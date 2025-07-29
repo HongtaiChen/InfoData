@@ -15,6 +15,12 @@ from datetime import datetime, timedelta
 import time
 import configparser
 import traceback
+import tushare as ts
+
+# 设置aushare接口token
+ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
+pro = ts.pro_api()
+
 
 # 配置日志
 def setup_logging():
@@ -50,7 +56,7 @@ class DailyDataUpdater:
         
         # 更新配置
         self.batch_size = self.config.getint('collection', 'batch_size')
-        self.request_delay = self.config.getfloat('collection', 'request_delay')
+        self.request_delay = self.config.getfloat('request_delay')
         
         self.connection = None
         self.cursor = None
@@ -121,11 +127,9 @@ class DailyDataUpdater:
         try:
             # 获取活跃股票（优先选择有成交量的股票）  
             self.cursor.execute("""
-                SELECT s.stock_code, s.short_name 
+                SELECT concat(s.stock_code,'.',exchange), s.short_name 
                 FROM stock_info s 
-                LEFT JOIN stock_market_current c ON s.stock_code = c.stock_code 
-                WHERE s.stock_code NOT LIKE %s 
-                ORDER BY IFNULL(c.volume, 0) DESC, s.stock_code 
+                ORDER BY s.stock_code 
                 LIMIT %s
             """, ('%.%', limit_stocks))
             stocks = self.cursor.fetchall()
