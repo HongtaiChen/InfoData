@@ -119,15 +119,84 @@ class DailyDataUpdater:
         # 保存记录
         with open(log_file, 'w', encoding='utf-8') as f:
             json.dump(history, f, ensure_ascii=False, indent=2)
+            
+            
+    def insert_all_stock_info(self):
+        """重新初始化股票基本信息"""
+        try:
+            
+            logger.info("清空股票基本信息...")
+            
+            # 清空表
+            self.cursor.execute("DELETE FROM stock_info")
+            
+            # 批量插入
+            insert_sql = """
+            INSERT INTO stock_info (stock_code, short_name, exchange, list_date,data_source, update_time) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            
+            logger.info("🚀 开始获取ADATA所有股票基本信息...")
+            
+            # 获取ADATA数据
+            df = adata.stock.info.all_code()
+            logger.info(f"📊 获取到 {len(df)} 只股票信息")
+            
+            batch_data = []
+            insert_count = 0
+            
+            for _, row in df.iterrows():
+                try:
+                    # 处理日期
+                    list_date = None
+                    if row['list_date'] and str(row['list_date']) != 'nan':
+                        try:
+                            list_date = str(row['list_date'])
+                        except:
+                            list_date = None
+                    
+                    batch_data.append((
+                        str(row['stock_code']),
+                        str(row['short_name']),
+                        str(row['exchange']),
+                        list_date,
+                        'ADTA',
+                        datetime.now()
+                    ))
+                    
+                    # 批量插入
+                    if len(batch_data) >= self.batch_size:
+                        self.cursor.executemany(insert_sql, batch_data)
+                        self.connection.commit()
+                        insert_count += len(batch_data)
+                        logger.info(f"📈 已插入 {insert_count} 只股票信息")
+                        batch_data = []
+                        
+                except Exception as e:
+                    logger.warning(f"处理股票 {row['stock_code']} 失败: {str(e)}")
+                    continue
+            
+            # 插入剩余数据
+            if batch_data:
+                self.cursor.executemany(insert_sql, batch_data)
+                self.connection.commit()
+                insert_count += len(batch_data)
+            
+            logger.info(f"✅ 成功插入 {insert_count} 只股票基本信息")
+            
+        except Exception as e:
+            logger.error(f"✗ 插入股票基本信息失败: {str(e)}")
+            if self.connection:
+                self.connection.rollback()
     
     def update_daily_kline(self, limit_stocks=200):
         """更新今日K线数据"""
         logger.info(f"📊 开始更新今日K线数据（前{limit_stocks}只股票）...")
         
         try:
-            # 获取活跃股票（优先选择有成交量的股票）  
+            # 获取所有股票  
             self.cursor.execute("""
-                SELECT concat(s.stock_code,'.',exchange), s.short_name 
+                SELECT concat(s.stock_code,'.',exchange) stock_code, s.short_name 
                 FROM stock_info s 
                 ORDER BY s.stock_code 
                 LIMIT %s
@@ -142,11 +211,18 @@ class DailyDataUpdater:
             for i, (stock_code, stock_name) in enumerate(stocks, 1):
                 try:
                     # 获取今日K线数据
-                    df = adata.stock.market.get_market(
-                        stock_code=stock_code,
-                        start_date=today,
-                        k_type=1
+                    # df = adata.stock.market.get_market(
+                    #     stock_code=stock_code,
+                    #     start_date=today,
+                    #     k_type=1
+                    # )
+                    data_source = 'AUSHARE'
+                    df = pro.daily(
+                        ts_code=stock_code, 
+                        start_date=today, 
+                        end_date=today
                     )
+                    
                     
                     if df.empty:
                         continue
@@ -159,28 +235,27 @@ class DailyDataUpdater:
                     
                     # 插入今日新数据
                     insert_sql = """
-                    INSERT INTO stock_market_daily 
-                    (stock_code, trade_date, trade_time, open, high, low, close, pre_close, 
-                     change_amount, change_pct, volume, amount, turnover_ratio, update_time) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO stock_market_daily 
+                        (stock_code, trade_date, open, high, low, close, pre_close, 
+                        change_amount, change_pct, volume, amount, update_time,data_source) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
                     for _, row in df.iterrows():
                         self.cursor.execute(insert_sql, (
                             stock_code,
                             str(row.get('trade_date')),
-                            str(row.get('trade_time')),
-                            float(row.get('open')) if row.get('open') is not None else None,
-                            float(row.get('high')) if row.get('high') is not None else None,
-                            float(row.get('low')) if row.get('low') is not None else None,
-                            float(row.get('close')) if row.get('close') is not None else None,
-                            float(row.get('pre_close')) if row.get('pre_close') is not None else None,
-                            float(row.get('change')) if row.get('change') is not None else None,
-                            float(row.get('change_pct')) if row.get('change_pct') is not None else None,
-                            int(row.get('volume')) if row.get('volume') is not None else None,
-                            float(row.get('amount')) if row.get('amount') is not None else None,
-                            float(row.get('turnover_ratio')) if row.get('turnover_ratio') is not None else None,
-                            datetime.now()
+                            float(row.get('open', 0)) if row.get('open') else None, 
+                            float(row.get('high', 0)) if row.get('high') else None, 
+                            float(row.get('low', 0)) if row.get('low') else None, 
+                            float(row.get('close', 0)) if row.get('close') else None, 
+                            float(row.get('pre_close', 0)) if row.get('pre_close') else None, 
+                            float(row.get('change', 0)) if row.get('change') else None, 
+                            float(row.get('pct_chg', 0)) if row.get('pct_chg') else None, 
+                            int(row.get('vol', 0)) if row.get('vol') else None, 
+                            float(row.get('amount', 0)) if row.get('amount') else None, 
+                            datetime.now(),
+                            data_source
                         ))
                     
                     self.connection.commit()
@@ -216,13 +291,16 @@ class DailyDataUpdater:
         
         try:
             
-            # 1. 更新今日K线数据
+            # 1. 重新插入所有股票基本信息
+            self.insert_all_stock_info()
+            
+            # 2. 更新今日K线数据
             self.update_daily_kline()
             
-            # 2. 生成统计报告
+            # 3. 生成统计报告
             self.show_update_summary()
             
-            # 3. 保存更新日志
+            # 4. 保存更新日志
             self.save_update_log()
             
             logger.info("🎉 每日数据更新完成！")
