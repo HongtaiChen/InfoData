@@ -200,10 +200,8 @@ class DailyDataUpdater:
             # print(stocks)
             logger.info(f"📊 准备更新 {len(stocks)} 只股票的近7个自然日K线数据")
             
-            # begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
-            # end_date =   datetime.now().strftime('%Y%m%d')
-            begin_date = '20250101'
-            end_date = '20250723'
+            begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
+            end_date =   datetime.now().strftime('%Y%m%d')
             success_count = 0
             
             for i, (stock_code, stock_name) in enumerate(stocks, 1):
