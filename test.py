@@ -1,12 +1,11 @@
-# import adata
-# import sqlite3
+import adata
 
-# conn = sqlite3.connect('stockinfo.db')  
-# # k_type: k线类型：1.日；2.周；3.月 默认：1 日k
-# res_df = adata.stock.market.get_market(stock_code='000001', k_type=1, start_date='2021-01-01')
-# print(res_df)
-# import adata
-# from adata.common.utils import requests
+
+# k_type: k线类型：1.日；2.周；3.月 默认：1 日k
+res_df = adata.stock.info.get_stock_shares(stock_code='603918')
+print(res_df)
+
+
 
 # # df = adata.stock.market.get_market(
 # #                 stock_code='603918', 
@@ -51,11 +50,11 @@
 # res_df = adata.stock.info.all_code()
 # print(res_df)
 
-import tushare as ts
-ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
-pro = ts.pro_api()
-df = pro.daily(ts_code='000006.SZ', start_date='20250731', end_date='20250731')
-print(df)
+# import tushare as ts
+# ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
+# pro = ts.pro_api()
+# df = pro.daily(ts_code='002466.SZ', start_date='20250731', end_date='20250731')
+# print(df)
 
 # from pyecharts import options as opts
 # from pyecharts.charts import Kline

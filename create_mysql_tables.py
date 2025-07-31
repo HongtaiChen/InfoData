@@ -85,6 +85,9 @@ def create_tables():
         # 8. 创建指数历史数据表
         create_index_market_daily_table(cursor)
         
+        # 9. 创建股票股本信息表
+        create_stock_shares_table(cursor)
+        
         # 提交事务
         connection.commit()
         
@@ -135,10 +138,10 @@ def create_stock_market_daily_table(cursor):
         amount DECIMAL(15,2) COMMENT '成交额(元)',
         turnover_ratio DECIMAL(8,4) COMMENT '换手率(%)',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
         UNIQUE KEY uk_stock_date (stock_code, trade_date),
         INDEX idx_stock_code (stock_code),
         INDEX idx_trade_date (trade_date),
-        data_source varchar(100) COMMENT '数据来源',
         INDEX idx_update_time (update_time)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票日K线数据表'
     """
@@ -289,6 +292,27 @@ def create_index_market_daily_table(cursor):
     """
     cursor.execute(sql)
     logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")
+    
+def create_stock_shares_table(cursor):
+    """创建指数日K线数据表"""
+    sql = """
+     CREATE TABLE IF NOT EXISTS stock_shares (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        change_date DATE COMMENT '变动时间',
+        total_shares BIGINT COMMENT '限售股本：股',
+        list_a_shares BIGINT COMMENT '流通A股股本：股',
+        change_reason VARCHAR(1000) COMMENT '变动原因',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        UNIQUE KEY uk_stock_date (stock_code, change_date),
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_trade_date (change_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票股本信息表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")    
 
 def show_tables():
     """显示创建的表"""

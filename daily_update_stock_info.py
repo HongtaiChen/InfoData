@@ -188,6 +188,74 @@ class DailyDataUpdater:
             logger.error(f"✗ 插入股票基本信息失败: {str(e)}")
             if self.connection:
                 self.connection.rollback()
+                
+    def insert_all_stock_shares(self):
+        """重新初始化股票股本信息"""
+        try:
+            
+            logger.info("清空股票基本信息...")
+            
+            # 清空表
+            self.cursor.execute("DELETE FROM stock_info")
+            
+            # 批量插入
+            insert_sql = """
+            INSERT INTO stock_info (stock_code, short_name, exchange, list_date,data_source, update_time) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            
+            logger.info("🚀 开始获取ADATA所有股票基本信息...")
+            
+            # 获取ADATA数据
+            df = adata.stock.info.all_code()
+            logger.info(f"📊 获取到 {len(df)} 只股票信息")
+            
+            batch_data = []
+            insert_count = 0
+            
+            for _, row in df.iterrows():
+                try:
+                    # 处理日期
+                    list_date = None
+                    if row['list_date'] and str(row['list_date']) != 'nan':
+                        try:
+                            list_date = str(row['list_date'])
+                        except:
+                            list_date = None
+                    
+                    batch_data.append((
+                        str(row['stock_code']),
+                        str(row['short_name']),
+                        str(row['exchange']),
+                        list_date,
+                        'ADTA',
+                        datetime.now()
+                    ))
+                    
+                    # 批量插入
+                    if len(batch_data) >= self.batch_size:
+                        self.cursor.executemany(insert_sql, batch_data)
+                        self.connection.commit()
+                        insert_count += len(batch_data)
+                        logger.info(f"📈 已插入 {insert_count} 只股票信息")
+                        batch_data = []
+                        
+                except Exception as e:
+                    logger.warning(f"处理股票 {row['stock_code']} 失败: {str(e)}")
+                    continue
+            
+            # 插入剩余数据
+            if batch_data:
+                self.cursor.executemany(insert_sql, batch_data)
+                self.connection.commit()
+                insert_count += len(batch_data)
+            
+            logger.info(f"✅ 成功插入 {insert_count} 只股票基本信息")
+            
+        except Exception as e:
+            logger.error(f"✗ 插入股票基本信息失败: {str(e)}")
+            if self.connection:
+                self.connection.rollback()        
     
     def update_daily_kline(self):
         """更新近7个自然日K线数据"""
