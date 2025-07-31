@@ -56,7 +56,7 @@ class DailyDataUpdater:
         
         # 更新配置
         self.batch_size = self.config.getint('collection', 'batch_size')
-        self.request_delay = self.config.getfloat('request_delay')
+        self.request_delay = self.config.getfloat('daily_update','request_delay')
         
         self.connection = None
         self.cursor = None
@@ -189,40 +189,31 @@ class DailyDataUpdater:
             if self.connection:
                 self.connection.rollback()
     
-    def update_daily_kline(self, limit_stocks=200):
-        """更新今日K线数据"""
-        logger.info(f"📊 开始更新今日K线数据（前{limit_stocks}只股票）...")
+    def update_daily_kline(self):
+        """更新近7个自然日K线数据"""
+        logger.info(f"📊 开始更新近7个自然日K线数据）...")
         
         try:
             # 获取所有股票  
-            self.cursor.execute("""
-                SELECT concat(s.stock_code,'.',exchange) stock_code, s.short_name 
-                FROM stock_info s 
-                ORDER BY s.stock_code 
-                LIMIT %s
-            """, ('%.%', limit_stocks))
-            stocks = self.cursor.fetchall()
+            self.cursor.execute(f"SELECT concat(a.stock_code,'.',exchange) stock_code,short_name  FROM stock_info a ORDER BY a.stock_code")
+            stocks = self.cursor.fetchall() # type: ignore
+            # print(stocks)
+            logger.info(f"📊 准备更新 {len(stocks)} 只股票的近7个自然日K线数据")
             
-            logger.info(f"📊 准备更新 {len(stocks)} 只股票的今日K线数据")
-            
-            today = datetime.now().strftime('%Y-%m-%d')
+            # begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
+            # end_date =   datetime.now().strftime('%Y%m%d')
+            begin_date = '20250101'
+            end_date = '20250723'
             success_count = 0
             
             for i, (stock_code, stock_name) in enumerate(stocks, 1):
                 try:
-                    # 获取今日K线数据
-                    # df = adata.stock.market.get_market(
-                    #     stock_code=stock_code,
-                    #     start_date=today,
-                    #     k_type=1
-                    # )
                     data_source = 'AUSHARE'
                     df = pro.daily(
                         ts_code=stock_code, 
-                        start_date=today, 
-                        end_date=today
+                        start_date=begin_date, 
+                        end_date=end_date
                     )
-                    
                     
                     if df.empty:
                         continue
@@ -230,8 +221,8 @@ class DailyDataUpdater:
                     # 删除今日旧数据
                     self.cursor.execute("""
                         DELETE FROM stock_market_daily 
-                        WHERE stock_code = %s AND trade_date = %s
-                    """, (stock_code, today))
+                        WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
+                    """, (stock_code, begin_date, end_date))
                     
                     # 插入今日新数据
                     insert_sql = """
@@ -244,7 +235,7 @@ class DailyDataUpdater:
                     for _, row in df.iterrows():
                         self.cursor.execute(insert_sql, (
                             stock_code,
-                            str(row.get('trade_date')),
+                            str(row.get('trade_date')) if row.get('trade_date') else None,
                             float(row.get('open', 0)) if row.get('open') else None, 
                             float(row.get('high', 0)) if row.get('high') else None, 
                             float(row.get('low', 0)) if row.get('low') else None, 
@@ -258,7 +249,7 @@ class DailyDataUpdater:
                             data_source
                         ))
                     
-                    self.connection.commit()
+                    self.connection.commit() # type: ignore
                     success_count += 1
                     
                     if i % 50 == 0:
@@ -291,8 +282,8 @@ class DailyDataUpdater:
         
         try:
             
-            # 1. 重新插入所有股票基本信息
-            self.insert_all_stock_info()
+            # # 1. 重新插入所有股票基本信息
+            # self.insert_all_stock_info()
             
             # 2. 更新今日K线数据
             self.update_daily_kline()

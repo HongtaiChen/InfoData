@@ -51,11 +51,11 @@
 # res_df = adata.stock.info.all_code()
 # print(res_df)
 
-# import tushare as ts
-# ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
-# pro = ts.pro_api()
-# df = pro.daily(ts_code='871694.BJ', start_date='20220101', end_date='20250710')
-# print(df)
+import tushare as ts
+ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
+pro = ts.pro_api()
+df = pro.daily(ts_code='000006.SZ', start_date='20250731', end_date='20250731')
+print(df)
 
 # from pyecharts import options as opts
 # from pyecharts.charts import Kline
@@ -84,7 +84,7 @@
 # # 渲染图表
 # kline.render("kline_chart.html")
 
-from datetime import datetime, timedelta
+# from datetime import datetime, timedelta
 
-today = datetime.now().strftime('%Y-%m-%d')
-print(today)
+# today = datetime.now().strftime('%Y-%m-%d')
+# print(today)

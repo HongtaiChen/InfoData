@@ -1,0 +1,164 @@
+[
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T19:49:33.364813",
+    "duration": "0:00:16.979497",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日K线失败: not all arguments converted during string formatting"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T19:57:30.460052",
+    "duration": "0:00:16.908773",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日K线失败: not all arguments converted during string formatting"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:02:24.085976",
+    "duration": "0:01:52.502960",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:05:03.245338",
+    "duration": "0:01:15.510701",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:08:13.087480",
+    "duration": "0:00:17.976471",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日K线失败: not enough values to unpack (expected 2, got 1)"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:09:58.047327",
+    "duration": "0:00:19.762986",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日K线失败: (1054, \"Unknown column 'stock_name' in 'field list'\")"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:10:50.500769",
+    "duration": "0:01:11.808101",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:12:28.313258",
+    "duration": "0:00:47.203104",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:14:51.449956",
+    "duration": "0:01:13.060576",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 161,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T20:24:26.386857",
+    "duration": "0:36:40.049175",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5417,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-07-31",
+    "update_time": "2025-07-31T21:03:37.535361",
+    "duration": "0:40:53.588346",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5440,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  }
+]
