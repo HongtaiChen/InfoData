@@ -2,7 +2,7 @@ import adata
 
 
 # k_type: k线类型：1.日；2.周；3.月 默认：1 日k
-res_df = adata.stock.info.get_stock_shares(stock_code='603918')
+res_df = adata.stock.info.get_industry_sw(stock_code='603918')
 print(res_df)
 
 

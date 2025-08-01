@@ -689,13 +689,13 @@ class FullADataMySQLInserter:
             # self.insert_current_market_data_all()
             
             # 6. 插入历史行情（可选，耗时较长）
-            if include_history:
-                logger.info("\n" + "="*50)
-                logger.info("📈 阶段6: 历史行情数据（耗时较长）")
-                logger.info("="*50)
-                self.insert_market_data_parallel(max_history_stocks)
-            else:
-                logger.info("\n⏭️ 跳过历史行情数据采集")
+            # if include_history:
+            #     logger.info("\n" + "="*50)
+            #     logger.info("📈 阶段6: 历史行情数据（耗时较长）")
+            #     logger.info("="*50)
+            #     self.insert_market_data_parallel(max_history_stocks)
+            # else:
+            #     logger.info("\n⏭️ 跳过历史行情数据采集")
             
             # 7. 显示最终统计
             self.show_final_summary()

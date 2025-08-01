@@ -1,0 +1,531 @@
+2025-08-01 19:37:47,115 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:37:47,120 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:37:47,120 - INFO - ============================================================
+2025-08-01 19:37:47,125 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:37:47,125 - INFO - 清空股票股本信息...
+2025-08-01 19:37:47,128 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:37:47,389 - WARNING - ⚠️ 000001 平安银行 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:47,505 - WARNING - ⚠️ 000002 万科Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:47,600 - WARNING - ⚠️ 000003 PT金田A 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:47,712 - WARNING - ⚠️ 000004 *ST国华 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:47,812 - WARNING - ⚠️ 000005 ST星源 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:48,223 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:48,371 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:48,501 - WARNING - ⚠️ 000008 神州高铁 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:48,624 - WARNING - ⚠️ 000009 中国宝安 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:48,731 - WARNING - ⚠️ 000010 美丽生态 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:48,835 - WARNING - ⚠️ 000011 深物业A 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:48,961 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:49,058 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:49,182 - WARNING - ⚠️ 000014 沙河股份 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:49,298 - WARNING - ⚠️ 000015 PT中浩A 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:49,400 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:49,502 - WARNING - ⚠️ 000017 深中华A 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:49,613 - WARNING - ⚠️ 000018 神城A退 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:49,721 - WARNING - ⚠️ 000019 深粮控股 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:49,839 - WARNING - ⚠️ 000020 深华发Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:49,963 - WARNING - ⚠️ 000021 深科技 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:50,513 - WARNING - ⚠️ 000023 *ST深天 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:50,671 - WARNING - ⚠️ 000024 招商地产 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:50,775 - WARNING - ⚠️ 000025 特力Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:50,889 - WARNING - ⚠️ 000026 飞亚达 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:50,996 - WARNING - ⚠️ 000027 深圳能源 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,099 - WARNING - ⚠️ 000028 国药一致 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,200 - WARNING - ⚠️ 000029 深深房Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,308 - WARNING - ⚠️ 000030 富奥股份 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,410 - WARNING - ⚠️ 000031 大悦城 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,606 - WARNING - ⚠️ 000032 深桑达Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,704 - WARNING - ⚠️ 000033 新都退 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,819 - WARNING - ⚠️ 000034 神州数码 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:51,921 - WARNING - ⚠️ 000035 中国天楹 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,034 - WARNING - ⚠️ 000036 华联控股 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,136 - WARNING - ⚠️ 000037 深南电A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:52,284 - WARNING - ⚠️ 000038 大通退 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,436 - WARNING - ⚠️ 000039 中集集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,547 - WARNING - ⚠️ 000040 *ST旭蓝 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,743 - WARNING - ⚠️ 000042 中洲控股 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,845 - WARNING - ⚠️ 000045 深纺织Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:52,955 - WARNING - ⚠️ 000046 *ST泛海 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:53,246 - WARNING - ⚠️ 000047 ST中侨 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:53,359 - WARNING - ⚠️ 000048 京基智农 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:53,471 - WARNING - ⚠️ 000049 德赛电池 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:53,589 - WARNING - ⚠️ 000050 深天马Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:53,694 - WARNING - ⚠️ 000055 方大集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:53,798 - WARNING - ⚠️ 000056 皇庭国际 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:53,913 - WARNING - ⚠️ 000058 深赛格 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,019 - WARNING - ⚠️ 000059 华锦股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:54,136 - WARNING - ⚠️ 000060 中金岭南 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,246 - WARNING - ⚠️ 000061 农产品 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,354 - WARNING - ⚠️ 000062 深圳华强 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,468 - WARNING - ⚠️ 000063 中兴通讯 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,588 - WARNING - ⚠️ 000065 北方国际 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,756 - WARNING - ⚠️ 000066 中国长城 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:54,880 - WARNING - ⚠️ 000068 华控赛格 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,151 - WARNING - ⚠️ 000069 华侨城Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,254 - WARNING - ⚠️ 000070 特发信息 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,352 - WARNING - ⚠️ 000078 海王生物 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,457 - WARNING - ⚠️ 000088 盐田港 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,567 - WARNING - ⚠️ 000089 深圳机场 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,688 - WARNING - ⚠️ 000090 天健集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,815 - WARNING - ⚠️ 000096 广聚能源 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:55,912 - WARNING - ⚠️ 000099 中信海直 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:56,046 - WARNING - ⚠️ 000100 TCL科技 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,151 - WARNING - ⚠️ 000150 *ST宜康 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,312 - WARNING - ⚠️ 000151 中成股份 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,417 - WARNING - ⚠️ 000153 丰原药业 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,519 - WARNING - ⚠️ 000155 川能动力 股本信息: cannot convert float NaN to integer
+2025-08-01 19:37:56,634 - WARNING - ⚠️ 000156 华数传媒 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,746 - WARNING - ⚠️ 000157 中联重科 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,844 - WARNING - ⚠️ 000158 常山北明 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:56,948 - WARNING - ⚠️ 000159 国际实业 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,058 - WARNING - ⚠️ 000166 申万宏源 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,168 - WARNING - ⚠️ 000301 东方盛虹 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,309 - WARNING - ⚠️ 000333 美的集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,424 - WARNING - ⚠️ 000338 潍柴动力 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,536 - WARNING - ⚠️ 000400 许继电气 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,845 - WARNING - ⚠️ 000401 冀东水泥 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:57,956 - WARNING - ⚠️ 000402 金融街 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,071 - WARNING - ⚠️ 000403 派林生物 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,174 - WARNING - ⚠️ 000404 长虹华意 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,278 - WARNING - ⚠️ 000405 ST鑫光 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,383 - WARNING - ⚠️ 000406 石油大明 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,497 - WARNING - ⚠️ 000407 胜利股份 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,609 - WARNING - ⚠️ 000408 藏格矿业 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,732 - WARNING - ⚠️ 000409 云鼎科技 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,841 - WARNING - ⚠️ 000410 沈阳机床 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:58,946 - WARNING - ⚠️ 000411 英特集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,050 - WARNING - ⚠️ 000412 ST五环 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,318 - WARNING - ⚠️ 000413 ST旭电 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,425 - WARNING - ⚠️ 000415 渤海租赁 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,533 - WARNING - ⚠️ 000416 *ST民控 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,636 - WARNING - ⚠️ 000417 合百集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,747 - WARNING - ⚠️ 000418 小天鹅A 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,853 - WARNING - ⚠️ 000419 通程控股 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:37:59,963 - WARNING - ⚠️ 000420 吉林化纤 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:00,076 - WARNING - ⚠️ 000421 南京公用 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:00,247 - WARNING - ⚠️ 000422 湖北宜化 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:00,356 - WARNING - ⚠️ 000423 东阿阿胶 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:00,478 - WARNING - ⚠️ 000425 徐工机械 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:00,595 - WARNING - ⚠️ 000426 兴业银锡 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:00,856 - WARNING - ⚠️ 000428 华天酒店 股本信息: cannot convert float NaN to integer
+2025-08-01 19:38:00,967 - WARNING - ⚠️ 000429 粤高速Ａ 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,118 - WARNING - ⚠️ 000430 ST张家界 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,226 - WARNING - ⚠️ 000488 ST晨鸣 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,329 - WARNING - ⚠️ 000498 山东路桥 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,671 - WARNING - ⚠️ 000501 武商集团 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,775 - WARNING - ⚠️ 000502 绿景退 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,882 - WARNING - ⚠️ 000503 国新健康 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:01,984 - WARNING - ⚠️ 000504 *ST生物 股本信息: (1264, "Out of range value for column 'list_a_shares' at row 1")
+2025-08-01 19:38:02,174 - INFO - 数据库连接已关闭
+2025-08-01 19:40:09,989 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:40:09,990 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:40:09,990 - INFO - ============================================================
+2025-08-01 19:40:09,994 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:40:09,994 - INFO - 清空股票股本信息...
+2025-08-01 19:40:09,996 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:40:10,156 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:10,498 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:10,611 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:10,720 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:10,865 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:10,975 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,107 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,229 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,390 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,495 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,600 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,817 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:11,922 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,021 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,126 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,220 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,329 - WARNING - ⚠️ 000017 深中华A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,576 - WARNING - ⚠️ 000018 神城A退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,682 - WARNING - ⚠️ 000019 深粮控股 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,777 - WARNING - ⚠️ 000020 深华发Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,877 - WARNING - ⚠️ 000021 深科技 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:12,974 - WARNING - ⚠️ 000023 *ST深天 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,151 - WARNING - ⚠️ 000024 招商地产 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,257 - WARNING - ⚠️ 000025 特力Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,374 - WARNING - ⚠️ 000026 飞亚达 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,479 - WARNING - ⚠️ 000027 深圳能源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,635 - WARNING - ⚠️ 000028 国药一致 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,724 - WARNING - ⚠️ 000029 深深房Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,838 - WARNING - ⚠️ 000030 富奥股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:13,942 - WARNING - ⚠️ 000031 大悦城 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:14,166 - WARNING - ⚠️ 000032 深桑达Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:14,275 - WARNING - ⚠️ 000033 新都退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:14,394 - WARNING - ⚠️ 000034 神州数码 股本信息: cannot convert float NaN to integer
+2025-08-01 19:40:14,498 - INFO - 数据库连接已关闭
+2025-08-01 19:42:46,630 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:42:46,631 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:42:46,631 - INFO - ============================================================
+2025-08-01 19:42:46,634 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:42:46,635 - INFO - 清空股票股本信息...
+2025-08-01 19:42:46,635 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:42:46,783 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,077 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,174 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,276 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,375 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,471 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,573 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,682 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,795 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:47,899 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,015 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,135 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,234 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,334 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,424 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,676 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:48,783 - WARNING - ⚠️ 000017 深中华A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:49,065 - WARNING - ⚠️ 000018 神城A退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:49,173 - WARNING - ⚠️ 000019 深粮控股 股本信息: cannot convert float NaN to integer
+2025-08-01 19:42:49,304 - INFO - 数据库连接已关闭
+2025-08-01 19:43:07,412 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:43:07,412 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:43:07,413 - INFO - ============================================================
+2025-08-01 19:43:07,416 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:43:07,416 - INFO - 清空股票股本信息...
+2025-08-01 19:43:07,417 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:43:07,584 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:07,738 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:07,837 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:07,961 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:08,071 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:08,176 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:08,286 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:08,639 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:08,757 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:08,876 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:09,026 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:09,150 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:09,260 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:09,367 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:09,470 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:09,712 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:10,013 - WARNING - ⚠️ 000017 深中华A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:10,124 - WARNING - ⚠️ 000018 神城A退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:43:10,423 - INFO - 数据库连接已关闭
+2025-08-01 19:44:42,212 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:44:42,212 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:44:42,212 - INFO - ============================================================
+2025-08-01 19:44:42,215 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:44:42,215 - INFO - 清空股票股本信息...
+2025-08-01 19:44:42,216 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:44:42,364 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:42,493 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:42,644 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:42,763 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:42,911 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,255 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,368 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,483 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,593 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,689 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,798 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:43,921 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,023 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,122 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,217 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,314 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,443 - WARNING - ⚠️ 000017 深中华A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,739 - WARNING - ⚠️ 000018 神城A退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,842 - WARNING - ⚠️ 000019 深粮控股 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:44,939 - WARNING - ⚠️ 000020 深华发Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,066 - WARNING - ⚠️ 000021 深科技 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,181 - WARNING - ⚠️ 000023 *ST深天 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,337 - WARNING - ⚠️ 000024 招商地产 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,446 - WARNING - ⚠️ 000025 特力Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,575 - WARNING - ⚠️ 000026 飞亚达 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,687 - WARNING - ⚠️ 000027 深圳能源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,794 - WARNING - ⚠️ 000028 国药一致 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:45,892 - WARNING - ⚠️ 000029 深深房Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,006 - WARNING - ⚠️ 000030 富奥股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,120 - WARNING - ⚠️ 000031 大悦城 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,229 - WARNING - ⚠️ 000032 深桑达Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,337 - WARNING - ⚠️ 000033 新都退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,467 - WARNING - ⚠️ 000034 神州数码 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,577 - WARNING - ⚠️ 000035 中国天楹 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,707 - WARNING - ⚠️ 000036 华联控股 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,811 - WARNING - ⚠️ 000037 深南电A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:46,929 - WARNING - ⚠️ 000038 大通退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:47,062 - WARNING - ⚠️ 000039 中集集团 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:47,212 - WARNING - ⚠️ 000040 *ST旭蓝 股本信息: cannot convert float NaN to integer
+2025-08-01 19:44:47,315 - INFO - 数据库连接已关闭
+2025-08-01 19:48:21,332 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:48:21,333 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:48:21,333 - INFO - ============================================================
+2025-08-01 19:48:21,336 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:48:21,336 - INFO - 清空股票股本信息...
+2025-08-01 19:48:21,337 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:48:21,504 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:21,639 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:21,758 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:21,867 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:21,983 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:22,185 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:22,308 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:22,597 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:22,911 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,244 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,371 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,499 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,607 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,724 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,836 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:23,954 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:24,065 - WARNING - ⚠️ 000017 深中华A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:48:24,170 - INFO - 数据库连接已关闭
+2025-08-01 19:53:02,273 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:53:02,274 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:53:02,274 - INFO - ============================================================
+2025-08-01 19:53:02,277 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:53:02,277 - INFO - 清空股票股本信息...
+2025-08-01 19:53:02,277 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:53:02,449 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:02,586 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:02,682 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,032 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,134 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,239 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,334 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,446 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,593 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,698 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,804 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:03,938 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:04,034 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:04,133 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:04,233 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:04,357 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:53:04,465 - INFO - 数据库连接已关闭
+2025-08-01 19:54:12,884 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 19:54:12,885 - INFO - 🚀 开始每日数据更新...
+2025-08-01 19:54:12,885 - INFO - ============================================================
+2025-08-01 19:54:12,888 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 19:54:12,888 - INFO - 清空股票股本信息...
+2025-08-01 19:54:12,889 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 19:54:13,073 - WARNING - ⚠️ 000001 平安银行 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,220 - WARNING - ⚠️ 000002 万科Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,334 - WARNING - ⚠️ 000003 PT金田A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,447 - WARNING - ⚠️ 000004 *ST国华 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,560 - WARNING - ⚠️ 000005 ST星源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,689 - WARNING - ⚠️ 000006 深振业Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,798 - WARNING - ⚠️ 000007 全新好 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:13,938 - WARNING - ⚠️ 000008 神州高铁 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,062 - WARNING - ⚠️ 000009 中国宝安 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,185 - WARNING - ⚠️ 000010 美丽生态 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,306 - WARNING - ⚠️ 000011 深物业A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,442 - WARNING - ⚠️ 000012 南玻Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,556 - WARNING - ⚠️ 000013 *ST石化A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,681 - WARNING - ⚠️ 000014 沙河股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,782 - WARNING - ⚠️ 000015 PT中浩A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:14,888 - WARNING - ⚠️ 000016 深康佳Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,009 - WARNING - ⚠️ 000017 深中华A 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,132 - WARNING - ⚠️ 000018 神城A退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,240 - WARNING - ⚠️ 000019 深粮控股 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,338 - WARNING - ⚠️ 000020 深华发Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,456 - WARNING - ⚠️ 000021 深科技 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,559 - WARNING - ⚠️ 000023 *ST深天 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,675 - WARNING - ⚠️ 000024 招商地产 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,784 - WARNING - ⚠️ 000025 特力Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:15,921 - WARNING - ⚠️ 000026 飞亚达 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,029 - WARNING - ⚠️ 000027 深圳能源 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,139 - WARNING - ⚠️ 000028 国药一致 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,310 - WARNING - ⚠️ 000029 深深房Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,431 - WARNING - ⚠️ 000030 富奥股份 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,541 - WARNING - ⚠️ 000031 大悦城 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,654 - WARNING - ⚠️ 000032 深桑达Ａ 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,762 - WARNING - ⚠️ 000033 新都退 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:16,893 - WARNING - ⚠️ 000034 神州数码 股本信息: cannot convert float NaN to integer
+2025-08-01 19:54:17,110 - INFO - 数据库连接已关闭
+2025-08-01 20:09:21,481 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 20:09:21,481 - INFO - 🚀 开始每日数据更新...
+2025-08-01 20:09:21,481 - INFO - ============================================================
+2025-08-01 20:09:21,485 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 20:09:21,485 - INFO - 清空股票股本信息...
+2025-08-01 20:09:21,485 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 20:09:34,389 - INFO - 📈 已处理 50/5839 只股票，成功 50 只
+2025-08-01 20:09:47,020 - INFO - 📈 已处理 100/5839 只股票，成功 100 只
+2025-08-01 20:09:59,828 - INFO - 📈 已处理 150/5839 只股票，成功 150 只
+2025-08-01 20:10:13,355 - INFO - 📈 已处理 200/5839 只股票，成功 200 只
+2025-08-01 20:10:26,392 - INFO - 📈 已处理 250/5839 只股票，成功 250 只
+2025-08-01 20:10:40,055 - INFO - 📈 已处理 300/5839 只股票，成功 300 只
+2025-08-01 20:10:53,000 - INFO - 📈 已处理 350/5839 只股票，成功 350 只
+2025-08-01 20:11:06,548 - INFO - 📈 已处理 400/5839 只股票，成功 400 只
+2025-08-01 20:11:19,536 - INFO - 📈 已处理 450/5839 只股票，成功 450 只
+2025-08-01 20:11:32,299 - INFO - 📈 已处理 500/5839 只股票，成功 500 只
+2025-08-01 20:11:44,586 - INFO - 📈 已处理 550/5839 只股票，成功 550 只
+2025-08-01 20:11:56,546 - INFO - 📈 已处理 600/5839 只股票，成功 600 只
+2025-08-01 20:12:09,573 - INFO - 📈 已处理 650/5839 只股票，成功 650 只
+2025-08-01 20:12:23,416 - INFO - 📈 已处理 700/5839 只股票，成功 700 只
+2025-08-01 20:12:36,108 - INFO - 📈 已处理 750/5839 只股票，成功 750 只
+2025-08-01 20:12:49,831 - INFO - 📈 已处理 800/5839 只股票，成功 800 只
+2025-08-01 20:13:03,585 - INFO - 📈 已处理 850/5839 只股票，成功 850 只
+2025-08-01 20:13:17,456 - INFO - 📈 已处理 900/5839 只股票，成功 900 只
+2025-08-01 20:13:30,466 - INFO - 📈 已处理 950/5839 只股票，成功 950 只
+2025-08-01 20:13:43,986 - INFO - 📈 已处理 1000/5839 只股票，成功 1000 只
+2025-08-01 20:13:57,501 - INFO - 📈 已处理 1050/5839 只股票，成功 1050 只
+2025-08-01 20:14:10,202 - INFO - 📈 已处理 1100/5839 只股票，成功 1100 只
+2025-08-01 20:14:22,917 - INFO - 📈 已处理 1150/5839 只股票，成功 1150 只
+2025-08-01 20:14:35,088 - INFO - 📈 已处理 1200/5839 只股票，成功 1200 只
+2025-08-01 20:14:49,204 - INFO - 📈 已处理 1250/5839 只股票，成功 1250 只
+2025-08-01 20:15:02,544 - INFO - 📈 已处理 1300/5839 只股票，成功 1300 只
+2025-08-01 20:15:14,853 - INFO - 📈 已处理 1350/5839 只股票，成功 1350 只
+2025-08-01 20:15:27,273 - INFO - 📈 已处理 1400/5839 只股票，成功 1400 只
+2025-08-01 20:15:40,158 - INFO - 📈 已处理 1450/5839 只股票，成功 1450 只
+2025-08-01 20:15:52,566 - INFO - 📈 已处理 1500/5839 只股票，成功 1500 只
+2025-08-01 20:16:05,876 - INFO - 📈 已处理 1550/5839 只股票，成功 1550 只
+2025-08-01 20:16:18,974 - INFO - 📈 已处理 1600/5839 只股票，成功 1600 只
+2025-08-01 20:16:31,200 - INFO - 📈 已处理 1650/5839 只股票，成功 1650 只
+2025-08-01 20:16:43,826 - INFO - 📈 已处理 1700/5839 只股票，成功 1700 只
+2025-08-01 20:16:56,698 - INFO - 📈 已处理 1750/5839 只股票，成功 1750 只
+2025-08-01 20:17:10,164 - INFO - 📈 已处理 1800/5839 只股票，成功 1800 只
+2025-08-01 20:17:23,133 - INFO - 📈 已处理 1850/5839 只股票，成功 1850 只
+2025-08-01 20:17:35,936 - INFO - 📈 已处理 1900/5839 只股票，成功 1900 只
+2025-08-01 20:17:48,600 - INFO - 📈 已处理 1950/5839 只股票，成功 1950 只
+2025-08-01 20:18:01,301 - INFO - 📈 已处理 2000/5839 只股票，成功 2000 只
+2025-08-01 20:18:14,962 - INFO - 📈 已处理 2050/5839 只股票，成功 2050 只
+2025-08-01 20:18:27,945 - INFO - 📈 已处理 2100/5839 只股票，成功 2100 只
+2025-08-01 20:18:42,161 - INFO - 📈 已处理 2150/5839 只股票，成功 2150 只
+2025-08-01 20:18:55,657 - INFO - 📈 已处理 2200/5839 只股票，成功 2200 只
+2025-08-01 20:19:09,457 - INFO - 📈 已处理 2250/5839 只股票，成功 2250 只
+2025-08-01 20:19:23,225 - INFO - 📈 已处理 2300/5839 只股票，成功 2300 只
+2025-08-01 20:19:38,134 - INFO - 📈 已处理 2350/5839 只股票，成功 2350 只
+2025-08-01 20:19:50,327 - INFO - 📈 已处理 2400/5839 只股票，成功 2400 只
+2025-08-01 20:20:03,576 - INFO - 📈 已处理 2450/5839 只股票，成功 2450 只
+2025-08-01 20:20:16,052 - INFO - 📈 已处理 2500/5839 只股票，成功 2500 只
+2025-08-01 20:20:28,592 - INFO - 📈 已处理 2550/5839 只股票，成功 2550 只
+2025-08-01 20:20:41,559 - INFO - 📈 已处理 2600/5839 只股票，成功 2600 只
+2025-08-01 20:20:54,535 - INFO - 📈 已处理 2650/5839 只股票，成功 2650 只
+2025-08-01 20:21:07,276 - INFO - 📈 已处理 2700/5839 只股票，成功 2700 只
+2025-08-01 20:21:20,283 - INFO - 📈 已处理 2750/5839 只股票，成功 2750 只
+2025-08-01 20:21:32,405 - INFO - 📈 已处理 2800/5839 只股票，成功 2800 只
+2025-08-01 20:21:44,047 - INFO - 📈 已处理 2850/5839 只股票，成功 2850 只
+2025-08-01 20:21:55,982 - INFO - 📈 已处理 2900/5839 只股票，成功 2900 只
+2025-08-01 20:22:09,274 - INFO - 📈 已处理 2950/5839 只股票，成功 2950 只
+2025-08-01 20:22:21,521 - INFO - 📈 已处理 3000/5839 只股票，成功 3000 只
+2025-08-01 20:22:33,877 - INFO - 📈 已处理 3050/5839 只股票，成功 3050 只
+2025-08-01 20:22:46,433 - INFO - 📈 已处理 3100/5839 只股票，成功 3100 只
+2025-08-01 20:22:59,646 - INFO - 📈 已处理 3150/5839 只股票，成功 3150 只
+2025-08-01 20:23:12,592 - INFO - 📈 已处理 3200/5839 只股票，成功 3200 只
+2025-08-01 20:23:25,440 - INFO - 📈 已处理 3250/5839 只股票，成功 3250 只
+2025-08-01 20:23:38,329 - INFO - 📈 已处理 3300/5839 只股票，成功 3300 只
+2025-08-01 20:23:51,677 - INFO - 📈 已处理 3350/5839 只股票，成功 3350 只
+2025-08-01 20:24:04,553 - INFO - 📈 已处理 3400/5839 只股票，成功 3400 只
+2025-08-01 20:24:16,584 - INFO - 📈 已处理 3450/5839 只股票，成功 3450 只
+2025-08-01 20:24:28,624 - INFO - 📈 已处理 3500/5839 只股票，成功 3500 只
+2025-08-01 20:24:40,989 - INFO - 📈 已处理 3550/5839 只股票，成功 3550 只
+2025-08-01 20:24:53,295 - INFO - 📈 已处理 3600/5839 只股票，成功 3600 只
+2025-08-01 20:25:06,534 - INFO - 📈 已处理 3650/5839 只股票，成功 3650 只
+2025-08-01 20:25:19,114 - INFO - 📈 已处理 3700/5839 只股票，成功 3700 只
+2025-08-01 20:25:31,395 - INFO - 📈 已处理 3750/5839 只股票，成功 3750 只
+2025-08-01 20:25:43,790 - INFO - 📈 已处理 3800/5839 只股票，成功 3800 只
+2025-08-01 20:25:56,007 - INFO - 📈 已处理 3850/5839 只股票，成功 3850 只
+2025-08-01 20:26:09,579 - INFO - 📈 已处理 3900/5839 只股票，成功 3900 只
+2025-08-01 20:26:21,429 - INFO - 📈 已处理 3950/5839 只股票，成功 3950 只
+2025-08-01 20:26:34,120 - INFO - 📈 已处理 4000/5839 只股票，成功 4000 只
+2025-08-01 20:26:46,288 - INFO - 📈 已处理 4050/5839 只股票，成功 4050 只
+2025-08-01 20:26:59,128 - INFO - 📈 已处理 4100/5839 只股票，成功 4100 只
+2025-08-01 20:27:12,261 - INFO - 📈 已处理 4150/5839 只股票，成功 4150 只
+2025-08-01 20:27:24,199 - INFO - 📈 已处理 4200/5839 只股票，成功 4200 只
+2025-08-01 20:27:37,616 - INFO - 📈 已处理 4250/5839 只股票，成功 4250 只
+2025-08-01 20:27:50,286 - INFO - 📈 已处理 4300/5839 只股票，成功 4300 只
+2025-08-01 20:28:02,532 - INFO - 📈 已处理 4350/5839 只股票，成功 4350 只
+2025-08-01 20:28:14,540 - INFO - 📈 已处理 4400/5839 只股票，成功 4400 只
+2025-08-01 20:28:26,296 - INFO - 📈 已处理 4450/5839 只股票，成功 4450 只
+2025-08-01 20:28:38,440 - INFO - 📈 已处理 4500/5839 只股票，成功 4500 只
+2025-08-01 20:28:50,539 - INFO - 📈 已处理 4550/5839 只股票，成功 4550 只
+2025-08-01 20:29:03,109 - INFO - 📈 已处理 4600/5839 只股票，成功 4600 只
+2025-08-01 20:29:15,748 - INFO - 📈 已处理 4650/5839 只股票，成功 4650 只
+2025-08-01 20:29:27,507 - INFO - 📈 已处理 4700/5839 只股票，成功 4700 只
+2025-08-01 20:29:39,351 - INFO - 📈 已处理 4750/5839 只股票，成功 4750 只
+2025-08-01 20:29:52,167 - INFO - 📈 已处理 4800/5839 只股票，成功 4800 只
+2025-08-01 20:30:04,679 - INFO - 📈 已处理 4850/5839 只股票，成功 4850 只
+2025-08-01 20:30:17,176 - INFO - 📈 已处理 4900/5839 只股票，成功 4900 只
+2025-08-01 20:30:29,467 - INFO - 📈 已处理 4950/5839 只股票，成功 4950 只
+2025-08-01 20:30:41,286 - INFO - 📈 已处理 5000/5839 只股票，成功 5000 只
+2025-08-01 20:30:53,473 - INFO - 📈 已处理 5050/5839 只股票，成功 5050 只
+2025-08-01 20:31:07,036 - INFO - 📈 已处理 5100/5839 只股票，成功 5100 只
+2025-08-01 20:31:19,293 - INFO - 📈 已处理 5150/5839 只股票，成功 5150 只
+2025-08-01 20:31:31,476 - INFO - 📈 已处理 5200/5839 只股票，成功 5200 只
+2025-08-01 20:31:43,913 - INFO - 📈 已处理 5250/5839 只股票，成功 5250 只
+2025-08-01 20:31:56,234 - INFO - 📈 已处理 5300/5839 只股票，成功 5300 只
+2025-08-01 20:32:08,814 - INFO - 📈 已处理 5350/5839 只股票，成功 5350 只
+2025-08-01 20:32:21,004 - INFO - 📈 已处理 5400/5839 只股票，成功 5400 只
+2025-08-01 20:32:33,152 - INFO - 📈 已处理 5450/5839 只股票，成功 5450 只
+2025-08-01 20:32:46,475 - INFO - 📈 已处理 5500/5839 只股票，成功 5500 只
+2025-08-01 20:32:59,597 - INFO - 📈 已处理 5550/5839 只股票，成功 5550 只
+2025-08-01 20:33:13,274 - INFO - 📈 已处理 5600/5839 只股票，成功 5600 只
+2025-08-01 20:33:25,127 - INFO - 📈 已处理 5650/5839 只股票，成功 5650 只
+2025-08-01 20:33:37,191 - INFO - 📈 已处理 5700/5839 只股票，成功 5700 只
+2025-08-01 20:33:48,947 - INFO - 📈 已处理 5750/5839 只股票，成功 5750 只
+2025-08-01 20:34:01,850 - INFO - 📈 已处理 5800/5839 只股票，成功 5800 只
+2025-08-01 20:34:11,469 - INFO - ✅ 今日股本信息更新完成: 5839 条记录
+2025-08-01 20:34:11,470 - INFO - ============================================================
+2025-08-01 20:34:11,471 - INFO - 📊 每日数据更新统计
+2025-08-01 20:34:11,471 - INFO - ============================================================
+2025-08-01 20:34:11,471 - INFO - ⏱️  更新耗时: 0:24:49.989205
+2025-08-01 20:34:11,472 - INFO - 📈 实时行情: 0 条
+2025-08-01 20:34:11,472 - INFO - 📊 今日K线: 5,839 条
+2025-08-01 20:34:11,472 - INFO - 📅 交易日历: 0 条
+2025-08-01 20:34:11,472 - INFO - ✅ 无错误
+2025-08-01 20:34:11,472 - INFO - ============================================================
+2025-08-01 20:34:11,482 - INFO - 🎉 每日数据更新完成！
+2025-08-01 20:34:11,482 - INFO - 数据库连接已关闭
+2025-08-01 20:34:11,483 - INFO - ✅ 每日数据更新成功完成
+2025-08-01 20:38:29,059 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 20:38:29,060 - INFO - 🚀 开始每日数据更新...
+2025-08-01 20:38:29,060 - INFO - ============================================================
+2025-08-01 20:38:29,065 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 20:38:29,065 - INFO - 清空股票申万一二级行业...
+2025-08-01 20:38:29,069 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 20:38:49,123 - INFO - 📈 已处理 50/5839 只股票，成功 43 只
+2025-08-01 20:39:09,486 - INFO - 📈 已处理 100/5839 只股票，成功 89 只
+2025-08-01 20:39:29,049 - INFO - 📈 已处理 150/5839 只股票，成功 131 只
+2025-08-01 20:39:48,829 - INFO - 📈 已处理 200/5839 只股票，成功 172 只
+2025-08-01 20:40:08,506 - INFO - 📈 已处理 250/5839 只股票，成功 213 只
+2025-08-01 20:40:28,845 - INFO - 📈 已处理 300/5839 只股票，成功 257 只
+2025-08-01 20:40:49,522 - INFO - 📈 已处理 350/5839 只股票，成功 299 只
+2025-08-01 20:41:09,701 - INFO - 📈 已处理 400/5839 只股票，成功 344 只
+2025-08-01 20:41:34,359 - INFO - 📈 已处理 450/5839 只股票，成功 392 只
+2025-08-01 20:41:55,747 - INFO - 📈 已处理 500/5839 只股票，成功 439 只
+2025-08-01 20:42:16,750 - INFO - 📈 已处理 550/5839 只股票，成功 489 只
+2025-08-01 20:42:38,260 - INFO - 📈 已处理 600/5839 只股票，成功 539 只
+2025-08-01 20:42:59,897 - INFO - 📈 已处理 650/5839 只股票，成功 588 只
+2025-08-01 20:43:20,699 - INFO - 📈 已处理 700/5839 只股票，成功 636 只
+2025-08-01 20:43:41,140 - INFO - 📈 已处理 750/5839 只股票，成功 686 只
+2025-08-01 20:44:02,330 - INFO - 📈 已处理 800/5839 只股票，成功 734 只
+2025-08-01 20:44:23,115 - INFO - 📈 已处理 850/5839 只股票，成功 783 只
+2025-08-01 20:44:44,298 - INFO - 📈 已处理 900/5839 只股票，成功 832 只
+2025-08-01 20:45:05,108 - INFO - 📈 已处理 950/5839 只股票，成功 882 只
+2025-08-01 20:45:25,491 - INFO - 📈 已处理 1000/5839 只股票，成功 931 只
+2025-08-01 20:45:49,485 - INFO - 📈 已处理 1050/5839 只股票，成功 981 只
+2025-08-01 20:46:09,680 - INFO - 📈 已处理 1100/5839 只股票，成功 1026 只
+2025-08-01 20:46:30,484 - INFO - 📈 已处理 1150/5839 只股票，成功 1075 只
+2025-08-01 20:46:51,072 - INFO - 📈 已处理 1200/5839 只股票，成功 1125 只
+2025-08-01 20:47:11,792 - INFO - 📈 已处理 1250/5839 只股票，成功 1172 只
+2025-08-01 20:47:35,535 - INFO - 📈 已处理 1300/5839 只股票，成功 1220 只
+2025-08-01 20:47:56,677 - INFO - 📈 已处理 1350/5839 只股票，成功 1269 只
+2025-08-01 20:48:17,765 - INFO - 📈 已处理 1400/5839 只股票，成功 1318 只
+2025-08-01 20:48:39,088 - INFO - 📈 已处理 1450/5839 只股票，成功 1368 只
+2025-08-01 20:49:00,050 - INFO - 📈 已处理 1500/5839 只股票，成功 1418 只
+2025-08-01 20:49:20,616 - INFO - 📈 已处理 1550/5839 只股票，成功 1468 只
+2025-08-01 20:49:41,551 - INFO - 📈 已处理 1600/5839 只股票，成功 1518 只
+2025-08-01 20:50:19,948 - INFO - 📈 已处理 1700/5839 只股票，成功 1601 只
+2025-08-01 20:50:41,024 - INFO - 📈 已处理 1750/5839 只股票，成功 1647 只
+2025-08-01 20:51:01,569 - INFO - 📈 已处理 1800/5839 只股票，成功 1695 只
+2025-08-01 20:51:22,744 - INFO - 📈 已处理 1850/5839 只股票，成功 1744 只
+2025-08-01 20:51:43,805 - INFO - 📈 已处理 1900/5839 只股票，成功 1790 只
+2025-08-01 20:52:05,054 - INFO - 📈 已处理 1950/5839 只股票，成功 1840 只
+2025-08-01 20:52:26,450 - INFO - 📈 已处理 2000/5839 只股票，成功 1889 只
+2025-08-01 21:07:04,762 - INFO - 数据库连接已关闭
+2025-08-01 21:08:20,626 - INFO - 🌟 每日数据更新程序启动
+2025-08-01 21:08:20,627 - INFO - 🚀 开始每日数据更新...
+2025-08-01 21:08:20,627 - INFO - ============================================================
+2025-08-01 21:08:20,634 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-01 21:08:20,634 - INFO - 清空股票申万一二级行业...
+2025-08-01 21:08:20,665 - INFO - 🚀 开始获取ADATA所有股票股本信息...
+2025-08-01 21:09:45,333 - INFO - 数据库连接已关闭

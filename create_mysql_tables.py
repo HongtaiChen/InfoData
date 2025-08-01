@@ -70,23 +70,29 @@ def create_tables():
         # 3. 创建股票实时行情表
         create_stock_market_current_table(cursor)
         
-        # 4. 创建概念板块信息表
-        create_concept_info_table(cursor)
+        # 4. 创建同花顺概念板块信息表
+        create_ths_concept_info_table(cursor)
         
-        # 5. 创建股票概念关系表
-        create_stock_concepts_table(cursor)
+        # 5. 创建同花顺股票概念关系表
+        create_ths_stock_concepts_table(cursor)
         
         # 6. 创建交易日历表
         create_trade_calendar_table(cursor)
         
-        # 7. 创建指数信息表
-        create_index_info_table(cursor)
+        # 7. 创建同花顺指数信息表
+        create_ths_index_info_table(cursor)
         
         # 8. 创建指数历史数据表
         create_index_market_daily_table(cursor)
         
         # 9. 创建股票股本信息表
         create_stock_shares_table(cursor)
+        
+        # 10. 创建股票申万行业信息表
+        create_stock_industry_sw_table(cursor)
+        
+        # 11. 创建股票指数关系表
+        create_ths_stock_index_table(cursor)
         
         # 提交事务
         connection.commit()
@@ -178,46 +184,45 @@ def create_stock_market_current_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 股票实时行情表(stock_market_current)创建成功")
 
-def create_concept_info_table(cursor):
-    """创建概念板块信息表"""
+def create_ths_concept_info_table(cursor):
+    """创建同花顺概念板块信息表"""
     sql = """
-    CREATE TABLE IF NOT EXISTS concept_info (
+    CREATE TABLE IF NOT EXISTS ths_concept_info (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
         concept_code VARCHAR(20) NOT NULL COMMENT '概念代码',
         concept_name VARCHAR(100) COMMENT '概念名称',
         source VARCHAR(10) COMMENT '数据源(ths/east)',
-        stock_count INT COMMENT '成分股数量',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        UNIQUE KEY uk_concept_source (concept_code, source),
+        data_source varchar(100) COMMENT '数据来源',
         INDEX idx_concept_name (concept_name),
         INDEX idx_source (source),
-        data_source varchar(100) COMMENT '数据来源',
         INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='概念板块信息表'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺概念板块信息表'
     """
     cursor.execute(sql)
     logger.info("✓ 概念板块信息表(concept_info)创建成功")
 
-def create_stock_concepts_table(cursor):
-    """创建股票概念关系表"""
+def create_ths_stock_concepts_table(cursor):
+    """创建同花顺股票概念关系表"""
     sql = """
-    CREATE TABLE IF NOT EXISTS stock_concepts (
+    CREATE TABLE IF NOT EXISTS ths_stock_concepts (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
         concept_code VARCHAR(20) NOT NULL COMMENT '概念代码',
         concept_name VARCHAR(100) COMMENT '概念名称',
         source VARCHAR(10) COMMENT '数据源(ths/east)',
+        reason VARCHAR(1000) COMMENT '概念原因	',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        UNIQUE KEY uk_stock_concept (stock_code, concept_code, source),
+        data_source varchar(100) COMMENT '数据来源',
         INDEX idx_stock_code (stock_code),
         INDEX idx_concept_code (concept_code),
         INDEX idx_source (source),
-        data_source varchar(100) COMMENT '数据来源',
         INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票概念关系表'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺股票概念关系表'
     """
     cursor.execute(sql)
-    logger.info("✓ 股票概念关系表(stock_concepts)创建成功")
+    logger.info("✓ 同花顺股票概念关系表(stock_concepts)创建成功")
 
 def create_trade_calendar_table(cursor):
     """创建交易日历表"""
@@ -242,28 +247,46 @@ def create_trade_calendar_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 交易日历表(trade_calendar)创建成功")
 
-def create_index_info_table(cursor):
-    """创建指数信息表"""
+def create_ths_index_info_table(cursor):
+    """创建同花顺指数信息表"""
     sql = """
-    CREATE TABLE IF NOT EXISTS index_info (
+    CREATE TABLE IF NOT EXISTS ths_index_info (
         id INT AUTO_INCREMENT PRIMARY KEY,
         index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
         index_name VARCHAR(100) COMMENT '指数名称',
-        index_type VARCHAR(20) COMMENT '指数类型',
-        exchange VARCHAR(10) COMMENT '交易所',
-        base_date DATE COMMENT '基准日期',
-        base_point DECIMAL(10,2) COMMENT '基准点数',
+        concept_code VARCHAR(20) COMMENT '概念代码',
+        source VARCHAR(10) COMMENT '来源',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
         UNIQUE KEY uk_index_code (index_code),
         INDEX idx_index_name (index_name),
-        INDEX idx_index_type (index_type),
-        INDEX idx_exchange (exchange),
-        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_concept_code (concept_code),
         INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指数信息表'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺指数信息表'
     """
     cursor.execute(sql)
-    logger.info("✓ 指数信息表(index_info)创建成功")
+    logger.info("✓ 同花顺指数信息表(index_info)创建成功")
+
+
+def create_ths_stock_index_table(cursor):
+    """创建同花顺股票指数关系表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS ths_stock_index (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(100)  COMMENT '股票简称',
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        UNIQUE KEY uk_index_stock_code (index_code, stock_code),
+        INDEX idx_index_code (index_code),
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺股票指数关系表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 同花顺股票指数关系表(index_info)创建成功")
+
 
 def create_index_market_daily_table(cursor):
     """创建指数日K线数据表"""
@@ -294,14 +317,15 @@ def create_index_market_daily_table(cursor):
     logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")
     
 def create_stock_shares_table(cursor):
-    """创建指数日K线数据表"""
+    """创建股票股本信息表数据表"""
     sql = """
      CREATE TABLE IF NOT EXISTS stock_shares (
         id INT AUTO_INCREMENT PRIMARY KEY,
         stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
         change_date DATE COMMENT '变动时间',
-        total_shares BIGINT COMMENT '限售股本：股',
-        list_a_shares BIGINT COMMENT '流通A股股本：股',
+        total_shares BIGINT COMMENT '总股本：股',
+        limit_shares BIGINT COMMENT '限售股本：股',
+        list_a_shares DECIMAL(24,2)  COMMENT '流通A股股本：股',
         change_reason VARCHAR(1000) COMMENT '变动原因',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
         data_source varchar(100) COMMENT '数据来源',
@@ -312,7 +336,27 @@ def create_stock_shares_table(cursor):
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票股本信息表'
     """
     cursor.execute(sql)
-    logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")    
+    logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")   
+    
+def create_stock_industry_sw_table(cursor):
+    """创建股票申万一二级行业信息数据表"""
+    sql = """
+     CREATE TABLE IF NOT EXISTS stock_industry_sw (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        sw_code VARCHAR(10) COMMENT '申万行业代码',
+        industry_name VARCHAR(100) COMMENT '行业名称',
+        industry_type VARCHAR(10) COMMENT '行业类别',
+        source VARCHAR(100)  COMMENT '来源',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_trade_date (industry_name),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票申万一二级行业信息数据表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")   
 
 def show_tables():
     """显示创建的表"""

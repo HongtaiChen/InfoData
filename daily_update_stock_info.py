@@ -16,6 +16,7 @@ import time
 import configparser
 import traceback
 import tushare as ts
+import pandas as pd
 
 # 设置aushare接口token
 ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
@@ -193,22 +194,157 @@ class DailyDataUpdater:
         """重新初始化股票股本信息"""
         try:
             
-            logger.info("清空股票基本信息...")
+            logger.info("清空股票股本信息...")
             
             # 清空表
-            self.cursor.execute("DELETE FROM stock_info")
+            self.cursor.execute("DELETE FROM stock_shares")
             
-            # 批量插入
+
+            
+            logger.info("🚀 开始获取ADATA所有股票股本信息...")
+            
+            self.cursor.execute(f"SELECT stock_code,short_name  FROM stock_info a ORDER BY a.stock_code")
+            stocks = self.cursor.fetchall() # type: ignore            
+
+            success_count = 0
+            
+            for i, (stock_code, stock_name) in enumerate(stocks, 1):
+                try:
+                    data_source = 'ADATA'
+                    df = adata.stock.info.get_stock_shares(stock_code=stock_code)
+                    
+                    if df.empty:
+                        continue
+                    
+                    
+                    # 批量插入
+                    insert_sql = """
+                    INSERT INTO stock_shares (stock_code, change_date, total_shares, limit_shares, list_a_shares,change_reason, update_time,data_source) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                                        
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            stock_code,
+                            str(row.get('change_date')) if row.get('change_date') else None,
+                            int(row.get('total_shares', 0)) if pd.notna(row.get('total_shares', 0))  else None, 
+                            int(row.get('limit_shares', 0)) if pd.notna(row.get('limit_shares', 0))  else None, 
+                            float(row.get('list_a_shares', 0.0)) if pd.notna(row.get('list_a_shares', 0.0))  else None, 
+                            str(row.get('change_reason', 0)) if row.get('change_reason') else None, 
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(stocks)} 只股票，成功 {success_count} 只")
+                    
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"{stock_code} {stock_name} 股本信息: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 今日股本信息更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新今日股本信息失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)
+
+    def insert_all_stock_industry_sw(self):
+        """重新初始化股票申万一二级行业"""
+        try:
+            
+            logger.info("清空股票申万一二级行业...")
+            
+            # 清空表
+            self.cursor.execute("DELETE FROM stock_industry_sw")
+            
+
+            
+            logger.info("🚀 开始获取ADATA所有股票股本信息...")
+            
+            self.cursor.execute(f"SELECT stock_code,short_name FROM stock_info a ORDER BY a.stock_code")
+            stocks = self.cursor.fetchall() # type: ignore            
+
+            success_count = 0
+            
+            for i, (stock_code, stock_name) in enumerate(stocks, 1):
+                try:
+                    data_source = 'ADATA'
+                    df = adata.stock.info.get_industry_sw(stock_code=stock_code)
+                    
+                    if df.empty:
+                        continue
+                    
+                    
+                    # 批量插入
+                    insert_sql = """
+                    INSERT INTO stock_industry_sw (stock_code, sw_code, industry_name, industry_type, source,update_time,data_source) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                                        
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            stock_code,
+                            str(row.get('sw_code')) if row.get('sw_code') else None,
+                            str(row.get('industry_name')) if row.get('industry_name') else None,
+                            str(row.get('industry_type')) if row.get('industry_type') else None, 
+                            str(row.get('source')) if row.get('source') else None, 
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(stocks)} 只股票，成功 {success_count} 只")
+                    
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"{stock_code} {stock_name} 申万一二级行业信息: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 今日申万一二级行业信息更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新今日申万一二级行业信息失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)
+
+    def insert_all_ths_concept_code(self):
+        """重新初始化同花顺的概念代码信息"""
+        try:
+            
+            logger.info("清空同花顺的概念代码信息...")
+            
+            # 清空表
+            self.cursor.execute("DELETE FROM ths_concept_info")
+            
+             # 批量插入
             insert_sql = """
-            INSERT INTO stock_info (stock_code, short_name, exchange, list_date,data_source, update_time) 
+            INSERT INTO ths_concept_info (index_code, concept_code, concept_name, source, update_time, data_source) 
             VALUES (%s, %s, %s, %s, %s, %s)
             """
+
             
-            logger.info("🚀 开始获取ADATA所有股票基本信息...")
+            logger.info("🚀 开始获取ADATA所有同花顺的概念代码信息...")
             
-            # 获取ADATA数据
-            df = adata.stock.info.all_code()
-            logger.info(f"📊 获取到 {len(df)} 只股票信息")
+            df = adata.stock.info.all_concept_code_ths()
+            logger.info(f"📊 获取到 {len(df)} 只概念代码信息")
             
             batch_data = []
             insert_count = 0
@@ -216,20 +352,14 @@ class DailyDataUpdater:
             for _, row in df.iterrows():
                 try:
                     # 处理日期
-                    list_date = None
-                    if row['list_date'] and str(row['list_date']) != 'nan':
-                        try:
-                            list_date = str(row['list_date'])
-                        except:
-                            list_date = None
                     
                     batch_data.append((
-                        str(row['stock_code']),
-                        str(row['short_name']),
-                        str(row['exchange']),
-                        list_date,
-                        'ADTA',
-                        datetime.now()
+                        str(row['index_code']),
+                        str(row['concept_code']),
+                        str(row['name']),                         
+                        str(row['source']),
+                        datetime.now(),
+                        'ADTA'
                     ))
                     
                     # 批量插入
@@ -237,11 +367,11 @@ class DailyDataUpdater:
                         self.cursor.executemany(insert_sql, batch_data)
                         self.connection.commit()
                         insert_count += len(batch_data)
-                        logger.info(f"📈 已插入 {insert_count} 只股票信息")
+                        logger.info(f"📈 已插入 {insert_count} 只概念代码信息")
                         batch_data = []
                         
                 except Exception as e:
-                    logger.warning(f"处理股票 {row['stock_code']} 失败: {str(e)}")
+                    logger.warning(f"处理只概念代码信息{row['name']} 失败: {str(e)}")
                     continue
             
             # 插入剩余数据
@@ -250,12 +380,14 @@ class DailyDataUpdater:
                 self.connection.commit()
                 insert_count += len(batch_data)
             
-            logger.info(f"✅ 成功插入 {insert_count} 只股票基本信息")
+            logger.info(f"✅ 成功插入 {insert_count} 只概念代码信息")
             
         except Exception as e:
-            logger.error(f"✗ 插入股票基本信息失败: {str(e)}")
+            logger.error(f"✗ 插入概念代码信息失败: {str(e)}")
             if self.connection:
-                self.connection.rollback()        
+                self.connection.rollback()
+
+            
     
     def update_daily_kline(self):
         """更新近7个自然日K线数据"""
@@ -351,13 +483,22 @@ class DailyDataUpdater:
             # # 1. 重新插入所有股票基本信息
             # self.insert_all_stock_info()
             
-            # 2. 更新今日K线数据
-            self.update_daily_kline()
+            # # 2. 更新今日K线数据
+            # self.update_daily_kline()
             
-            # 3. 生成统计报告
+            # 3. 更新股本信息
+            # self.insert_all_stock_shares()
+            
+            # 4. 更新股票申万行业一二级信息
+            # self.insert_all_stock_industry_sw()
+            
+            # 5. 更新同花顺概念信息表
+            # self.insert_all_ths_concept_code()
+            
+            # 生成统计报告
             self.show_update_summary()
             
-            # 4. 保存更新日志
+            # 保存更新日志
             self.save_update_log()
             
             logger.info("🎉 每日数据更新完成！")
