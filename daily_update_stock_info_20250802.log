@@ -341,3 +341,2073 @@
 2025-08-02 07:03:16,968 - INFO - 🎉 每日数据更新完成！
 2025-08-02 07:03:16,968 - INFO - 数据库连接已关闭
 2025-08-02 07:03:16,969 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 07:15:41,309 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:15:41,310 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:15:41,310 - INFO - ============================================================
+2025-08-02 07:15:41,314 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:15:41,314 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:15:41,317 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:15:41,572 - WARNING - ⚠️ 000001 平安银行同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:41,705 - WARNING - ⚠️ 000002 万科Ａ同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:41,838 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:15:41,989 - WARNING - ⚠️ 000004 *ST国华同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:42,169 - WARNING - ⚠️ 000005 ST星源同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:42,299 - WARNING - ⚠️ 000006 深振业Ａ同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:42,434 - WARNING - ⚠️ 000007 全新好同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:42,592 - WARNING - ⚠️ 000008 神州高铁同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:42,756 - WARNING - ⚠️ 000009 中国宝安同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:42,875 - WARNING - ⚠️ 000010 美丽生态同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:43,008 - WARNING - ⚠️ 000011 深物业A同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:43,190 - WARNING - ⚠️ 000012 南玻Ａ同花顺股票概念关系: 'concept_name'
+2025-08-02 07:15:43,210 - INFO - 数据库连接已关闭
+2025-08-02 07:16:07,629 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:16:07,630 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:16:07,631 - INFO - ============================================================
+2025-08-02 07:16:07,635 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:16:07,635 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:16:07,636 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:16:08,187 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:16:08,566 - WARNING - ⚠️ 000005 ST星源同花顺股票概念关系: (1062, "Duplicate entry '000005-None' for key 'ths_stock_concepts.uk_stock_concept'")
+2025-08-02 07:16:10,299 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:16:10,711 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:16:11,403 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:16:12,175 - INFO - 数据库连接已关闭
+2025-08-02 07:17:35,901 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:17:35,901 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:17:35,901 - INFO - ============================================================
+2025-08-02 07:17:35,905 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:17:35,905 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:17:35,908 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:17:36,439 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:17:38,607 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:17:38,889 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:17:39,437 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:17:40,267 - WARNING - ⚠️ 000023 *ST深天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:17:40,376 - WARNING - ⚠️ 000024 招商地产同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:17:41,011 - INFO - 数据库连接已关闭
+2025-08-02 07:18:38,309 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:18:38,310 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:18:38,310 - INFO - ============================================================
+2025-08-02 07:18:38,314 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:18:38,314 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:18:38,318 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:18:38,879 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:18:39,220 - WARNING - ⚠️ 000005 ST星源同花顺股票概念关系: (1048, "Column 'concept_code' cannot be null")
+2025-08-02 07:18:40,875 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:18:41,172 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:18:41,724 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:18:42,509 - WARNING - ⚠️ 000023 *ST深天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:18:42,598 - WARNING - ⚠️ 000024 招商地产同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:18:43,952 - INFO - 数据库连接已关闭
+2025-08-02 07:19:16,849 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:19:16,850 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:19:16,850 - INFO - ============================================================
+2025-08-02 07:19:16,853 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:19:16,853 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:19:16,855 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:19:17,432 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:19:19,585 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:19:19,875 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:19:20,421 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:19:21,183 - WARNING - ⚠️ 000023 *ST深天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:19:21,269 - WARNING - ⚠️ 000024 招商地产同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:19:22,823 - INFO - 数据库连接已关闭
+2025-08-02 07:36:19,783 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:36:19,783 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:36:19,783 - INFO - ============================================================
+2025-08-02 07:36:19,795 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:36:19,795 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:36:19,797 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:36:20,513 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:36:23,000 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:36:23,418 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:36:24,069 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:36:24,278 - INFO - 数据库连接已关闭
+2025-08-02 07:36:56,552 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:36:56,552 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:36:56,552 - INFO - ============================================================
+2025-08-02 07:36:56,555 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:36:56,556 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:36:56,558 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:36:57,078 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:36:59,177 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:36:59,467 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:00,014 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:01,013 - WARNING - ⚠️ 000023 *ST深天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:01,118 - WARNING - ⚠️ 000024 招商地产同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:03,482 - WARNING - ⚠️ 000033 新都退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:04,716 - WARNING - ⚠️ 000038 大通退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:06,188 - WARNING - ⚠️ 000047 ST中侨同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:08,107 - INFO - 📈 已处理 50/5839 只股票，成功 41 只
+2025-08-02 07:37:13,528 - WARNING - ⚠️ 000150 *ST宜康同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:18,136 - WARNING - ⚠️ 000405 ST鑫光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:18,282 - WARNING - ⚠️ 000406 石油大明同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:19,777 - WARNING - ⚠️ 000412 ST五环同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:19,901 - WARNING - ⚠️ 000413 ST旭电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:20,265 - WARNING - ⚠️ 000416 *ST民控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:20,711 - WARNING - ⚠️ 000418 小天鹅A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:21,663 - INFO - 📈 已处理 100/5839 只股票，成功 84 只
+2025-08-02 07:37:24,299 - WARNING - ⚠️ 000502 绿景退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:25,761 - WARNING - ⚠️ 000508 琼民源A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:26,484 - WARNING - ⚠️ 000511 烯碳退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:27,115 - WARNING - ⚠️ 000515 攀渝钛业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:28,776 - WARNING - ⚠️ 000522 白云山A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:30,036 - WARNING - ⚠️ 000527 美的电器同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:37:31,271 - INFO - 数据库连接已关闭
+2025-08-02 07:39:11,619 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:39:11,620 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:39:11,620 - INFO - ============================================================
+2025-08-02 07:39:11,623 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:39:11,623 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:39:11,626 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:39:11,757 - ERROR - ❌ 更新今日同花顺股票概念关系失败: name 'stock_name' is not defined
+2025-08-02 07:39:11,757 - INFO - ============================================================
+2025-08-02 07:39:11,758 - INFO - 📊 每日数据更新统计
+2025-08-02 07:39:11,758 - INFO - ============================================================
+2025-08-02 07:39:11,758 - INFO - ⏱️  更新耗时: 0:00:00.137393
+2025-08-02 07:39:11,758 - INFO - 📈 实时行情: 0 条
+2025-08-02 07:39:11,758 - INFO - 📊 今日K线: 0 条
+2025-08-02 07:39:11,758 - INFO - 📅 交易日历: 0 条
+2025-08-02 07:39:11,758 - INFO - ❌ 错误数量: 1
+2025-08-02 07:39:11,758 - INFO -    • 更新今日同花顺股票概念关系失败: name 'stock_name' is not defined
+2025-08-02 07:39:11,758 - INFO - ============================================================
+2025-08-02 07:39:11,765 - INFO - 🎉 每日数据更新完成！
+2025-08-02 07:39:11,765 - INFO - 数据库连接已关闭
+2025-08-02 07:39:11,765 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 07:39:39,674 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:39:39,674 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:39:39,674 - INFO - ============================================================
+2025-08-02 07:39:39,677 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:39:39,677 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:39:39,678 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:39:39,806 - WARNING - ⚠️ 000001 平安银行同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:39,965 - WARNING - ⚠️ 000002 万科Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,055 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:40,173 - WARNING - ⚠️ 000004 *ST国华同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,268 - WARNING - ⚠️ 000005 ST星源同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,362 - WARNING - ⚠️ 000006 深振业Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,461 - WARNING - ⚠️ 000007 全新好同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,581 - WARNING - ⚠️ 000008 神州高铁同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,709 - WARNING - ⚠️ 000009 中国宝安同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,797 - WARNING - ⚠️ 000010 美丽生态同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,885 - WARNING - ⚠️ 000011 深物业A同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:40,996 - WARNING - ⚠️ 000012 南玻Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,090 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:41,183 - WARNING - ⚠️ 000014 沙河股份同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,261 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:41,399 - WARNING - ⚠️ 000016 深康佳Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,489 - WARNING - ⚠️ 000017 深中华A同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,565 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:41,681 - WARNING - ⚠️ 000019 深粮控股同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,770 - WARNING - ⚠️ 000020 深华发Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,895 - WARNING - ⚠️ 000021 深科技同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:41,978 - WARNING - ⚠️ 000023 *ST深天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:42,065 - WARNING - ⚠️ 000024 招商地产同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:42,163 - WARNING - ⚠️ 000025 特力Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,281 - WARNING - ⚠️ 000026 飞亚达同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,401 - WARNING - ⚠️ 000027 深圳能源同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,506 - WARNING - ⚠️ 000028 国药一致同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,595 - WARNING - ⚠️ 000029 深深房Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,717 - WARNING - ⚠️ 000030 富奥股份同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,808 - WARNING - ⚠️ 000031 大悦城同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:42,954 - WARNING - ⚠️ 000032 深桑达Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,044 - WARNING - ⚠️ 000033 新都退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:43,180 - WARNING - ⚠️ 000034 神州数码同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,287 - WARNING - ⚠️ 000035 中国天楹同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,374 - WARNING - ⚠️ 000036 华联控股同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,475 - WARNING - ⚠️ 000037 深南电A同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,553 - WARNING - ⚠️ 000038 大通退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:43,796 - WARNING - ⚠️ 000039 中集集团同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,888 - WARNING - ⚠️ 000040 *ST旭蓝同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:43,988 - WARNING - ⚠️ 000042 中洲控股同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,077 - WARNING - ⚠️ 000045 深纺织Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,166 - WARNING - ⚠️ 000046 *ST泛海同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,250 - WARNING - ⚠️ 000047 ST中侨同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:44,345 - WARNING - ⚠️ 000048 京基智农同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,476 - WARNING - ⚠️ 000049 德赛电池同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,606 - WARNING - ⚠️ 000050 深天马Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,722 - WARNING - ⚠️ 000055 方大集团同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,832 - WARNING - ⚠️ 000056 皇庭国际同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:44,943 - WARNING - ⚠️ 000058 深赛格同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,054 - WARNING - ⚠️ 000059 华锦股份同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,170 - WARNING - ⚠️ 000060 中金岭南同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,314 - WARNING - ⚠️ 000061 农产品同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,458 - WARNING - ⚠️ 000062 深圳华强同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,592 - WARNING - ⚠️ 000063 中兴通讯同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,707 - WARNING - ⚠️ 000065 北方国际同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,839 - WARNING - ⚠️ 000066 中国长城同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:45,948 - WARNING - ⚠️ 000068 华控赛格同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,074 - WARNING - ⚠️ 000069 华侨城Ａ同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,202 - WARNING - ⚠️ 000070 特发信息同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,312 - WARNING - ⚠️ 000078 海王生物同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,419 - WARNING - ⚠️ 000088 盐田港同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,509 - WARNING - ⚠️ 000089 深圳机场同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,617 - WARNING - ⚠️ 000090 天健集团同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,711 - WARNING - ⚠️ 000096 广聚能源同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,816 - WARNING - ⚠️ 000099 中信海直同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:46,936 - WARNING - ⚠️ 000100 TCL科技同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:47,025 - WARNING - ⚠️ 000150 *ST宜康同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:39:47,134 - WARNING - ⚠️ 000151 中成股份同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:47,251 - WARNING - ⚠️ 000153 丰原药业同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:47,370 - WARNING - ⚠️ 000155 川能动力同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:47,491 - WARNING - ⚠️ 000156 华数传媒同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:47,626 - WARNING - ⚠️ 000157 中联重科同花顺股票概念关系: not all arguments converted during string formatting
+2025-08-02 07:39:47,647 - INFO - 数据库连接已关闭
+2025-08-02 07:40:10,433 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 07:40:10,433 - INFO - 🚀 开始每日数据更新...
+2025-08-02 07:40:10,433 - INFO - ============================================================
+2025-08-02 07:40:10,449 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 07:40:10,449 - INFO - 清空同花顺股票概念关系...
+2025-08-02 07:40:10,450 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 07:40:11,024 - WARNING - ⚠️ 000003 PT金田A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:13,201 - WARNING - ⚠️ 000013 *ST石化A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:13,500 - WARNING - ⚠️ 000015 PT中浩A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:14,053 - WARNING - ⚠️ 000018 神城A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:14,832 - WARNING - ⚠️ 000023 *ST深天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:14,936 - WARNING - ⚠️ 000024 招商地产同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:16,909 - WARNING - ⚠️ 000033 新都退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:17,922 - WARNING - ⚠️ 000038 大通退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:19,107 - WARNING - ⚠️ 000047 ST中侨同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:20,728 - INFO - 📈 已处理 50/5839 只股票，成功 41 只
+2025-08-02 07:40:24,787 - WARNING - ⚠️ 000150 *ST宜康同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:28,765 - WARNING - ⚠️ 000405 ST鑫光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:28,852 - WARNING - ⚠️ 000406 石油大明同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:30,342 - WARNING - ⚠️ 000412 ST五环同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:30,470 - WARNING - ⚠️ 000413 ST旭电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:30,875 - WARNING - ⚠️ 000416 *ST民控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:31,292 - WARNING - ⚠️ 000418 小天鹅A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:32,280 - INFO - 📈 已处理 100/5839 只股票，成功 84 只
+2025-08-02 07:40:34,993 - WARNING - ⚠️ 000502 绿景退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:36,471 - WARNING - ⚠️ 000508 琼民源A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:37,196 - WARNING - ⚠️ 000511 烯碳退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:37,898 - WARNING - ⚠️ 000515 攀渝钛业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:39,659 - WARNING - ⚠️ 000522 白云山A同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:40,914 - WARNING - ⚠️ 000527 美的电器同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:42,953 - WARNING - ⚠️ 000535 *ST猴王同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:44,834 - WARNING - ⚠️ 000542 TCL通讯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:45,023 - INFO - 📈 已处理 150/5839 只股票，成功 126 只
+2025-08-02 07:40:46,620 - WARNING - ⚠️ 000549 S湘火炬同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:48,564 - WARNING - ⚠️ 000556 PT南洋同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:50,146 - WARNING - ⚠️ 000562 宏源证券同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:51,844 - WARNING - ⚠️ 000569 长城股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:53,339 - WARNING - ⚠️ 000578 盐湖集团同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:54,055 - WARNING - ⚠️ 000583 S*ST托普同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:54,451 - WARNING - ⚠️ 000585 东电退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:54,889 - WARNING - ⚠️ 000587 *ST金洲同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:55,010 - WARNING - ⚠️ 000588 PT粤金曼同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:57,782 - INFO - 📈 已处理 200/5839 只股票，成功 167 只
+2025-08-02 07:40:58,902 - WARNING - ⚠️ 000602 金马集团同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:40:59,604 - WARNING - ⚠️ 000606 顺利退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:00,778 - WARNING - ⚠️ 000611 天首退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:01,420 - WARNING - ⚠️ 000613 东海A退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:01,818 - WARNING - ⚠️ 000616 *ST海投同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:02,235 - WARNING - ⚠️ 000618 吉林化工同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:02,905 - WARNING - ⚠️ 000621 *ST比特同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:03,026 - WARNING - ⚠️ 000622 恒立退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:08,446 - WARNING - ⚠️ 000653 ST九州同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:09,431 - WARNING - ⚠️ 000658 ST海洋同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:09,790 - WARNING - ⚠️ 000660 *ST南华同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:10,206 - WARNING - ⚠️ 000662 天夏退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:10,371 - INFO - 📈 已处理 250/5839 只股票，成功 205 只
+2025-08-02 07:41:10,923 - WARNING - ⚠️ 000666 经纬纺机同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:11,041 - WARNING - ⚠️ 000667 ST美置同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:12,003 - WARNING - ⚠️ 000671 ST阳光城同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:12,394 - WARNING - ⚠️ 000673 当代退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:12,516 - WARNING - ⚠️ 000675 ST银山同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:15,402 - WARNING - ⚠️ 000687 华讯退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:15,854 - WARNING - ⚠️ 000689 ST宏业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:16,779 - WARNING - ⚠️ 000693 华泽退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:17,724 - WARNING - ⚠️ 000699 S*ST佳纸同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:23,039 - INFO - 📈 已处理 300/5839 只股票，成功 246 只
+2025-08-02 07:41:25,321 - WARNING - ⚠️ 000730 *ST环保同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:27,679 - WARNING - ⚠️ 000748 长城信息同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:30,316 - WARNING - ⚠️ 000760 斯太退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:30,991 - WARNING - ⚠️ 000763 锦州石化同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:31,112 - WARNING - ⚠️ 000765 *ST华信同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:32,063 - WARNING - ⚠️ 000769 *ST大菲同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:33,298 - WARNING - ⚠️ 000780 ST平能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:35,969 - INFO - 📈 已处理 350/5839 只股票，成功 289 只
+2025-08-02 07:41:38,975 - WARNING - ⚠️ 000805 *ST炎黄同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:39,124 - WARNING - ⚠️ 000806 银河退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:41,535 - WARNING - ⚠️ 000817 辽河油田同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:43,894 - WARNING - ⚠️ 000827 *ST长兴同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:45,116 - WARNING - ⚠️ 000832 *ST龙涤同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:45,504 - WARNING - ⚠️ 000835 长动退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:48,932 - INFO - 📈 已处理 400/5839 只股票，成功 333 只
+2025-08-02 07:41:49,774 - WARNING - ⚠️ 000866 扬子石化同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:41:59,726 - WARNING - ⚠️ 000916 华北高速同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:00,156 - WARNING - ⚠️ 000918 *ST嘉凯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:02,640 - INFO - 📈 已处理 450/5839 只股票，成功 380 只
+2025-08-02 07:42:05,354 - WARNING - ⚠️ 000939 凯迪退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:07,391 - WARNING - ⚠️ 000956 中原油气同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:11,336 - WARNING - ⚠️ 000971 *ST高升同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:12,297 - WARNING - ⚠️ 000976 *ST华铁同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:12,975 - WARNING - ⚠️ 000979 中弘退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:13,635 - WARNING - ⚠️ 000982 中银绒业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:15,723 - INFO - 📈 已处理 500/5839 只股票，成功 424 只
+2025-08-02 07:42:29,553 - INFO - 📈 已处理 550/5839 只股票，成功 474 只
+2025-08-02 07:42:43,291 - INFO - 📈 已处理 600/5839 只股票，成功 524 只
+2025-08-02 07:42:46,294 - WARNING - ⚠️ 002002 ST鸿达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:49,388 - WARNING - ⚠️ 002013 中航机电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:50,737 - WARNING - ⚠️ 002018 华信退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:42:57,039 - INFO - 📈 已处理 650/5839 只股票，成功 571 只
+2025-08-02 07:43:05,978 - WARNING - ⚠️ 002070 众和退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:06,105 - WARNING - ⚠️ 002071 长城退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:10,866 - WARNING - ⚠️ 002087 新纺退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:11,246 - WARNING - ⚠️ 002089 新海退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:11,732 - INFO - 📈 已处理 700/5839 只股票，成功 617 只
+2025-08-02 07:43:18,027 - WARNING - ⚠️ 002113 *ST天润同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:25,840 - INFO - 📈 已处理 750/5839 只股票，成功 666 只
+2025-08-02 07:43:26,338 - WARNING - ⚠️ 002143 印纪退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:27,357 - WARNING - ⚠️ 002147 新光退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:39,869 - INFO - 📈 已处理 800/5839 只股票，成功 714 只
+2025-08-02 07:43:47,899 - WARNING - ⚠️ 002220 天宝退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:43:53,722 - INFO - 📈 已处理 850/5839 只股票，成功 763 只
+2025-08-02 07:43:58,684 - WARNING - ⚠️ 002260 德奥退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:07,923 - INFO - 📈 已处理 900/5839 只股票，成功 812 只
+2025-08-02 07:44:12,287 - WARNING - ⚠️ 002308 *ST威创同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:16,916 - WARNING - ⚠️ 002325 *ST洪涛同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:19,794 - WARNING - ⚠️ 002336 人乐退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:21,889 - INFO - 📈 已处理 950/5839 只股票，成功 859 只
+2025-08-02 07:44:26,678 - WARNING - ⚠️ 002359 北讯退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:36,058 - INFO - 📈 已处理 1000/5839 只股票，成功 908 只
+2025-08-02 07:44:41,814 - WARNING - ⚠️ 002411 必康退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:43,367 - WARNING - ⚠️ 002417 深南退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:50,476 - INFO - 📈 已处理 1050/5839 只股票，成功 956 只
+2025-08-02 07:44:52,290 - WARNING - ⚠️ 002447 晨鑫退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:53,087 - WARNING - ⚠️ 002450 康得退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:44:57,181 - WARNING - ⚠️ 002464 众应退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:00,134 - WARNING - ⚠️ 002473 圣莱退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:01,384 - WARNING - ⚠️ 002477 雏鹰退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:05,948 - INFO - 📈 已处理 1100/5839 只股票，成功 1001 只
+2025-08-02 07:45:08,826 - WARNING - ⚠️ 002499 科林退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:09,870 - WARNING - ⚠️ 002503 *ST搜特同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:10,003 - WARNING - ⚠️ 002504 *ST弘高同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:11,466 - WARNING - ⚠️ 002509 天茂退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:22,551 - INFO - 📈 已处理 1150/5839 只股票，成功 1047 只
+2025-08-02 07:45:42,313 - INFO - 📈 已处理 1200/5839 只股票，成功 1097 只
+2025-08-02 07:45:46,636 - WARNING - ⚠️ 002604 龙力退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:52,134 - WARNING - ⚠️ 002618 丹邦退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:45:52,254 - WARNING - ⚠️ 002619 *ST艾格同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:03,445 - INFO - 📈 已处理 1250/5839 只股票，成功 1144 只
+2025-08-02 07:46:17,445 - WARNING - ⚠️ 002680 长生退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:18,493 - WARNING - ⚠️ 002684 猛狮退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:20,866 - INFO - 📈 已处理 1300/5839 只股票，成功 1192 只
+2025-08-02 07:46:25,352 - WARNING - ⚠️ 002711 欧浦退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:32,897 - WARNING - ⚠️ 002740 *ST爱迪同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:34,508 - INFO - 📈 已处理 1350/5839 只股票，成功 1240 只
+2025-08-02 07:46:35,554 - WARNING - ⚠️ 002751 易尚退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:40,072 - WARNING - ⚠️ 002770 科迪退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:41,549 - WARNING - ⚠️ 002776 *ST柏龙同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:42,868 - WARNING - ⚠️ 002781 奇信退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:46:47,833 - INFO - 📈 已处理 1400/5839 只股票，成功 1286 只
+2025-08-02 07:47:01,681 - INFO - 📈 已处理 1450/5839 只股票，成功 1336 只
+2025-08-02 07:47:15,621 - INFO - 📈 已处理 1500/5839 只股票，成功 1386 只
+2025-08-02 07:47:22,116 - WARNING - ⚠️ 002936 郑州银行同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:27,413 - WARNING - ⚠️ 002958 青农商行同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:29,006 - INFO - 📈 已处理 1550/5839 只股票，成功 1434 只
+2025-08-02 07:47:37,522 - WARNING - ⚠️ 002998 优彩资源同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:43,028 - INFO - 📈 已处理 1600/5839 只股票，成功 1483 只
+2025-08-02 07:47:50,743 - WARNING - ⚠️ 200002 万科B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:50,882 - WARNING - ⚠️ 200003 PT金田B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,000 - WARNING - ⚠️ 200011 深物业B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,117 - WARNING - ⚠️ 200012 南玻Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,228 - WARNING - ⚠️ 200013 *ST石化B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,346 - WARNING - ⚠️ 200015 PT中浩B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,466 - WARNING - ⚠️ 200016 深康佳Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,583 - WARNING - ⚠️ 200017 深中华B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,700 - WARNING - ⚠️ 200018 神城B退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,837 - WARNING - ⚠️ 200019 深粮B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:51,950 - WARNING - ⚠️ 200020 深华发Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,075 - WARNING - ⚠️ 200024 招商局B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,183 - WARNING - ⚠️ 200025 特力Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,335 - WARNING - ⚠️ 200026 飞亚达Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,450 - WARNING - ⚠️ 200028 一致Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,583 - WARNING - ⚠️ 200029 深深房Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,700 - WARNING - ⚠️ 200030 富奥B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,838 - WARNING - ⚠️ 200037 深南电B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:52,966 - WARNING - ⚠️ 200039 中集B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,084 - WARNING - ⚠️ 200041 *ST本实B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,200 - WARNING - ⚠️ 200045 深纺织Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,366 - WARNING - ⚠️ 200053 深基地B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,483 - WARNING - ⚠️ 200054 建车B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,600 - WARNING - ⚠️ 200055 方大Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,748 - WARNING - ⚠️ 200056 皇庭B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,865 - WARNING - ⚠️ 200057 *ST大洋B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:53,999 - WARNING - ⚠️ 200058 深赛格B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,162 - WARNING - ⚠️ 200152 山航B退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,282 - WARNING - ⚠️ 200160 东沣B退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,417 - WARNING - ⚠️ 200168 *ST舜喆B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,533 - WARNING - ⚠️ 200413 ST东旭B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,664 - WARNING - ⚠️ 200418 小天鹅B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,783 - WARNING - ⚠️ 200429 粤高速Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:54,909 - WARNING - ⚠️ 200468 宁通信B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,017 - WARNING - ⚠️ 200488 ST晨鸣B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,139 - WARNING - ⚠️ 200505 京粮B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,251 - WARNING - ⚠️ 200512 闽灿坤Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,367 - WARNING - ⚠️ 200513 丽珠B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,483 - WARNING - ⚠️ 200521 虹美菱B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,617 - WARNING - ⚠️ 200530 冰山B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,749 - WARNING - ⚠️ 200539 粤电力Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,868 - WARNING - ⚠️ 200541 粤照明Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:55,983 - WARNING - ⚠️ 200550 江铃Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,199 - WARNING - ⚠️ 200553 安道麦B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,325 - WARNING - ⚠️ 200570 苏常柴Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,442 - WARNING - ⚠️ 200581 苏威孚Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,567 - WARNING - ⚠️ 200596 古井贡Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,683 - WARNING - ⚠️ 200613 东海B退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,802 - WARNING - ⚠️ 200625 长安Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:56,932 - WARNING - ⚠️ 200706 瓦轴B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,050 - WARNING - ⚠️ 200725 京东方Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,183 - WARNING - ⚠️ 200726 鲁泰Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,301 - WARNING - ⚠️ 200761 本钢板Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,432 - WARNING - ⚠️ 200770 武锅B退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,550 - WARNING - ⚠️ 200771 杭汽轮Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,682 - WARNING - ⚠️ 200869 张裕Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,802 - WARNING - ⚠️ 200986 粤华包B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:57,932 - WARNING - ⚠️ 200992 中鲁Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:47:58,050 - WARNING - ⚠️ 201872 招港B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:03,099 - INFO - 📈 已处理 1700/5839 只股票，成功 1524 只
+2025-08-02 07:48:04,747 - WARNING - ⚠️ 300023 宝德退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:05,928 - WARNING - ⚠️ 300028 金亚退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:09,058 - WARNING - ⚠️ 300038 数知退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:16,224 - WARNING - ⚠️ 300064 金刚退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:17,312 - INFO - 📈 已处理 1750/5839 只股票，成功 1570 只
+2025-08-02 07:48:23,473 - WARNING - ⚠️ 300089 文化退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:23,598 - WARNING - ⚠️ 300090 盛运退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:28,063 - WARNING - ⚠️ 300104 乐视退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:29,191 - WARNING - ⚠️ 300108 *ST吉药同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:32,693 - INFO - 📈 已处理 1800/5839 只股票，成功 1616 只
+2025-08-02 07:48:45,592 - WARNING - ⚠️ 300156 神雾退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:53,465 - INFO - 📈 已处理 1850/5839 只股票，成功 1665 只
+2025-08-02 07:48:56,505 - WARNING - ⚠️ 300178 腾邦退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:48:58,660 - WARNING - ⚠️ 300186 大华农同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:03,186 - WARNING - ⚠️ 300202 聚龙退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:07,082 - WARNING - ⚠️ 300216 千山退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:08,223 - INFO - 📈 已处理 1900/5839 只股票，成功 1711 只
+2025-08-02 07:49:23,926 - INFO - 📈 已处理 1950/5839 只股票，成功 1761 只
+2025-08-02 07:49:36,523 - WARNING - ⚠️ 300295 三六五网同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:41,676 - WARNING - ⚠️ 300296 利亚德同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:46,811 - WARNING - ⚠️ 300297 蓝盾退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:51,925 - WARNING - ⚠️ 300298 三诺生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:49:57,094 - WARNING - ⚠️ 300299 富春股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:02,237 - WARNING - ⚠️ 300300 ST峡创同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:07,378 - WARNING - ⚠️ 300301 ST长方同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:12,507 - WARNING - ⚠️ 300302 同有科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:17,659 - WARNING - ⚠️ 300303 聚飞光电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:22,794 - WARNING - ⚠️ 300304 云意电气同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:27,924 - WARNING - ⚠️ 300305 裕兴股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:33,034 - WARNING - ⚠️ 300306 远方信息同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:38,160 - WARNING - ⚠️ 300307 慈星股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:43,303 - WARNING - ⚠️ 300308 中际旭创同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:48,408 - WARNING - ⚠️ 300309 吉艾退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:53,531 - WARNING - ⚠️ 300310 宜通世纪同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:50:58,654 - WARNING - ⚠️ 300311 ST任子行同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:03,767 - WARNING - ⚠️ 300312 邦讯退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:08,877 - WARNING - ⚠️ 300313 *ST天山同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:13,989 - WARNING - ⚠️ 300314 戴维医疗同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:19,126 - WARNING - ⚠️ 300315 掌趣科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:24,243 - WARNING - ⚠️ 300316 晶盛机电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:29,360 - WARNING - ⚠️ 300317 珈伟新能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:34,470 - WARNING - ⚠️ 300318 博晖创新同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:39,579 - WARNING - ⚠️ 300319 麦捷科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:44,677 - WARNING - ⚠️ 300320 海达股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:49,786 - WARNING - ⚠️ 300321 同大股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:51:54,907 - WARNING - ⚠️ 300322 硕贝德同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:00,025 - WARNING - ⚠️ 300323 华灿光电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:05,141 - WARNING - ⚠️ 300324 旋极信息同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:10,249 - WARNING - ⚠️ 300325 德威退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:15,325 - WARNING - ⚠️ 300326 ST凯利同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:20,437 - WARNING - ⚠️ 300327 中颖电子同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:25,538 - WARNING - ⚠️ 300328 宜安科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:30,640 - WARNING - ⚠️ 300329 海伦钢琴同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:32,468 - WARNING - ⚠️ 300330 计通退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:34,421 - WARNING - ⚠️ 300336 新文退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:40,218 - WARNING - ⚠️ 300356 光一退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:41,376 - WARNING - ⚠️ 300362 天翔退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:42,644 - WARNING - ⚠️ 300367 网力退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:43,406 - INFO - 📈 已处理 2050/5839 只股票，成功 1821 只
+2025-08-02 07:52:43,922 - WARNING - ⚠️ 300372 欣泰退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:52:57,938 - INFO - 📈 已处理 2100/5839 只股票，成功 1870 只
+2025-08-02 07:53:00,874 - WARNING - ⚠️ 300431 暴风退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:53:11,669 - INFO - 📈 已处理 2150/5839 只股票，成功 1919 只
+2025-08-02 07:53:46,857 - INFO - 📈 已处理 2200/5839 只股票，成功 1969 只
+2025-08-02 07:53:48,206 - WARNING - ⚠️ 300526 中潜退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:54:00,387 - INFO - 📈 已处理 2250/5839 只股票，成功 2018 只
+2025-08-02 07:54:14,981 - INFO - 📈 已处理 2300/5839 只股票，成功 2068 只
+2025-08-02 07:54:18,592 - WARNING - ⚠️ 300637 扬帆新材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:54:28,333 - INFO - 📈 已处理 2350/5839 只股票，成功 2117 只
+2025-08-02 07:54:42,106 - INFO - 📈 已处理 2400/5839 只股票，成功 2167 只
+2025-08-02 07:54:45,840 - WARNING - ⚠️ 300742 越博退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:54:55,456 - INFO - 📈 已处理 2450/5839 只股票，成功 2216 只
+2025-08-02 07:55:00,153 - WARNING - ⚠️ 300799 左江退同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:55:08,871 - INFO - 📈 已处理 2500/5839 只股票，成功 2265 只
+2025-08-02 07:55:22,933 - INFO - 📈 已处理 2550/5839 只股票，成功 2315 只
+2025-08-02 07:55:36,715 - INFO - 📈 已处理 2600/5839 只股票，成功 2365 只
+2025-08-02 07:55:49,918 - INFO - 📈 已处理 2650/5839 只股票，成功 2415 只
+2025-08-02 07:56:03,230 - INFO - 📈 已处理 2700/5839 只股票，成功 2465 只
+2025-08-02 07:56:17,464 - INFO - 📈 已处理 2750/5839 只股票，成功 2515 只
+2025-08-02 07:56:33,660 - INFO - 📈 已处理 2800/5839 只股票，成功 2565 只
+2025-08-02 07:56:47,227 - INFO - 📈 已处理 2850/5839 只股票，成功 2615 只
+2025-08-02 07:57:00,521 - INFO - 📈 已处理 2900/5839 只股票，成功 2665 只
+2025-08-02 07:57:14,415 - INFO - 📈 已处理 2950/5839 只股票，成功 2715 只
+2025-08-02 07:57:29,167 - INFO - 📈 已处理 3000/5839 只股票，成功 2765 只
+2025-08-02 07:57:44,629 - INFO - 📈 已处理 3050/5839 只股票，成功 2815 只
+2025-08-02 07:58:00,245 - INFO - 📈 已处理 3100/5839 只股票，成功 2865 只
+2025-08-02 07:58:07,165 - WARNING - ⚠️ 600001 邯郸钢铁同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:07,302 - WARNING - ⚠️ 600002 齐鲁石化同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:07,420 - WARNING - ⚠️ 600003 ST东北高同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:07,786 - WARNING - ⚠️ 600005 武钢股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:14,800 - INFO - 📈 已处理 3150/5839 只股票，成功 2911 只
+2025-08-02 07:58:22,715 - WARNING - ⚠️ 600068 葛洲坝同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:22,868 - WARNING - ⚠️ 600069 退市银鸽同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:24,118 - WARNING - ⚠️ 600074 退市保千同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:24,915 - WARNING - ⚠️ 600077 *ST宋都同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:27,121 - WARNING - ⚠️ 600086 退市金钰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:28,031 - WARNING - ⚠️ 600090 退市济堂同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:28,167 - WARNING - ⚠️ 600091 退市明科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:28,327 - WARNING - ⚠️ 600092 S*ST精密同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:28,467 - WARNING - ⚠️ 600093 退市易见同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:28,883 - INFO - 📈 已处理 3200/5839 只股票，成功 2952 只
+2025-08-02 07:58:30,882 - WARNING - ⚠️ 600102 莱钢股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:36,397 - WARNING - ⚠️ 600122 *ST宏图同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:41,665 - WARNING - ⚠️ 600139 *ST西源同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:42,351 - WARNING - ⚠️ 600145 退市新亿同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:42,468 - WARNING - ⚠️ 600146 退市环球同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:43,788 - INFO - 📈 已处理 3250/5839 只股票，成功 2997 只
+2025-08-02 07:58:50,427 - WARNING - ⚠️ 600175 退市美都同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:51,882 - WARNING - ⚠️ 600181 S*ST云大同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:58,522 - WARNING - ⚠️ 600205 S山东铝同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:58:58,682 - INFO - 📈 已处理 3300/5839 只股票，成功 3044 只
+2025-08-02 07:58:59,460 - WARNING - ⚠️ 600209 退市罗顿同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:00,397 - WARNING - ⚠️ 600213 *ST亚星同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:01,836 - WARNING - ⚠️ 600220 ST阳光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:07,959 - WARNING - ⚠️ 600240 退市华业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:08,445 - WARNING - ⚠️ 600242 退市中昌同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:09,195 - WARNING - ⚠️ 600247 *ST成城同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:10,994 - WARNING - ⚠️ 600253 天方药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:12,656 - WARNING - ⚠️ 600260 *ST凯乐同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:12,852 - INFO - 📈 已处理 3350/5839 只股票，成功 3086 只
+2025-08-02 07:59:13,360 - WARNING - ⚠️ 600263 路桥建设同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:15,349 - WARNING - ⚠️ 600270 外运发展同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:17,178 - WARNING - ⚠️ 600275 退市昌鱼同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:20,300 - WARNING - ⚠️ 600286 S*ST国瓷同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:21,735 - WARNING - ⚠️ 600291 退市西水同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:22,881 - WARNING - ⚠️ 600296 S兰铝同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:27,552 - WARNING - ⚠️ 600311 *ST荣华同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:28,571 - INFO - 📈 已处理 3400/5839 只股票，成功 3129 只
+2025-08-02 07:59:28,808 - WARNING - ⚠️ 600317 营口港同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:29,638 - WARNING - ⚠️ 600321 正源股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:37,460 - WARNING - ⚠️ 600357 承德钒钛同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:44,117 - INFO - 📈 已处理 3450/5839 只股票，成功 3176 只
+2025-08-02 07:59:46,848 - WARNING - ⚠️ 600385 退市金泰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:49,668 - WARNING - ⚠️ 600393 ST粤泰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:51,459 - WARNING - ⚠️ 600401 退市海润同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:57,533 - WARNING - ⚠️ 600432 退市吉恩同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 07:59:59,896 - INFO - 📈 已处理 3500/5839 只股票，成功 3222 只
+2025-08-02 08:00:03,069 - WARNING - ⚠️ 600462 退市九有同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:05,332 - WARNING - ⚠️ 600472 包头铝业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:08,833 - WARNING - ⚠️ 600485 *ST信威同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:15,751 - INFO - 📈 已处理 3550/5839 只股票，成功 3269 只
+2025-08-02 08:00:22,305 - WARNING - ⚠️ 600532 退市未来同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:29,518 - WARNING - ⚠️ 600540 新赛股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:34,644 - WARNING - ⚠️ 600543 莫高股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:39,742 - WARNING - ⚠️ 600545 卓郎智能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:44,867 - WARNING - ⚠️ 600546 山煤国际同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:49,996 - WARNING - ⚠️ 600547 山东黄金同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:00:55,123 - WARNING - ⚠️ 600548 深高速同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:00,516 - WARNING - ⚠️ 600549 厦门钨业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:05,661 - WARNING - ⚠️ 600550 保变电气同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:10,787 - WARNING - ⚠️ 600551 时代出版同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:15,931 - WARNING - ⚠️ 600552 凯盛科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:21,092 - WARNING - ⚠️ 600553 太行水泥同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:26,267 - WARNING - ⚠️ 600555 退市海创同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:31,376 - WARNING - ⚠️ 600556 天下秀同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:36,520 - WARNING - ⚠️ 600557 康缘药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:41,663 - WARNING - ⚠️ 600558 大西洋同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:46,789 - WARNING - ⚠️ 600559 老白干酒同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:51,886 - WARNING - ⚠️ 600560 金自天正同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:01:56,998 - WARNING - ⚠️ 600561 江西长运同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:02,124 - WARNING - ⚠️ 600562 国睿科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:07,252 - WARNING - ⚠️ 600563 法拉电子同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:12,411 - WARNING - ⚠️ 600565 ST迪马同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:17,538 - WARNING - ⚠️ 600566 济川药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:22,666 - WARNING - ⚠️ 600567 山鹰国际同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:27,793 - WARNING - ⚠️ 600568 ST中珠同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:32,919 - WARNING - ⚠️ 600569 安阳钢铁同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:39,145 - WARNING - ⚠️ 600591 *ST上航同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:43,395 - WARNING - ⚠️ 600607 上实医药同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:45,088 - WARNING - ⚠️ 600614 退市鹏起同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:46,609 - INFO - 📈 已处理 3650/5839 只股票，成功 3340 只
+2025-08-02 08:02:47,991 - WARNING - ⚠️ 600625 PT水仙同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:48,429 - WARNING - ⚠️ 600627 上电股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:49,430 - WARNING - ⚠️ 600631 百联股份(已合并)同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:49,562 - WARNING - ⚠️ 600632 华联商厦同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:50,043 - WARNING - ⚠️ 600634 退市富控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:53,305 - WARNING - ⚠️ 600646 ST国嘉同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:53,428 - WARNING - ⚠️ 600647 退市同达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:54,701 - WARNING - ⚠️ 600652 退市游久同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:55,640 - WARNING - ⚠️ 600656 退市博元同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:56,314 - WARNING - ⚠️ 600659 *ST花雕同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:58,933 - WARNING - ⚠️ 600669 *ST鞍成同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:59,045 - WARNING - ⚠️ 600670 *ST斯达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:02:59,505 - WARNING - ⚠️ 600672 *ST华圣同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:00,753 - WARNING - ⚠️ 600677 *ST航通同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:01,442 - WARNING - ⚠️ 600680 *ST上普同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:03,261 - WARNING - ⚠️ 600687 退市刚泰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:05,426 - WARNING - ⚠️ 600695 退市绿庭同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:06,978 - WARNING - ⚠️ 600701 退市工新同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:09,000 - WARNING - ⚠️ 600709 ST生态同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:12,089 - INFO - 📈 已处理 3750/5839 只股票，成功 3421 只
+2025-08-02 08:03:12,845 - WARNING - ⚠️ 600723 首商股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:19,679 - WARNING - ⚠️ 600747 退市大控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:20,901 - WARNING - ⚠️ 600752 *ST哈慈同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:23,536 - WARNING - ⚠️ 600762 S*ST金荔同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:24,540 - WARNING - ⚠️ 600766 退市园城同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:24,660 - WARNING - ⚠️ 600767 退市运盛同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:25,370 - INFO - 📈 已处理 3800/5839 只股票，成功 3465 只
+2025-08-02 08:03:29,886 - WARNING - ⚠️ 600786 东方锅炉同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:30,310 - WARNING - ⚠️ 600788 *ST达曼同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:35,108 - WARNING - ⚠️ 600806 退市昆机同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:36,848 - WARNING - ⚠️ 600813 ST鞍一工同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:38,666 - INFO - 📈 已处理 3850/5839 只股票，成功 3511 只
+2025-08-02 08:03:39,486 - WARNING - ⚠️ 600823 *ST世茂同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:41,850 - WARNING - ⚠️ 600832 东方明珠同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:43,935 - WARNING - ⚠️ 600840 新湖创业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:44,327 - WARNING - ⚠️ 600842 中西药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:46,805 - WARNING - ⚠️ 600852 *ST中川同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:47,777 - WARNING - ⚠️ 600856 退市中天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:51,526 - WARNING - ⚠️ 600870 退市厦华同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:51,706 - INFO - 📈 已处理 3900/5839 只股票，成功 3554 只
+2025-08-02 08:03:53,735 - WARNING - ⚠️ 600878 *ST北科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:57,013 - WARNING - ⚠️ 600890 退市中房同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:57,128 - WARNING - ⚠️ 600891 退市秋林同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:58,408 - WARNING - ⚠️ 600896 退市海医同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:03:58,808 - WARNING - ⚠️ 600898 *ST美讯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:04:05,197 - INFO - 📈 已处理 3950/5839 只股票，成功 3599 只
+2025-08-02 08:04:10,999 - WARNING - ⚠️ 600978 *ST宜生同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:04:14,542 - WARNING - ⚠️ 600991 广汽长丰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:04:18,855 - INFO - 📈 已处理 4000/5839 只股票，成功 3647 只
+2025-08-02 08:04:21,992 - WARNING - ⚠️ 601028 玉龙股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:04:33,611 - INFO - 📈 已处理 4050/5839 只股票，成功 3696 只
+2025-08-02 08:04:41,716 - WARNING - ⚠️ 601258 *ST庞大同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:04:42,921 - WARNING - ⚠️ 601299 中国北车同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:04:48,005 - INFO - 📈 已处理 4100/5839 只股票，成功 3744 只
+2025-08-02 08:04:51,861 - WARNING - ⚠️ 601558 退市锐电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:05:06,194 - INFO - 📈 已处理 4150/5839 只股票，成功 3793 只
+2025-08-02 08:05:27,737 - INFO - 📈 已处理 4200/5839 只股票，成功 3843 只
+2025-08-02 08:05:45,346 - INFO - 📈 已处理 4250/5839 只股票，成功 3893 只
+2025-08-02 08:06:06,012 - INFO - 📈 已处理 4300/5839 只股票，成功 3943 只
+2025-08-02 08:06:21,848 - WARNING - ⚠️ 603133 退市碳元同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:06:26,156 - INFO - 📈 已处理 4350/5839 只股票，成功 3992 只
+2025-08-02 08:06:26,964 - WARNING - ⚠️ 603157 退市拉夏同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:06:50,012 - INFO - 📈 已处理 4400/5839 只股票，成功 4041 只
+2025-08-02 08:07:11,101 - INFO - 📈 已处理 4450/5839 只股票，成功 4091 只
+2025-08-02 08:07:30,309 - INFO - 📈 已处理 4500/5839 只股票，成功 4141 只
+2025-08-02 08:07:49,689 - INFO - 📈 已处理 4550/5839 只股票，成功 4191 只
+2025-08-02 08:07:59,757 - WARNING - ⚠️ 603555 ST贵人同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:08:05,465 - INFO - 📈 已处理 4600/5839 只股票，成功 4240 只
+2025-08-02 08:08:07,377 - WARNING - ⚠️ 603603 退市博天同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:08:19,921 - INFO - 📈 已处理 4650/5839 只股票，成功 4289 只
+2025-08-02 08:08:33,971 - INFO - 📈 已处理 4700/5839 只股票，成功 4339 只
+2025-08-02 08:08:47,624 - INFO - 📈 已处理 4750/5839 只股票，成功 4389 只
+2025-08-02 08:09:01,555 - INFO - 📈 已处理 4800/5839 只股票，成功 4439 只
+2025-08-02 08:09:08,454 - WARNING - ⚠️ 603996 退市中新同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:09:15,064 - INFO - 📈 已处理 4850/5839 只股票，成功 4488 只
+2025-08-02 08:09:21,925 - WARNING - ⚠️ 605166 聚合顺同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:09:28,645 - INFO - 📈 已处理 4900/5839 只股票，成功 4537 只
+2025-08-02 08:09:42,320 - INFO - 📈 已处理 4950/5839 只股票，成功 4587 只
+2025-08-02 08:09:56,352 - INFO - 📈 已处理 5000/5839 只股票，成功 4637 只
+2025-08-02 08:10:10,358 - INFO - 📈 已处理 5050/5839 只股票，成功 4687 只
+2025-08-02 08:10:12,118 - WARNING - ⚠️ 688129 东来技术同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:10:24,685 - INFO - 📈 已处理 5100/5839 只股票，成功 4736 只
+2025-08-02 08:10:39,478 - INFO - 📈 已处理 5150/5839 只股票，成功 4786 只
+2025-08-02 08:10:57,200 - WARNING - ⚠️ 688293 奥浦迈同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:02,327 - WARNING - ⚠️ 688295 中复神鹰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:07,433 - WARNING - ⚠️ 688296 和达科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:12,545 - WARNING - ⚠️ 688297 中无人机同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:17,666 - WARNING - ⚠️ 688298 东方生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:22,789 - WARNING - ⚠️ 688299 长阳科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:27,885 - WARNING - ⚠️ 688300 联瑞新材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:33,026 - WARNING - ⚠️ 688301 奕瑞科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:38,156 - WARNING - ⚠️ 688302 海创药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:43,297 - WARNING - ⚠️ 688303 大全能源同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:48,414 - WARNING - ⚠️ 688305 科德数控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:53,542 - WARNING - ⚠️ 688306 均普智能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:11:58,666 - WARNING - ⚠️ 688307 中润光学同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:03,776 - WARNING - ⚠️ 688308 欧科亿同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:14,525 - WARNING - ⚠️ 688319 欧林生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:19,635 - WARNING - ⚠️ 688320 禾川科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:24,772 - WARNING - ⚠️ 688321 微芯生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:29,868 - WARNING - ⚠️ 688322 奥比中光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:34,999 - WARNING - ⚠️ 688323 瑞华泰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:40,114 - WARNING - ⚠️ 688325 赛微微电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:45,207 - WARNING - ⚠️ 688326 经纬恒润同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:50,324 - WARNING - ⚠️ 688327 云从科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:12:55,453 - WARNING - ⚠️ 688328 深科达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:00,587 - WARNING - ⚠️ 688329 艾隆科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:05,698 - WARNING - ⚠️ 688330 宏力达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:10,815 - WARNING - ⚠️ 688331 荣昌生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:15,978 - WARNING - ⚠️ 688332 中科蓝讯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:21,208 - WARNING - ⚠️ 688333 铂力特同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:26,324 - WARNING - ⚠️ 688334 西高院同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:31,468 - WARNING - ⚠️ 688335 复洁环保同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:36,596 - WARNING - ⚠️ 688336 三生国健同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:41,719 - WARNING - ⚠️ 688337 普源精电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:46,855 - WARNING - ⚠️ 688338 赛科希德同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:51,951 - WARNING - ⚠️ 688339 亿华通-U同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:13:57,091 - WARNING - ⚠️ 688343 云天励飞同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:02,211 - WARNING - ⚠️ 688345 博力威同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:07,365 - WARNING - ⚠️ 688347 华虹公司同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:12,472 - WARNING - ⚠️ 688348 昱能科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:17,603 - WARNING - ⚠️ 688349 三一重能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:22,751 - WARNING - ⚠️ 688350 富淼科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:27,862 - WARNING - ⚠️ 688351 微电生理同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:32,997 - WARNING - ⚠️ 688352 颀中科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:38,176 - WARNING - ⚠️ 688353 华盛锂电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:43,272 - WARNING - ⚠️ 688355 明志科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:48,384 - WARNING - ⚠️ 688356 键凯科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:53,477 - WARNING - ⚠️ 688357 建龙微纳同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:14:58,577 - WARNING - ⚠️ 688358 祥生医疗同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:03,704 - WARNING - ⚠️ 688359 三孚新科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:08,794 - WARNING - ⚠️ 688360 德马科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:13,891 - WARNING - ⚠️ 688361 中科飞测同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:18,996 - WARNING - ⚠️ 688362 甬矽电子同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:24,117 - WARNING - ⚠️ 688363 华熙生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:29,248 - WARNING - ⚠️ 688365 光云科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:34,427 - WARNING - ⚠️ 688366 昊海生科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:39,524 - WARNING - ⚠️ 688367 工大高科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:44,636 - WARNING - ⚠️ 688368 晶丰明源同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:49,827 - WARNING - ⚠️ 688369 致远互联同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:15:54,955 - WARNING - ⚠️ 688370 丛麟科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:00,082 - WARNING - ⚠️ 688371 菲沃泰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:05,194 - WARNING - ⚠️ 688372 伟测科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:10,322 - WARNING - ⚠️ 688373 盟科药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:15,448 - WARNING - ⚠️ 688375 国博电子同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:20,577 - WARNING - ⚠️ 688376 美埃科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:25,706 - WARNING - ⚠️ 688377 迪威尔同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:30,846 - WARNING - ⚠️ 688378 奥来德同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:35,972 - WARNING - ⚠️ 688379 华光新材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:41,102 - WARNING - ⚠️ 688380 中微半导同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:46,259 - WARNING - ⚠️ 688381 帝奥微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:51,403 - WARNING - ⚠️ 688382 益方生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:16:56,531 - WARNING - ⚠️ 688383 新益昌同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:01,675 - WARNING - ⚠️ 688385 复旦微电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:06,801 - WARNING - ⚠️ 688386 泛亚微透同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:11,944 - WARNING - ⚠️ 688387 信科移动同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:17,073 - WARNING - ⚠️ 688388 嘉元科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:22,199 - WARNING - ⚠️ 688389 普门科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:27,311 - WARNING - ⚠️ 688390 固德威同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:32,455 - WARNING - ⚠️ 688391 钜泉科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:37,581 - WARNING - ⚠️ 688392 骄成超声同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:42,708 - WARNING - ⚠️ 688393 安必平同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:47,836 - WARNING - ⚠️ 688395 正弦电气同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:52,962 - WARNING - ⚠️ 688396 华润微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:17:58,091 - WARNING - ⚠️ 688398 赛特新材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:03,218 - WARNING - ⚠️ 688399 硕世生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:08,360 - WARNING - ⚠️ 688400 凌云光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:13,504 - WARNING - ⚠️ 688401 路维光电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:18,663 - WARNING - ⚠️ 688403 汇成股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:23,793 - WARNING - ⚠️ 688408 中信博同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:28,918 - WARNING - ⚠️ 688409 富创精密同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:34,047 - WARNING - ⚠️ 688410 山外山同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:39,191 - WARNING - ⚠️ 688411 海博思创同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:44,316 - WARNING - ⚠️ 688416 恒烁股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:49,444 - WARNING - ⚠️ 688418 震有科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:54,572 - WARNING - ⚠️ 688419 耐科装备同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:18:59,682 - WARNING - ⚠️ 688420 美腾科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:04,809 - WARNING - ⚠️ 688425 铁建重工同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:09,938 - WARNING - ⚠️ 688426 康为世纪同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:15,064 - WARNING - ⚠️ 688428 诺诚健华同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:20,192 - WARNING - ⚠️ 688429 时创能源同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:25,320 - WARNING - ⚠️ 688432 有研硅同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:30,448 - WARNING - ⚠️ 688433 华曙高科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:35,591 - WARNING - ⚠️ 688435 英方软件同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:40,718 - WARNING - ⚠️ 688439 振华风光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:45,844 - WARNING - ⚠️ 688443 智翔金泰同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:50,972 - WARNING - ⚠️ 688448 磁谷科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:19:56,115 - WARNING - ⚠️ 688449 联芸科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:01,226 - WARNING - ⚠️ 688450 光格科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:06,370 - WARNING - ⚠️ 688455 科捷智能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:11,514 - WARNING - ⚠️ 688456 有研粉材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:16,638 - WARNING - ⚠️ 688458 美芯晟同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:21,783 - WARNING - ⚠️ 688459 哈铁科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:26,911 - WARNING - ⚠️ 688466 金科环境同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:32,022 - WARNING - ⚠️ 688468 科美诊断同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:37,150 - WARNING - ⚠️ 688469 芯联集成同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:42,324 - WARNING - ⚠️ 688472 阿特斯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:47,468 - WARNING - ⚠️ 688475 萤石网络同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:20:52,610 - WARNING - ⚠️ 688478 晶升股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:05,642 - INFO - 📈 已处理 5350/5839 只股票，成功 4870 只
+2025-08-02 08:21:19,572 - INFO - 📈 已处理 5400/5839 只股票，成功 4920 只
+2025-08-02 08:21:25,728 - WARNING - ⚠️ 688591 泰凌微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:30,853 - WARNING - ⚠️ 688592 司南导航同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:35,966 - WARNING - ⚠️ 688593 新相微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:41,095 - WARNING - ⚠️ 688595 芯海科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:46,219 - WARNING - ⚠️ 688596 正帆科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:51,349 - WARNING - ⚠️ 688597 煜邦电力同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:21:56,523 - WARNING - ⚠️ 688598 金博股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:01,651 - WARNING - ⚠️ 688599 天合光能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:06,792 - WARNING - ⚠️ 688600 皖仪科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:11,952 - WARNING - ⚠️ 688601 力芯微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:17,080 - WARNING - ⚠️ 688602 康鹏科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:22,223 - WARNING - ⚠️ 688603 天承科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:27,334 - WARNING - ⚠️ 688605 先锋精科同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:32,462 - WARNING - ⚠️ 688606 奥泰生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:37,588 - WARNING - ⚠️ 688607 康众医疗同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:42,748 - WARNING - ⚠️ 688608 恒玄科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:47,860 - WARNING - ⚠️ 688609 九联科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:52,986 - WARNING - ⚠️ 688610 埃科光电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:22:58,098 - WARNING - ⚠️ 688611 杭州柯林同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:03,242 - WARNING - ⚠️ 688612 威迈斯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:08,385 - WARNING - ⚠️ 688613 奥精医疗同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:13,514 - WARNING - ⚠️ 688615 合合信息同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:18,640 - WARNING - ⚠️ 688616 西力科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:23,750 - WARNING - ⚠️ 688617 惠泰医疗同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:28,895 - WARNING - ⚠️ 688618 三旺通信同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:34,038 - WARNING - ⚠️ 688619 罗普特同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:39,181 - WARNING - ⚠️ 688620 安凯微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:44,308 - WARNING - ⚠️ 688621 阳光诺和同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:49,435 - WARNING - ⚠️ 688622 禾信仪器同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:54,563 - WARNING - ⚠️ 688623 双元科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:23:59,674 - WARNING - ⚠️ 688625 呈和科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:04,802 - WARNING - ⚠️ 688626 翔宇医疗同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:09,930 - WARNING - ⚠️ 688627 精智达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:15,058 - WARNING - ⚠️ 688628 优利德同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:20,216 - WARNING - ⚠️ 688629 华丰科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:25,375 - WARNING - ⚠️ 688630 芯碁微装同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:30,502 - WARNING - ⚠️ 688631 莱斯信息同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:35,629 - WARNING - ⚠️ 688633 星球石墨同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:40,757 - WARNING - ⚠️ 688636 智明达同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:45,883 - WARNING - ⚠️ 688638 誉辰智能同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:51,011 - WARNING - ⚠️ 688639 华恒生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:24:56,171 - WARNING - ⚠️ 688646 ST逸飞同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:01,330 - WARNING - ⚠️ 688648 中邮科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:06,455 - WARNING - ⚠️ 688651 盛邦安全同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:11,583 - WARNING - ⚠️ 688652 京仪装备同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:16,711 - WARNING - ⚠️ 688653 康希通信同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:21,822 - WARNING - ⚠️ 688655 迅捷兴同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:27,028 - WARNING - ⚠️ 688656 浩欧博同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:32,188 - WARNING - ⚠️ 688657 浩辰软件同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:37,301 - WARNING - ⚠️ 688658 悦康药业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:42,422 - WARNING - ⚠️ 688659 元琛科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:47,539 - WARNING - ⚠️ 688660 电气风电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:52,696 - WARNING - ⚠️ 688661 和林微纳同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:25:57,824 - WARNING - ⚠️ 688662 富信科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:02,937 - WARNING - ⚠️ 688663 新风光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:08,063 - WARNING - ⚠️ 688665 四方光电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:13,178 - WARNING - ⚠️ 688667 菱电电控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:18,302 - WARNING - ⚠️ 688668 鼎通科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:23,429 - WARNING - ⚠️ 688669 聚石化学同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:28,556 - WARNING - ⚠️ 688670 金迪克同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:33,669 - WARNING - ⚠️ 688671 碧兴物联同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:38,813 - WARNING - ⚠️ 688676 金盘科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:43,956 - WARNING - ⚠️ 688677 海泰新光同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:49,084 - WARNING - ⚠️ 688678 福立旺同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:54,211 - WARNING - ⚠️ 688679 通源环境同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:26:59,337 - WARNING - ⚠️ 688680 海优新材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:04,451 - WARNING - ⚠️ 688681 科汇股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:09,580 - WARNING - ⚠️ 688682 霍莱沃同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:14,719 - WARNING - ⚠️ 688683 莱尔科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:19,832 - WARNING - ⚠️ 688685 迈信林同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:24,959 - WARNING - ⚠️ 688686 奥普特同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:30,069 - WARNING - ⚠️ 688687 凯因科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:35,197 - WARNING - ⚠️ 688689 银河微电同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:40,466 - WARNING - ⚠️ 688690 纳微科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:45,611 - WARNING - ⚠️ 688691 灿芯股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:50,736 - WARNING - ⚠️ 688692 达梦数据同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:27:55,849 - WARNING - ⚠️ 688693 锴威特同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:00,992 - WARNING - ⚠️ 688695 中创股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:06,150 - WARNING - ⚠️ 688696 极米科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:11,262 - WARNING - ⚠️ 688697 纽威数控同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:16,390 - WARNING - ⚠️ 688698 伟创电气同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:21,518 - WARNING - ⚠️ 688699 明微电子同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:26,707 - WARNING - ⚠️ 688700 东威科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:31,835 - WARNING - ⚠️ 688701 卓锦股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:36,945 - WARNING - ⚠️ 688702 盛科通信同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:42,073 - WARNING - ⚠️ 688707 振华新材同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:47,217 - WARNING - ⚠️ 688708 佳驰科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:52,343 - WARNING - ⚠️ 688709 成都华微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:28:57,486 - WARNING - ⚠️ 688710 益诺思同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:02,599 - WARNING - ⚠️ 688711 宏微科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:07,726 - WARNING - ⚠️ 688716 中研股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:12,870 - WARNING - ⚠️ 688717 艾罗能源同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:18,013 - WARNING - ⚠️ 688718 唯赛勃同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:23,145 - WARNING - ⚠️ 688719 爱科赛博同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:28,283 - WARNING - ⚠️ 688720 艾森股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:33,426 - WARNING - ⚠️ 688721 龙图光罩同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:38,553 - WARNING - ⚠️ 688722 同益中同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:43,681 - WARNING - ⚠️ 688726 拉普拉斯同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:48,808 - WARNING - ⚠️ 688728 格科微同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:53,936 - WARNING - ⚠️ 688729 屹唐股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:29:59,062 - WARNING - ⚠️ 688733 壹石通同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:04,191 - WARNING - ⚠️ 688737 中自科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:09,318 - WARNING - ⚠️ 688739 成大生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:14,444 - WARNING - ⚠️ 688750 金天钛业同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:19,589 - WARNING - ⚠️ 688755 汉邦科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:24,731 - WARNING - ⚠️ 688757 胜科纳米同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:29,858 - WARNING - ⚠️ 688758 赛分科技同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:34,986 - WARNING - ⚠️ 688766 普冉股份同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:40,114 - WARNING - ⚠️ 688767 博拓生物同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:45,276 - WARNING - ⚠️ 688768 容知日新同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:50,399 - WARNING - ⚠️ 688772 珠海冠宇同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:30:55,528 - WARNING - ⚠️ 688775 影石创新同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:31:08,275 - INFO - 📈 已处理 5550/5839 只股票，成功 4958 只
+2025-08-02 08:31:22,324 - INFO - 📈 已处理 5600/5839 只股票，成功 5008 只
+2025-08-02 08:31:35,732 - INFO - 📈 已处理 5650/5839 只股票，成功 5058 只
+2025-08-02 08:31:49,028 - INFO - 📈 已处理 5700/5839 只股票，成功 5108 只
+2025-08-02 08:32:02,324 - INFO - 📈 已处理 5750/5839 只股票，成功 5158 只
+2025-08-02 08:32:04,347 - WARNING - ⚠️ 900901 云赛Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:04,486 - WARNING - ⚠️ 900902 市北B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:04,651 - WARNING - ⚠️ 900903 大众Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:04,772 - WARNING - ⚠️ 900904 神奇B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:04,900 - WARNING - ⚠️ 900905 老凤祥Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,022 - WARNING - ⚠️ 900906 中毅达B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,136 - WARNING - ⚠️ 900907 退市鹏B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,271 - WARNING - ⚠️ 900908 氯碱Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,386 - WARNING - ⚠️ 900909 华谊B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,520 - WARNING - ⚠️ 900910 海立Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,653 - WARNING - ⚠️ 900911 金桥Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,800 - WARNING - ⚠️ 900912 外高Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:05,928 - WARNING - ⚠️ 900913 国新B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,054 - WARNING - ⚠️ 900914 锦在线B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,200 - WARNING - ⚠️ 900915 中路Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,330 - WARNING - ⚠️ 900916 凤凰B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,452 - WARNING - ⚠️ 900917 海欣Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,585 - WARNING - ⚠️ 900918 耀皮Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,713 - WARNING - ⚠️ 900919 退市庭B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,838 - WARNING - ⚠️ 900920 动力Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:06,970 - WARNING - ⚠️ 900921 丹科B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,102 - WARNING - ⚠️ 900922 三毛B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,236 - WARNING - ⚠️ 900923 百联Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,354 - WARNING - ⚠️ 900924 上工Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,485 - WARNING - ⚠️ 900925 机电Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,620 - WARNING - ⚠️ 900926 宝信Ｂ同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,736 - WARNING - ⚠️ 900927 物贸Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:07,900 - WARNING - ⚠️ 900928 临港B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,019 - WARNING - ⚠️ 900929 锦旅Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,148 - WARNING - ⚠️ 900930 *ST沪普B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,270 - WARNING - ⚠️ 900931 PT水仙B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,402 - WARNING - ⚠️ 900932 陆家Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,536 - WARNING - ⚠️ 900933 华新B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,653 - WARNING - ⚠️ 900934 锦江Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,818 - WARNING - ⚠️ 900935 阳晨B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:08,954 - WARNING - ⚠️ 900936 鄂资Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,086 - WARNING - ⚠️ 900937 华电B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,235 - WARNING - ⚠️ 900938 海科B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,353 - WARNING - ⚠️ 900939 汇丽B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,503 - WARNING - ⚠️ 900940 大名城B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,636 - WARNING - ⚠️ 900941 东信Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,784 - WARNING - ⚠️ 900942 黄山Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:09,918 - WARNING - ⚠️ 900943 开开Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,045 - WARNING - ⚠️ 900945 海控B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,185 - WARNING - ⚠️ 900946 天雁B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,352 - WARNING - ⚠️ 900947 振华Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,488 - WARNING - ⚠️ 900948 伊泰Ｂ股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,603 - WARNING - ⚠️ 900949 东电B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,735 - WARNING - ⚠️ 900950 新城B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,869 - WARNING - ⚠️ 900951 退市大化同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:10,999 - WARNING - ⚠️ 900952 退市锦B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:11,120 - WARNING - ⚠️ 900953 凯马B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:11,253 - WARNING - ⚠️ 900955 退市海B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:11,386 - WARNING - ⚠️ 900956 东贝B股同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:11,518 - WARNING - ⚠️ 900957 *ST凌云B同花顺股票概念关系: 'NoneType' object has no attribute 'tbody'
+2025-08-02 08:32:19,745 - INFO - ✅ 今日同花顺股票概念关系更新完成: 5192 条记录
+2025-08-02 08:32:19,745 - INFO - ============================================================
+2025-08-02 08:32:19,745 - INFO - 📊 每日数据更新统计
+2025-08-02 08:32:19,745 - INFO - ============================================================
+2025-08-02 08:32:19,745 - INFO - ⏱️  更新耗时: 0:52:09.311516
+2025-08-02 08:32:19,745 - INFO - 📈 实时行情: 0 条
+2025-08-02 08:32:19,745 - INFO - 📊 今日K线: 5,192 条
+2025-08-02 08:32:19,745 - INFO - 📅 交易日历: 0 条
+2025-08-02 08:32:19,745 - INFO - ✅ 无错误
+2025-08-02 08:32:19,745 - INFO - ============================================================
+2025-08-02 08:32:19,758 - INFO - 🎉 每日数据更新完成！
+2025-08-02 08:32:19,758 - INFO - 数据库连接已关闭
+2025-08-02 08:32:19,758 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 09:00:25,429 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:00:25,429 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:00:25,429 - INFO - ============================================================
+2025-08-02 09:00:25,445 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:00:25,446 - INFO - 清空同花顺股票概念关系...
+2025-08-02 09:00:25,949 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 09:06:22,607 - INFO - 数据库连接已关闭
+2025-08-02 09:07:09,850 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:07:09,851 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:07:09,851 - INFO - ============================================================
+2025-08-02 09:07:09,859 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:07:09,859 - INFO - 清空同花顺股票概念关系...
+2025-08-02 09:07:10,295 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 09:08:32,902 - INFO - 数据库连接已关闭
+2025-08-02 09:08:34,400 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:08:34,401 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:08:34,401 - INFO - ============================================================
+2025-08-02 09:08:34,405 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:08:34,405 - INFO - 清空同花顺股票概念关系...
+2025-08-02 09:08:34,839 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 09:08:34,839 - INFO - 获取概念代码，开始处理
+2025-08-02 09:08:42,435 - INFO - 数据库连接已关闭
+2025-08-02 09:14:53,337 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:14:53,337 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:14:53,337 - INFO - ============================================================
+2025-08-02 09:14:53,341 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:14:53,341 - INFO - 清空同花顺股票概念关系...
+2025-08-02 09:14:53,791 - INFO - 🚀 开始获取ADATA同花顺股票概念关系...
+2025-08-02 09:14:53,796 - INFO - 获取概念代码，开始处理
+2025-08-02 09:14:54,484 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:14:56,337 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:14:57,937 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:00,837 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:02,236 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:02,985 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:03,723 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:04,553 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:05,323 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:07,104 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:07,966 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:08,716 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:09,434 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:10,245 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:10,984 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:11,780 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:12,622 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:14,547 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:15,399 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:19,354 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:20,276 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:21,003 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:21,851 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:22,729 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:23,471 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:24,227 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:25,380 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:26,240 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:27,043 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:27,843 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:28,580 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:29,332 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:32,265 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:33,043 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:33,817 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:34,555 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:35,361 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:36,157 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:36,738 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:37,443 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:38,198 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:39,200 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:40,109 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:40,926 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:41,661 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:42,355 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:43,128 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:44,282 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:45,769 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:46,886 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:46,979 - INFO - 📈 已处理 50/6 只概念，成功 50 只
+2025-08-02 09:15:47,715 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:49,126 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:49,832 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:50,773 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:51,634 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:52,481 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:54,379 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:55,163 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:56,041 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:56,764 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:57,531 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:58,253 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:59,160 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:15:59,962 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:00,902 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:01,873 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:02,704 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:03,434 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:04,289 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:05,106 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:05,856 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:06,642 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:07,409 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:08,129 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:08,946 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:09,667 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:10,232 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:14,183 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:14,982 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:15,684 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:16,518 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:17,319 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:18,118 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:18,904 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:19,624 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:20,344 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:21,051 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:21,756 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:22,620 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:23,510 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:24,970 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:25,550 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:26,304 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:27,149 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:27,966 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:28,766 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:29,504 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:30,975 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:31,902 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:32,670 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:32,711 - INFO - 📈 已处理 100/6 只概念，成功 100 只
+2025-08-02 09:16:33,611 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:34,552 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:35,320 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:36,166 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:37,139 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:38,361 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:39,193 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:39,913 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:40,620 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:41,481 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:42,251 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:43,033 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:43,897 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:44,634 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:46,453 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:47,189 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:48,016 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:48,851 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:49,541 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:50,170 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:50,874 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:51,579 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:52,271 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:53,323 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:56,331 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:57,053 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:57,773 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:58,509 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:16:59,201 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:00,737 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:01,505 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:02,320 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:03,058 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:03,762 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:04,501 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:05,284 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:05,991 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:06,726 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:07,435 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:08,249 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:09,112 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:09,863 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:10,553 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:11,257 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:12,136 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:13,062 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:13,845 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:14,599 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:15,461 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:16,292 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:16,355 - INFO - 📈 已处理 150/6 只概念，成功 150 只
+2025-08-02 09:17:17,027 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:17,609 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:18,315 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:19,115 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:20,009 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:20,653 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:21,779 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:22,644 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:23,404 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:23,992 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:24,666 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:25,372 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:26,140 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:26,845 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:27,566 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:28,351 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:29,212 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:29,934 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:30,624 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:31,218 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:31,956 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:32,725 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:33,573 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:34,293 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:34,999 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:35,909 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:37,162 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:37,837 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:38,526 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:39,247 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:39,952 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:40,689 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:41,379 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:41,981 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:42,682 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:43,442 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:44,060 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:44,783 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:45,455 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:46,163 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:46,868 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:47,573 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:48,294 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:49,018 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:49,694 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:50,380 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:51,079 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:51,807 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:52,512 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:53,282 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:53,325 - INFO - 📈 已处理 200/6 只概念，成功 200 只
+2025-08-02 09:17:53,987 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:54,706 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:55,398 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:56,120 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:56,888 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:57,828 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:58,614 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:17:59,399 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:00,118 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:00,792 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:01,523 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:02,220 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:02,893 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:03,599 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:04,337 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:05,025 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:05,715 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:06,422 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:07,143 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:07,833 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:08,617 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:09,352 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:10,105 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:10,811 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:11,517 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:12,869 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:13,633 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:14,395 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:15,171 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:15,891 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:16,739 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:17,556 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:19,592 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:20,424 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:21,233 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:22,086 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:22,822 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:23,512 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:24,190 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:24,957 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:26,335 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:27,213 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:27,902 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:28,592 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:29,377 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:30,098 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:30,977 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:31,682 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:32,370 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:33,156 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:33,178 - INFO - 📈 已处理 250/6 只概念，成功 250 只
+2025-08-02 09:18:33,848 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:34,629 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:35,366 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:36,056 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:36,824 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:37,640 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:38,377 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:39,083 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:39,839 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:40,603 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:41,341 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:42,031 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:42,674 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:43,442 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:46,327 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:47,079 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:47,818 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:49,139 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:49,838 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:50,544 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:51,250 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:51,956 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:52,741 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:53,561 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:54,309 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:54,983 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:55,671 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:56,410 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:57,094 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:57,772 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:58,511 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:59,200 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:18:59,937 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:00,893 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:01,772 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:02,368 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:03,137 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:03,888 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:04,562 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:05,281 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:05,942 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:06,633 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:07,394 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:09,190 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:09,912 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:10,679 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:11,401 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:12,104 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:12,827 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:13,533 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:13,554 - INFO - 📈 已处理 300/6 只概念，成功 300 只
+2025-08-02 09:19:14,537 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:15,319 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:16,104 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:16,824 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:17,531 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:18,361 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:19,084 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:19,820 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:20,525 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:21,233 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:21,922 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:22,657 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:23,411 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:24,728 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:25,418 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:26,064 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:26,923 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:28,836 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:29,448 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:30,154 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:30,733 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:31,548 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:32,268 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:33,711 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:34,623 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:35,344 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:36,032 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:36,770 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:37,506 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:38,370 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:39,105 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:39,844 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:40,565 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:41,269 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:41,960 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:42,698 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:43,402 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:44,093 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:44,957 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:45,739 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:46,444 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:47,120 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:47,825 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:48,530 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:49,283 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:49,988 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:50,695 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:51,416 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:52,136 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:52,810 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:52,837 - INFO - 📈 已处理 350/6 只概念，成功 350 只
+2025-08-02 09:19:53,517 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:54,206 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:54,880 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:55,570 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:56,386 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:57,153 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:57,923 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:19:58,643 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:02,219 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:02,986 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:03,756 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:04,445 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:05,152 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:05,934 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:06,845 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:07,612 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:10,498 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:11,219 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:11,909 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:12,756 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:13,492 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:14,188 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:14,934 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:15,656 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:18,465 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:19,341 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:20,110 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:20,802 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:21,505 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:22,243 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:22,980 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:23,999 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:24,783 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:26,805 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:27,589 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:28,264 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:29,000 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:29,691 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:30,537 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:31,258 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:31,981 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:32,796 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:33,956 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:34,661 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:35,319 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:36,888 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:37,765 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:38,537 - INFO - 获取ADATA概念相关股票，开始处理
+2025-08-02 09:20:38,823 - WARNING - ⚠️ nan WiFi 6同花顺股票概念关系: substring not found
+2025-08-02 09:20:38,823 - INFO - ✅ 今日同花顺股票概念关系更新完成: 398 条记录
+2025-08-02 09:20:38,823 - INFO - ============================================================
+2025-08-02 09:20:38,823 - INFO - 📊 每日数据更新统计
+2025-08-02 09:20:38,823 - INFO - ============================================================
+2025-08-02 09:20:38,823 - INFO - ⏱️  更新耗时: 0:05:45.485594
+2025-08-02 09:20:38,823 - INFO - 📈 实时行情: 0 条
+2025-08-02 09:20:38,823 - INFO - 📊 今日K线: 398 条
+2025-08-02 09:20:38,823 - INFO - 📅 交易日历: 0 条
+2025-08-02 09:20:38,823 - INFO - ✅ 无错误
+2025-08-02 09:20:38,823 - INFO - ============================================================
+2025-08-02 09:20:38,823 - INFO - 🎉 每日数据更新完成！
+2025-08-02 09:20:38,823 - INFO - 数据库连接已关闭
+2025-08-02 09:20:38,823 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 09:45:26,822 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:45:26,823 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:45:26,823 - INFO - ============================================================
+2025-08-02 09:45:26,828 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:45:26,828 - INFO - 📊 开始更新近7个自然日日度资金流）...
+2025-08-02 09:45:26,829 - ERROR - ❌ 更新今日日度资金失败: (1054, "Unknown column 'ca.stock_code' in 'field list'")
+2025-08-02 09:45:26,829 - INFO - ============================================================
+2025-08-02 09:45:26,829 - INFO - 📊 每日数据更新统计
+2025-08-02 09:45:26,829 - INFO - ============================================================
+2025-08-02 09:45:26,829 - INFO - ⏱️  更新耗时: 0:00:00.006060
+2025-08-02 09:45:26,829 - INFO - 📈 实时行情: 0 条
+2025-08-02 09:45:26,829 - INFO - 📊 今日K线: 0 条
+2025-08-02 09:45:26,830 - INFO - 📅 交易日历: 0 条
+2025-08-02 09:45:26,830 - INFO - ❌ 错误数量: 1
+2025-08-02 09:45:26,830 - INFO -    • 更新今日日度资金失败: (1054, "Unknown column 'ca.stock_code' in 'field list'")
+2025-08-02 09:45:26,831 - INFO - ============================================================
+2025-08-02 09:45:26,832 - INFO - 🎉 每日数据更新完成！
+2025-08-02 09:45:26,832 - INFO - 数据库连接已关闭
+2025-08-02 09:45:26,832 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 09:45:44,778 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:45:44,779 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:45:44,779 - INFO - ============================================================
+2025-08-02 09:45:44,781 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:45:44,781 - INFO - 📊 开始更新近7个自然日日度资金流）...
+2025-08-02 09:45:44,816 - INFO - 📊 准备更新 5839 只股票的近7个自然日日度资金流
+2025-08-02 09:45:44,981 - WARNING - ⚠️ 000001 平安银行 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:45,113 - WARNING - ⚠️ 000002 万科Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:45,374 - WARNING - ⚠️ 000004 *ST国华 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:45,512 - WARNING - ⚠️ 000005 ST星源 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:45,650 - WARNING - ⚠️ 000006 深振业Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:45,764 - WARNING - ⚠️ 000007 全新好 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:45,882 - WARNING - ⚠️ 000008 神州高铁 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,014 - WARNING - ⚠️ 000009 中国宝安 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,133 - WARNING - ⚠️ 000010 美丽生态 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,247 - WARNING - ⚠️ 000011 深物业A 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,376 - WARNING - ⚠️ 000012 南玻Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,628 - WARNING - ⚠️ 000014 沙河股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,866 - WARNING - ⚠️ 000016 深康佳Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:46,992 - WARNING - ⚠️ 000017 深中华A 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:47,248 - WARNING - ⚠️ 000019 深粮控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:47,370 - WARNING - ⚠️ 000020 深华发Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:47,498 - WARNING - ⚠️ 000021 深科技 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:47,620 - WARNING - ⚠️ 000023 *ST深天 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:47,854 - WARNING - ⚠️ 000025 特力Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:47,981 - WARNING - ⚠️ 000026 飞亚达 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,100 - WARNING - ⚠️ 000027 深圳能源 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,265 - WARNING - ⚠️ 000028 国药一致 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,398 - WARNING - ⚠️ 000029 深深房Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,523 - WARNING - ⚠️ 000030 富奥股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,634 - WARNING - ⚠️ 000031 大悦城 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,758 - WARNING - ⚠️ 000032 深桑达Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:48,997 - WARNING - ⚠️ 000034 神州数码 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:49,128 - WARNING - ⚠️ 000035 中国天楹 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:49,259 - WARNING - ⚠️ 000036 华联控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:49,381 - WARNING - ⚠️ 000037 深南电A 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:49,637 - WARNING - ⚠️ 000039 中集集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:49,746 - WARNING - ⚠️ 000040 *ST旭蓝 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:49,889 - WARNING - ⚠️ 000042 中洲控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,018 - WARNING - ⚠️ 000045 深纺织Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,132 - WARNING - ⚠️ 000046 *ST泛海 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,390 - WARNING - ⚠️ 000048 京基智农 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,511 - WARNING - ⚠️ 000049 德赛电池 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,630 - WARNING - ⚠️ 000050 深天马Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,773 - WARNING - ⚠️ 000055 方大集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:50,899 - WARNING - ⚠️ 000056 皇庭国际 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,013 - WARNING - ⚠️ 000058 深赛格 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,129 - WARNING - ⚠️ 000059 华锦股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,263 - WARNING - ⚠️ 000060 中金岭南 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,396 - WARNING - ⚠️ 000061 农产品 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,513 - WARNING - ⚠️ 000062 深圳华强 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,630 - WARNING - ⚠️ 000063 中兴通讯 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,779 - WARNING - ⚠️ 000065 北方国际 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:51,911 - WARNING - ⚠️ 000066 中国长城 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,044 - WARNING - ⚠️ 000068 华控赛格 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,178 - WARNING - ⚠️ 000069 华侨城Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,312 - WARNING - ⚠️ 000070 特发信息 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,430 - WARNING - ⚠️ 000078 海王生物 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,563 - WARNING - ⚠️ 000088 盐田港 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,694 - WARNING - ⚠️ 000089 深圳机场 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,828 - WARNING - ⚠️ 000090 天健集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:52,960 - WARNING - ⚠️ 000096 广聚能源 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:53,080 - WARNING - ⚠️ 000099 中信海直 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:53,213 - WARNING - ⚠️ 000100 TCL科技 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:53,461 - WARNING - ⚠️ 000151 中成股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:53,596 - WARNING - ⚠️ 000153 丰原药业 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:53,727 - WARNING - ⚠️ 000155 川能动力 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:53,863 - WARNING - ⚠️ 000156 华数传媒 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,012 - WARNING - ⚠️ 000157 中联重科 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,130 - WARNING - ⚠️ 000158 常山北明 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,247 - WARNING - ⚠️ 000159 国际实业 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,410 - WARNING - ⚠️ 000166 申万宏源 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,544 - WARNING - ⚠️ 000301 东方盛虹 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,663 - WARNING - ⚠️ 000333 美的集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,796 - WARNING - ⚠️ 000338 潍柴动力 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:54,914 - WARNING - ⚠️ 000400 许继电气 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:55,045 - WARNING - ⚠️ 000401 冀东水泥 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:55,182 - WARNING - ⚠️ 000402 金融街 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:55,301 - WARNING - ⚠️ 000403 派林生物 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:55,447 - WARNING - ⚠️ 000404 长虹华意 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:55,823 - WARNING - ⚠️ 000407 胜利股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:55,945 - WARNING - ⚠️ 000408 藏格矿业 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:56,066 - WARNING - ⚠️ 000409 云鼎科技 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:56,195 - WARNING - ⚠️ 000410 沈阳机床 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:56,332 - WARNING - ⚠️ 000411 英特集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:56,603 - WARNING - ⚠️ 000413 ST旭电 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:56,713 - WARNING - ⚠️ 000415 渤海租赁 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:56,924 - WARNING - ⚠️ 000416 *ST民控 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,061 - WARNING - ⚠️ 000417 合百集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,322 - WARNING - ⚠️ 000419 通程控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,445 - WARNING - ⚠️ 000420 吉林化纤 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,579 - WARNING - ⚠️ 000421 南京公用 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,709 - WARNING - ⚠️ 000422 湖北宜化 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,829 - WARNING - ⚠️ 000423 东阿阿胶 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:57,963 - WARNING - ⚠️ 000425 徐工机械 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,127 - WARNING - ⚠️ 000426 兴业银锡 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,256 - WARNING - ⚠️ 000428 华天酒店 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,364 - WARNING - ⚠️ 000429 粤高速Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,480 - WARNING - ⚠️ 000430 ST张家界 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,613 - WARNING - ⚠️ 000488 ST晨鸣 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,748 - WARNING - ⚠️ 000498 山东路桥 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:58,878 - WARNING - ⚠️ 000501 武商集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,144 - WARNING - ⚠️ 000503 国新健康 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,255 - WARNING - ⚠️ 000504 *ST生物 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,371 - WARNING - ⚠️ 000505 京粮控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,506 - WARNING - ⚠️ 000506 招金黄金 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,625 - WARNING - ⚠️ 000507 珠海港 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,869 - WARNING - ⚠️ 000509 华塑控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:45:59,997 - WARNING - ⚠️ 000510 新金路 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:00,254 - WARNING - ⚠️ 000513 丽珠集团 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:00,367 - WARNING - ⚠️ 000514 渝开发 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:00,615 - WARNING - ⚠️ 000516 国际医学 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:00,746 - WARNING - ⚠️ 000517 荣安地产 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:00,867 - WARNING - ⚠️ 000518 *ST四环 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:00,997 - WARNING - ⚠️ 000519 中兵红箭 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:01,147 - WARNING - ⚠️ 000520 凤凰航运 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:01,264 - WARNING - ⚠️ 000521 长虹美菱 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:01,533 - WARNING - ⚠️ 000523 红棉股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:01,673 - WARNING - ⚠️ 000524 岭南控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:01,796 - WARNING - ⚠️ 000525 红太阳 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:01,914 - WARNING - ⚠️ 000526 学大教育 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,165 - WARNING - ⚠️ 000528 柳工 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,298 - WARNING - ⚠️ 000529 广弘控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,415 - WARNING - ⚠️ 000530 冰山冷热 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,549 - WARNING - ⚠️ 000531 穗恒运Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,661 - WARNING - ⚠️ 000532 华金资本 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,835 - WARNING - ⚠️ 000533 顺钠股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:02,949 - WARNING - ⚠️ 000534 万泽股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:03,191 - WARNING - ⚠️ 000536 华映科技 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:03,320 - WARNING - ⚠️ 000537 中绿电 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:03,450 - WARNING - ⚠️ 000538 云南白药 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:03,569 - WARNING - ⚠️ 000539 粤电力Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:03,813 - WARNING - ⚠️ 000541 佛山照明 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,079 - WARNING - ⚠️ 000543 皖能电力 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,205 - WARNING - ⚠️ 000544 中原环保 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,347 - WARNING - ⚠️ 000545 金浦钛业 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,466 - WARNING - ⚠️ 000546 金圆股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,579 - WARNING - ⚠️ 000547 航天发展 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,714 - WARNING - ⚠️ 000548 湖南投资 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:04,960 - WARNING - ⚠️ 000550 江铃汽车 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:05,105 - WARNING - ⚠️ 000551 创元科技 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:05,236 - WARNING - ⚠️ 000552 甘肃能化 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:05,382 - WARNING - ⚠️ 000553 安道麦A 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:05,500 - WARNING - ⚠️ 000554 泰山石油 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:05,623 - WARNING - ⚠️ 000555 神州信息 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:05,882 - WARNING - ⚠️ 000557 西部创业 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,001 - WARNING - ⚠️ 000558 天府文旅 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,115 - WARNING - ⚠️ 000559 万向钱潮 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,254 - WARNING - ⚠️ 000560 我爱我家 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,386 - WARNING - ⚠️ 000561 烽火电子 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,632 - WARNING - ⚠️ 000563 陕国投Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,777 - WARNING - ⚠️ 000564 供销大集 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:06,910 - WARNING - ⚠️ 000565 渝三峡Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,023 - WARNING - ⚠️ 000566 海南海药 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,132 - WARNING - ⚠️ 000567 海德股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,265 - WARNING - ⚠️ 000568 泸州老窖 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,501 - WARNING - ⚠️ 000570 苏常柴Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,613 - WARNING - ⚠️ 000571 新大洲A 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,746 - WARNING - ⚠️ 000572 海马汽车 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:07,886 - WARNING - ⚠️ 000573 粤宏远Ａ 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:08,032 - WARNING - ⚠️ 000576 甘化科工 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:08,299 - WARNING - ⚠️ 000581 威孚高科 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:08,416 - WARNING - ⚠️ 000582 北部湾港 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:08,670 - WARNING - ⚠️ 000584 工智退 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:08,900 - WARNING - ⚠️ 000586 汇源通信 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:09,282 - WARNING - ⚠️ 000589 贵州轮胎 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:09,399 - WARNING - ⚠️ 000590 启迪药业 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:09,517 - WARNING - ⚠️ 000591 太阳能 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:09,667 - WARNING - ⚠️ 000592 平潭发展 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:09,782 - WARNING - ⚠️ 000593 德龙汇能 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,032 - WARNING - ⚠️ 000595 *ST宝实 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,152 - WARNING - ⚠️ 000596 古井贡酒 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,279 - WARNING - ⚠️ 000597 东北制药 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,398 - WARNING - ⚠️ 000598 兴蓉环境 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,516 - WARNING - ⚠️ 000599 青岛双星 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,655 - WARNING - ⚠️ 000600 建投能源 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:10,779 - WARNING - ⚠️ 000601 韶能股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,035 - WARNING - ⚠️ 000603 盛达资源 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,148 - WARNING - ⚠️ 000605 渤海股份 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,388 - WARNING - ⚠️ 000607 华媒控股 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,514 - WARNING - ⚠️ 000608 *ST阳光 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,647 - WARNING - ⚠️ 000609 ST中迪 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,764 - WARNING - ⚠️ 000610 西安旅游 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:11,997 - WARNING - ⚠️ 000612 焦作万方 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:12,247 - WARNING - ⚠️ 000615 *ST美谷 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:12,499 - WARNING - ⚠️ 000617 中油资本 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:12,749 - WARNING - ⚠️ 000619 海螺新材 日度资金流向更新失败: (1054, "Unknown column 'main_net_inflowen' in 'field list'")
+2025-08-02 09:46:12,800 - INFO - 数据库连接已关闭
+2025-08-02 09:46:16,083 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 09:46:16,084 - INFO - 🚀 开始每日数据更新...
+2025-08-02 09:46:16,084 - INFO - ============================================================
+2025-08-02 09:46:16,087 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 09:46:16,087 - INFO - 📊 开始更新近7个自然日日度资金流）...
+2025-08-02 09:46:16,119 - INFO - 📊 准备更新 5839 只股票的近7个自然日日度资金流
+2025-08-02 09:46:28,729 - INFO - 📈 已处理 50/5839 只股票，成功 42 只
+2025-08-02 09:46:41,575 - INFO - 📈 已处理 100/5839 只股票，成功 87 只
+2025-08-02 09:46:53,676 - INFO - 📈 已处理 150/5839 只股票，成功 128 只
+2025-08-02 09:47:05,502 - INFO - 📈 已处理 200/5839 只股票，成功 168 只
+2025-08-02 09:47:17,309 - INFO - 📈 已处理 250/5839 只股票，成功 207 只
+2025-08-02 09:47:29,523 - INFO - 📈 已处理 300/5839 只股票，成功 249 只
+2025-08-02 09:47:41,612 - INFO - 📈 已处理 350/5839 只股票，成功 290 只
+2025-08-02 09:47:54,111 - INFO - 📈 已处理 400/5839 只股票，成功 334 只
+2025-08-02 09:48:07,140 - INFO - 📈 已处理 450/5839 只股票，成功 381 只
+2025-08-02 09:48:20,075 - INFO - 📈 已处理 500/5839 只股票，成功 428 只
+2025-08-02 09:48:33,389 - INFO - 📈 已处理 550/5839 只股票，成功 478 只
+2025-08-02 09:48:46,851 - INFO - 📈 已处理 600/5839 只股票，成功 528 只
+2025-08-02 09:49:00,124 - INFO - 📈 已处理 650/5839 只股票，成功 576 只
+2025-08-02 09:49:13,388 - INFO - 📈 已处理 700/5839 只股票，成功 624 只
+2025-08-02 09:49:27,564 - INFO - 📈 已处理 750/5839 只股票，成功 672 只
+2025-08-02 09:49:40,524 - INFO - 📈 已处理 800/5839 只股票，成功 720 只
+2025-08-02 09:49:53,839 - INFO - 📈 已处理 850/5839 只股票，成功 769 只
+2025-08-02 09:50:07,406 - INFO - 📈 已处理 900/5839 只股票，成功 818 只
+2025-08-02 09:50:20,952 - INFO - 📈 已处理 950/5839 只股票，成功 868 只
+2025-08-02 09:50:34,837 - INFO - 📈 已处理 1000/5839 只股票，成功 917 只
+2025-08-02 09:50:47,918 - INFO - 📈 已处理 1050/5839 只股票，成功 965 只
+2025-08-02 09:51:00,504 - INFO - 📈 已处理 1100/5839 只股票，成功 1010 只
+2025-08-02 09:51:13,236 - INFO - 📈 已处理 1150/5839 只股票，成功 1056 只
+2025-08-02 09:51:26,758 - INFO - 📈 已处理 1200/5839 只股票，成功 1106 只
+2025-08-02 09:51:39,647 - INFO - 📈 已处理 1250/5839 只股票，成功 1153 只
+2025-08-02 09:51:52,882 - INFO - 📈 已处理 1300/5839 只股票，成功 1201 只
+2025-08-02 09:52:07,220 - INFO - 📈 已处理 1350/5839 只股票，成功 1250 只
+2025-08-02 09:52:20,139 - INFO - 📈 已处理 1400/5839 只股票，成功 1297 只
+2025-08-02 09:52:33,371 - INFO - 📈 已处理 1450/5839 只股票，成功 1347 只
+2025-08-02 09:52:47,199 - INFO - 📈 已处理 1500/5839 只股票，成功 1397 只
+2025-08-02 09:53:01,489 - INFO - 📈 已处理 1550/5839 只股票，成功 1447 只
+2025-08-02 09:53:15,206 - INFO - 📈 已处理 1600/5839 只股票，成功 1497 只
+2025-08-02 09:53:39,604 - INFO - 📈 已处理 1700/5839 只股票，成功 1579 只
+2025-08-02 09:53:52,489 - INFO - 📈 已处理 1750/5839 只股票，成功 1625 只
+2025-08-02 09:54:05,476 - INFO - 📈 已处理 1800/5839 只股票，成功 1672 只
+2025-08-02 09:54:19,650 - INFO - 📈 已处理 1850/5839 只股票，成功 1721 只
+2025-08-02 09:54:32,362 - INFO - 📈 已处理 1900/5839 只股票，成功 1767 只
+2025-08-02 09:54:45,633 - INFO - 📈 已处理 1950/5839 只股票，成功 1817 只
+2025-08-02 09:54:58,365 - INFO - 📈 已处理 2000/5839 只股票，成功 1863 只
+2025-08-02 09:55:10,815 - INFO - 📈 已处理 2050/5839 只股票，成功 1907 只
+2025-08-02 09:55:23,913 - INFO - 📈 已处理 2100/5839 只股票，成功 1955 只
+2025-08-02 09:55:37,053 - INFO - 📈 已处理 2150/5839 只股票，成功 2004 只
+2025-08-02 09:55:50,603 - INFO - 📈 已处理 2200/5839 只股票，成功 2054 只
+2025-08-02 09:56:04,574 - INFO - 📈 已处理 2250/5839 只股票，成功 2103 只
+2025-08-02 09:56:17,926 - INFO - 📈 已处理 2300/5839 只股票，成功 2153 只
+2025-08-02 09:56:31,034 - INFO - 📈 已处理 2350/5839 只股票，成功 2203 只
+2025-08-02 09:56:44,835 - INFO - 📈 已处理 2400/5839 只股票，成功 2253 只
+2025-08-02 09:56:58,189 - INFO - 📈 已处理 2450/5839 只股票，成功 2303 只
+2025-08-02 09:57:11,530 - INFO - 📈 已处理 2500/5839 只股票，成功 2353 只
+2025-08-02 09:57:24,888 - INFO - 📈 已处理 2550/5839 只股票，成功 2403 只
+2025-08-02 09:57:38,237 - INFO - 📈 已处理 2600/5839 只股票，成功 2453 只
+2025-08-02 09:57:51,852 - INFO - 📈 已处理 2650/5839 只股票，成功 2503 只
+2025-08-02 09:58:05,083 - INFO - 📈 已处理 2700/5839 只股票，成功 2553 只
+2025-08-02 09:58:18,632 - INFO - 📈 已处理 2750/5839 只股票，成功 2603 只
+2025-08-02 09:58:32,129 - INFO - 📈 已处理 2800/5839 只股票，成功 2653 只
+2025-08-02 09:58:45,786 - INFO - 📈 已处理 2850/5839 只股票，成功 2703 只
+2025-08-02 09:58:59,245 - INFO - 📈 已处理 2900/5839 只股票，成功 2753 只
+2025-08-02 09:59:12,512 - INFO - 📈 已处理 2950/5839 只股票，成功 2803 只
+2025-08-02 09:59:26,431 - INFO - 📈 已处理 3000/5839 只股票，成功 2853 只
+2025-08-02 09:59:39,761 - INFO - 📈 已处理 3050/5839 只股票，成功 2903 只
+2025-08-02 09:59:52,877 - INFO - 📈 已处理 3100/5839 只股票，成功 2953 只
+2025-08-02 10:00:05,617 - INFO - 📈 已处理 3150/5839 只股票，成功 2999 只
+2025-08-02 10:00:17,426 - INFO - 📈 已处理 3200/5839 只股票，成功 3038 只
+2025-08-02 10:00:30,370 - INFO - 📈 已处理 3250/5839 只股票，成功 3083 只
+2025-08-02 10:00:43,266 - INFO - 📈 已处理 3300/5839 只股票，成功 3130 只
+2025-08-02 10:00:55,696 - INFO - 📈 已处理 3350/5839 只股票，成功 3174 只
+2025-08-02 10:01:08,194 - INFO - 📈 已处理 3400/5839 只股票，成功 3217 只
+2025-08-02 10:01:21,151 - INFO - 📈 已处理 3450/5839 只股票，成功 3265 只
+2025-08-02 10:01:33,947 - INFO - 📈 已处理 3500/5839 只股票，成功 3311 只
+2025-08-02 10:01:46,960 - INFO - 📈 已处理 3550/5839 只股票，成功 3358 只
+2025-08-02 10:01:59,928 - INFO - 📈 已处理 3600/5839 只股票，成功 3405 只
+2025-08-02 10:02:12,881 - INFO - 📈 已处理 3650/5839 只股票，成功 3452 只
+2025-08-02 10:02:37,296 - INFO - 📈 已处理 3750/5839 只股票，成功 3533 只
+2025-08-02 10:02:48,862 - INFO - 📈 已处理 3800/5839 只股票，成功 3578 只
+2025-08-02 10:02:59,323 - INFO - 📈 已处理 3850/5839 只股票，成功 3621 只
+2025-08-02 10:03:10,176 - INFO - 📈 已处理 3900/5839 只股票，成功 3665 只
+2025-08-02 10:03:25,003 - INFO - 📈 已处理 3950/5839 只股票，成功 3710 只
+2025-08-02 10:03:39,059 - INFO - 📈 已处理 4000/5839 只股票，成功 3758 只
+2025-08-02 10:03:53,291 - INFO - 📈 已处理 4050/5839 只股票，成功 3808 只
+2025-08-02 10:04:07,527 - INFO - 📈 已处理 4100/5839 只股票，成功 3855 只
+2025-08-02 10:04:21,502 - INFO - 📈 已处理 4150/5839 只股票，成功 3904 只
+2025-08-02 10:04:35,537 - INFO - 📈 已处理 4200/5839 只股票，成功 3954 只
+2025-08-02 10:04:49,589 - INFO - 📈 已处理 4250/5839 只股票，成功 4004 只
+2025-08-02 10:05:03,444 - INFO - 📈 已处理 4300/5839 只股票，成功 4054 只
+2025-08-02 10:05:17,225 - INFO - 📈 已处理 4350/5839 只股票，成功 4104 只
+2025-08-02 10:05:31,219 - INFO - 📈 已处理 4400/5839 只股票，成功 4153 只
+2025-08-02 10:05:45,420 - INFO - 📈 已处理 4450/5839 只股票，成功 4203 只
+2025-08-02 10:05:59,768 - INFO - 📈 已处理 4500/5839 只股票，成功 4253 只
+2025-08-02 10:06:13,811 - INFO - 📈 已处理 4550/5839 只股票，成功 4303 只
+2025-08-02 10:06:27,761 - INFO - 📈 已处理 4600/5839 只股票，成功 4353 只
+2025-08-02 10:06:41,832 - INFO - 📈 已处理 4650/5839 只股票，成功 4403 只
+2025-08-02 10:06:56,253 - INFO - 📈 已处理 4700/5839 只股票，成功 4453 只
+2025-08-02 10:07:10,431 - INFO - 📈 已处理 4750/5839 只股票，成功 4503 只
+2025-08-02 10:07:24,778 - INFO - 📈 已处理 4800/5839 只股票，成功 4553 只
+2025-08-02 10:07:39,348 - INFO - 📈 已处理 4850/5839 只股票，成功 4602 只
+2025-08-02 10:07:53,809 - INFO - 📈 已处理 4900/5839 只股票，成功 4652 只
+2025-08-02 10:08:08,095 - INFO - 📈 已处理 4950/5839 只股票，成功 4702 只
+2025-08-02 10:08:22,422 - INFO - 📈 已处理 5000/5839 只股票，成功 4752 只
+2025-08-02 10:08:36,583 - INFO - 📈 已处理 5050/5839 只股票，成功 4802 只
+2025-08-02 10:08:51,164 - INFO - 📈 已处理 5100/5839 只股票，成功 4852 只
+2025-08-02 10:09:05,544 - INFO - 📈 已处理 5150/5839 只股票，成功 4902 只
+2025-08-02 10:09:19,802 - INFO - 📈 已处理 5200/5839 只股票，成功 4952 只
+2025-08-02 10:09:35,059 - INFO - 📈 已处理 5250/5839 只股票，成功 5002 只
+2025-08-02 10:09:49,601 - INFO - 📈 已处理 5300/5839 只股票，成功 5052 只
+2025-08-02 10:10:04,062 - INFO - 📈 已处理 5350/5839 只股票，成功 5102 只
+2025-08-02 10:10:18,379 - INFO - 📈 已处理 5400/5839 只股票，成功 5152 只
+2025-08-02 10:10:32,831 - INFO - 📈 已处理 5450/5839 只股票，成功 5202 只
+2025-08-02 10:10:47,036 - INFO - 📈 已处理 5500/5839 只股票，成功 5252 只
+2025-08-02 10:11:01,376 - INFO - 📈 已处理 5550/5839 只股票，成功 5302 只
+2025-08-02 10:11:15,705 - INFO - 📈 已处理 5600/5839 只股票，成功 5352 只
+2025-08-02 10:11:30,205 - INFO - 📈 已处理 5650/5839 只股票，成功 5402 只
+2025-08-02 10:11:44,781 - INFO - 📈 已处理 5700/5839 只股票，成功 5452 只
+2025-08-02 10:11:59,093 - INFO - 📈 已处理 5750/5839 只股票，成功 5502 只
+2025-08-02 10:12:16,833 - INFO - ✅ 今日日度资金更新完成: 5536 条记录
+2025-08-02 10:12:16,833 - INFO - ============================================================
+2025-08-02 10:12:16,833 - INFO - 📊 每日数据更新统计
+2025-08-02 10:12:16,833 - INFO - ============================================================
+2025-08-02 10:12:16,833 - INFO - ⏱️  更新耗时: 0:26:00.748944
+2025-08-02 10:12:16,833 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:12:16,833 - INFO - 📊 今日K线: 5,536 条
+2025-08-02 10:12:16,833 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:12:16,833 - INFO - ✅ 无错误
+2025-08-02 10:12:16,833 - INFO - ============================================================
+2025-08-02 10:12:16,833 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:12:16,833 - INFO - 数据库连接已关闭
+2025-08-02 10:12:16,833 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 10:38:38,089 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:38:38,089 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:38:38,089 - INFO - ============================================================
+2025-08-02 10:38:38,089 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:38:38,089 - INFO - 📊 开始更新近7个自然日日度资金流）...
+2025-08-02 10:38:38,139 - INFO - 📊 准备更新 5839 只股票的近7个自然日日度资金流
+2025-08-02 10:38:45,439 - INFO - 数据库连接已关闭
+2025-08-02 10:40:42,822 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:40:42,822 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:40:42,822 - INFO - ============================================================
+2025-08-02 10:40:42,827 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:40:42,827 - INFO - 📊 开始更新近7个自然日概念行情数据）...
+2025-08-02 10:40:42,832 - ERROR - ❌ 更新今日概念行情失败: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM ths_concept_market' at line 1")
+2025-08-02 10:40:42,832 - INFO - ============================================================
+2025-08-02 10:40:42,832 - INFO - 📊 每日数据更新统计
+2025-08-02 10:40:42,832 - INFO - ============================================================
+2025-08-02 10:40:42,832 - INFO - ⏱️  更新耗时: 0:00:00.010280
+2025-08-02 10:40:42,832 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:40:42,832 - INFO - 📊 今日K线: 0 条
+2025-08-02 10:40:42,832 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:40:42,833 - INFO - ❌ 错误数量: 1
+2025-08-02 10:40:42,833 - INFO -    • 更新今日概念行情失败: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM ths_concept_market' at line 1")
+2025-08-02 10:40:42,833 - INFO - ============================================================
+2025-08-02 10:40:42,837 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:40:42,837 - INFO - 数据库连接已关闭
+2025-08-02 10:40:42,837 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 10:41:48,905 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:41:48,906 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:41:48,906 - INFO - ============================================================
+2025-08-02 10:41:48,911 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:41:48,911 - INFO - 📊 开始更新近7个自然日概念行情数据）...
+2025-08-02 10:41:49,005 - INFO - 📊 准备更新 0 只概念近7个自然日概念行情数据
+2025-08-02 10:41:49,005 - INFO - ✅ 今日概念行情更新完成: 0 条记录
+2025-08-02 10:41:49,005 - INFO - ============================================================
+2025-08-02 10:41:49,005 - INFO - 📊 每日数据更新统计
+2025-08-02 10:41:49,005 - INFO - ============================================================
+2025-08-02 10:41:49,005 - INFO - ⏱️  更新耗时: 0:00:00.099203
+2025-08-02 10:41:49,006 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:41:49,006 - INFO - 📊 今日K线: 0 条
+2025-08-02 10:41:49,006 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:41:49,006 - INFO - ✅ 无错误
+2025-08-02 10:41:49,006 - INFO - ============================================================
+2025-08-02 10:41:49,013 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:41:49,013 - INFO - 数据库连接已关闭
+2025-08-02 10:41:49,013 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 10:42:55,884 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:42:55,885 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:42:55,885 - INFO - ============================================================
+2025-08-02 10:42:55,890 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:42:55,890 - INFO - 📊 开始更新近7个自然日概念行情数据）...
+2025-08-02 10:42:56,491 - INFO - 📊 准备更新 0 只概念近7个自然日概念行情数据
+2025-08-02 10:42:56,491 - INFO - ✅ 今日概念行情更新完成: 0 条记录
+2025-08-02 10:42:56,491 - INFO - ============================================================
+2025-08-02 10:42:56,491 - INFO - 📊 每日数据更新统计
+2025-08-02 10:42:56,491 - INFO - ============================================================
+2025-08-02 10:42:56,491 - INFO - ⏱️  更新耗时: 0:00:00.606247
+2025-08-02 10:42:56,491 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:42:56,507 - INFO - 📊 今日K线: 0 条
+2025-08-02 10:42:56,507 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:42:56,507 - INFO - ✅ 无错误
+2025-08-02 10:42:56,507 - INFO - ============================================================
+2025-08-02 10:42:56,507 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:42:56,507 - INFO - 数据库连接已关闭
+2025-08-02 10:42:56,507 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 10:43:11,003 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:43:11,004 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:43:11,004 - INFO - ============================================================
+2025-08-02 10:43:11,007 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:43:11,007 - INFO - 📊 开始更新近7个自然日概念行情数据）...
+2025-08-02 10:43:11,155 - INFO - 📊 准备更新 0 只概念近7个自然日概念行情数据
+2025-08-02 10:43:11,155 - INFO - ✅ 今日概念行情更新完成: 0 条记录
+2025-08-02 10:43:11,155 - INFO - ============================================================
+2025-08-02 10:43:11,155 - INFO - 📊 每日数据更新统计
+2025-08-02 10:43:11,156 - INFO - ============================================================
+2025-08-02 10:43:11,156 - INFO - ⏱️  更新耗时: 0:00:00.150379
+2025-08-02 10:43:11,156 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:43:11,156 - INFO - 📊 今日K线: 0 条
+2025-08-02 10:43:11,156 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:43:11,156 - INFO - ✅ 无错误
+2025-08-02 10:43:11,156 - INFO - ============================================================
+2025-08-02 10:43:11,162 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:43:11,163 - INFO - 数据库连接已关闭
+2025-08-02 10:43:11,163 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 10:43:39,205 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:43:39,205 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:43:39,205 - INFO - ============================================================
+2025-08-02 10:43:39,205 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:43:39,205 - INFO - 📊 开始更新近7个自然日概念行情数据）...
+2025-08-02 10:43:39,298 - INFO - 📊 准备更新 399 只概念近7个自然日概念行情数据
+2025-08-02 10:44:18,696 - ERROR - ❌ 更新今日概念行情失败: name 'stock_code' is not defined
+2025-08-02 10:44:18,696 - INFO - ============================================================
+2025-08-02 10:44:18,696 - INFO - 📊 每日数据更新统计
+2025-08-02 10:44:18,696 - INFO - ============================================================
+2025-08-02 10:44:18,696 - INFO - ⏱️  更新耗时: 0:00:39.491004
+2025-08-02 10:44:18,696 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:44:18,696 - INFO - 📊 今日K线: 0 条
+2025-08-02 10:44:18,696 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:44:18,696 - INFO - ❌ 错误数量: 1
+2025-08-02 10:44:18,696 - INFO -    • 更新今日概念行情失败: name 'stock_code' is not defined
+2025-08-02 10:44:18,696 - INFO - ============================================================
+2025-08-02 10:44:18,696 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:44:18,696 - INFO - 数据库连接已关闭
+2025-08-02 10:44:18,696 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 10:44:53,155 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 10:44:53,155 - INFO - 🚀 开始每日数据更新...
+2025-08-02 10:44:53,155 - INFO - ============================================================
+2025-08-02 10:44:53,158 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 10:44:53,158 - INFO - 📊 开始更新近7个自然日概念行情数据）...
+2025-08-02 10:44:53,249 - INFO - 📊 准备更新 399 只概念近7个自然日概念行情数据
+2025-08-02 10:45:30,557 - INFO - 📈 已处理 50/6 只概念，成功 50 只
+2025-08-02 10:46:08,699 - INFO - 📈 已处理 100/6 只概念，成功 100 只
+2025-08-02 10:46:46,142 - INFO - 📈 已处理 150/6 只概念，成功 150 只
+2025-08-02 10:47:19,922 - INFO - 📈 已处理 200/6 只概念，成功 200 只
+2025-08-02 10:47:47,261 - INFO - 📈 已处理 250/6 只概念，成功 250 只
+2025-08-02 10:48:10,152 - INFO - 📈 已处理 300/6 只概念，成功 300 只
+2025-08-02 10:48:31,138 - INFO - 📈 已处理 350/6 只概念，成功 350 只
+2025-08-02 10:48:45,257 - WARNING - ⚠️ nan WiFi 6 概念行情更新失败: index_code错误，是8开头的指数代码,
+2025-08-02 10:48:45,258 - INFO - ✅ 今日概念行情更新完成: 398 条记录
+2025-08-02 10:48:45,259 - INFO - ============================================================
+2025-08-02 10:48:45,259 - INFO - 📊 每日数据更新统计
+2025-08-02 10:48:45,260 - INFO - ============================================================
+2025-08-02 10:48:45,260 - INFO - ⏱️  更新耗时: 0:03:52.103632
+2025-08-02 10:48:45,260 - INFO - 📈 实时行情: 0 条
+2025-08-02 10:48:45,261 - INFO - 📊 今日K线: 398 条
+2025-08-02 10:48:45,261 - INFO - 📅 交易日历: 0 条
+2025-08-02 10:48:45,261 - INFO - ✅ 无错误
+2025-08-02 10:48:45,261 - INFO - ============================================================
+2025-08-02 10:48:45,263 - INFO - 🎉 每日数据更新完成！
+2025-08-02 10:48:45,263 - INFO - 数据库连接已关闭
+2025-08-02 10:48:45,263 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 14:43:09,019 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 14:43:09,019 - INFO - 🚀 开始每日数据更新...
+2025-08-02 14:43:09,019 - INFO - ============================================================
+2025-08-02 14:43:09,025 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 14:43:09,025 - INFO - 清空股票财务指标信息...
+2025-08-02 14:43:09,103 - INFO - 🚀 开始获取ADATA所有股票财务指标信息...
+2025-08-02 14:43:09,292 - WARNING - ⚠️ 000001 平安银行 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:09,726 - WARNING - ⚠️ 000002 万科Ａ 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:09,852 - WARNING - ⚠️ 000003 PT金田A 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:09,958 - WARNING - ⚠️ 000004 *ST国华 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:10,308 - WARNING - ⚠️ 000005 ST星源 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:10,455 - WARNING - ⚠️ 000006 深振业Ａ 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:10,557 - WARNING - ⚠️ 000007 全新好 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:10,668 - WARNING - ⚠️ 000008 神州高铁 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:10,776 - WARNING - ⚠️ 000009 中国宝安 股票财务指标信息: not enough arguments for format string
+2025-08-02 14:43:11,047 - INFO - 数据库连接已关闭
+2025-08-02 14:47:30,512 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 14:47:30,512 - INFO - 🚀 开始每日数据更新...
+2025-08-02 14:47:30,512 - INFO - ============================================================
+2025-08-02 14:47:30,517 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 14:47:30,517 - INFO - 清空股票财务指标信息...
+2025-08-02 14:47:30,595 - INFO - 🚀 开始获取ADATA所有股票财务指标信息...
+2025-08-02 14:47:44,242 - INFO - 📈 已处理 50/5839 只股票财务指标信息，成功 50 只
+2025-08-02 14:47:58,753 - INFO - 📈 已处理 100/5839 只股票财务指标信息，成功 100 只
+2025-08-02 14:48:12,611 - INFO - 📈 已处理 150/5839 只股票财务指标信息，成功 150 只
+2025-08-02 14:48:25,861 - INFO - 📈 已处理 200/5839 只股票财务指标信息，成功 200 只
+2025-08-02 14:48:39,401 - INFO - 📈 已处理 250/5839 只股票财务指标信息，成功 250 只
+2025-08-02 14:48:52,643 - INFO - 📈 已处理 300/5839 只股票财务指标信息，成功 300 只
+2025-08-02 14:49:06,364 - INFO - 📈 已处理 350/5839 只股票财务指标信息，成功 350 只
+2025-08-02 14:49:19,902 - INFO - 📈 已处理 400/5839 只股票财务指标信息，成功 400 只
+2025-08-02 14:49:32,917 - INFO - 📈 已处理 450/5839 只股票财务指标信息，成功 450 只
+2025-08-02 14:49:45,983 - INFO - 📈 已处理 500/5839 只股票财务指标信息，成功 500 只
+2025-08-02 14:49:58,787 - INFO - 📈 已处理 550/5839 只股票财务指标信息，成功 550 只
+2025-08-02 14:50:10,873 - INFO - 📈 已处理 600/5839 只股票财务指标信息，成功 600 只
+2025-08-02 14:50:25,159 - INFO - 📈 已处理 650/5839 只股票财务指标信息，成功 650 只
+2025-08-02 14:50:39,023 - INFO - 📈 已处理 700/5839 只股票财务指标信息，成功 700 只
+2025-08-02 14:50:56,199 - INFO - 📈 已处理 750/5839 只股票财务指标信息，成功 750 只
+2025-08-02 14:51:11,598 - INFO - 📈 已处理 800/5839 只股票财务指标信息，成功 800 只
+2025-08-02 14:51:25,407 - INFO - 📈 已处理 850/5839 只股票财务指标信息，成功 850 只
+2025-08-02 14:51:39,296 - INFO - 📈 已处理 900/5839 只股票财务指标信息，成功 900 只
+2025-08-02 14:51:53,336 - INFO - 📈 已处理 950/5839 只股票财务指标信息，成功 950 只
+2025-08-02 14:52:06,842 - INFO - 📈 已处理 1000/5839 只股票财务指标信息，成功 1000 只
+2025-08-02 14:52:20,545 - INFO - 📈 已处理 1050/5839 只股票财务指标信息，成功 1050 只
+2025-08-02 14:52:34,786 - INFO - 📈 已处理 1100/5839 只股票财务指标信息，成功 1100 只
+2025-08-02 14:52:49,198 - INFO - 📈 已处理 1150/5839 只股票财务指标信息，成功 1150 只
+2025-08-02 14:53:03,398 - INFO - 📈 已处理 1200/5839 只股票财务指标信息，成功 1200 只
+2025-08-02 14:53:17,353 - INFO - 📈 已处理 1250/5839 只股票财务指标信息，成功 1250 只
+2025-08-02 14:53:31,016 - INFO - 📈 已处理 1300/5839 只股票财务指标信息，成功 1300 只
+2025-08-02 14:53:44,444 - INFO - 📈 已处理 1350/5839 只股票财务指标信息，成功 1350 只
+2025-08-02 14:53:57,674 - INFO - 📈 已处理 1400/5839 只股票财务指标信息，成功 1400 只
+2025-08-02 14:54:11,755 - INFO - 📈 已处理 1450/5839 只股票财务指标信息，成功 1450 只
+2025-08-02 14:54:24,613 - INFO - 📈 已处理 1500/5839 只股票财务指标信息，成功 1500 只
+2025-08-02 14:54:37,561 - INFO - 📈 已处理 1550/5839 只股票财务指标信息，成功 1550 只
+2025-08-02 14:54:50,010 - INFO - 📈 已处理 1600/5839 只股票财务指标信息，成功 1600 只
+2025-08-02 14:55:03,149 - INFO - 📈 已处理 1650/5839 只股票财务指标信息，成功 1650 只
+2025-08-02 14:55:17,214 - INFO - 📈 已处理 1700/5839 只股票财务指标信息，成功 1700 只
+2025-08-02 14:55:32,155 - INFO - 📈 已处理 1750/5839 只股票财务指标信息，成功 1750 只
+2025-08-02 14:55:46,565 - INFO - 📈 已处理 1800/5839 只股票财务指标信息，成功 1800 只
+2025-08-02 14:56:00,356 - INFO - 📈 已处理 1850/5839 只股票财务指标信息，成功 1850 只
+2025-08-02 14:56:14,250 - INFO - 📈 已处理 1900/5839 只股票财务指标信息，成功 1900 只
+2025-08-02 14:56:28,275 - INFO - 📈 已处理 1950/5839 只股票财务指标信息，成功 1950 只
+2025-08-02 14:56:42,602 - INFO - 📈 已处理 2000/5839 只股票财务指标信息，成功 2000 只
+2025-08-02 14:56:56,073 - INFO - 📈 已处理 2050/5839 只股票财务指标信息，成功 2050 只
+2025-08-02 14:57:09,902 - INFO - 📈 已处理 2100/5839 只股票财务指标信息，成功 2100 只
+2025-08-02 14:57:23,562 - INFO - 📈 已处理 2150/5839 只股票财务指标信息，成功 2150 只
+2025-08-02 14:57:36,434 - INFO - 📈 已处理 2200/5839 只股票财务指标信息，成功 2200 只
+2025-08-02 14:57:49,884 - INFO - 📈 已处理 2250/5839 只股票财务指标信息，成功 2250 只
+2025-08-02 14:58:04,879 - INFO - 📈 已处理 2300/5839 只股票财务指标信息，成功 2300 只
+2025-08-02 14:58:18,735 - INFO - 📈 已处理 2350/5839 只股票财务指标信息，成功 2350 只
+2025-08-02 14:58:31,883 - INFO - 📈 已处理 2400/5839 只股票财务指标信息，成功 2400 只
+2025-08-02 14:58:45,171 - INFO - 📈 已处理 2450/5839 只股票财务指标信息，成功 2450 只
+2025-08-02 14:58:57,816 - INFO - 📈 已处理 2500/5839 只股票财务指标信息，成功 2500 只
+2025-08-02 14:59:11,957 - INFO - 📈 已处理 2550/5839 只股票财务指标信息，成功 2550 只
+2025-08-02 14:59:24,712 - INFO - 📈 已处理 2600/5839 只股票财务指标信息，成功 2600 只
+2025-08-02 14:59:37,203 - INFO - 📈 已处理 2650/5839 只股票财务指标信息，成功 2650 只
+2025-08-02 14:59:49,505 - INFO - 📈 已处理 2700/5839 只股票财务指标信息，成功 2700 只
+2025-08-02 15:00:02,345 - INFO - 📈 已处理 2750/5839 只股票财务指标信息，成功 2750 只
+2025-08-02 15:00:16,016 - INFO - 📈 已处理 2800/5839 只股票财务指标信息，成功 2800 只
+2025-08-02 15:00:28,854 - INFO - 📈 已处理 2850/5839 只股票财务指标信息，成功 2850 只
+2025-08-02 15:00:41,107 - INFO - 📈 已处理 2900/5839 只股票财务指标信息，成功 2900 只
+2025-08-02 15:00:53,802 - INFO - 📈 已处理 2950/5839 只股票财务指标信息，成功 2950 只
+2025-08-02 15:01:06,307 - INFO - 📈 已处理 3000/5839 只股票财务指标信息，成功 3000 只
+2025-08-02 15:01:18,495 - INFO - 📈 已处理 3050/5839 只股票财务指标信息，成功 3050 只
+2025-08-02 15:01:30,685 - INFO - 📈 已处理 3100/5839 只股票财务指标信息，成功 3100 只
+2025-08-02 15:01:43,920 - INFO - 📈 已处理 3150/5839 只股票财务指标信息，成功 3150 只
+2025-08-02 15:01:56,942 - INFO - 📈 已处理 3200/5839 只股票财务指标信息，成功 3200 只
+2025-08-02 15:02:10,753 - INFO - 📈 已处理 3250/5839 只股票财务指标信息，成功 3250 只
+2025-08-02 15:02:24,217 - INFO - 📈 已处理 3300/5839 只股票财务指标信息，成功 3300 只
+2025-08-02 15:02:37,233 - INFO - 📈 已处理 3350/5839 只股票财务指标信息，成功 3350 只
+2025-08-02 15:02:49,863 - INFO - 📈 已处理 3400/5839 只股票财务指标信息，成功 3400 只
+2025-08-02 15:03:03,611 - INFO - 📈 已处理 3450/5839 只股票财务指标信息，成功 3450 只
+2025-08-02 15:03:16,515 - INFO - 📈 已处理 3500/5839 只股票财务指标信息，成功 3500 只
+2025-08-02 15:03:29,678 - INFO - 📈 已处理 3550/5839 只股票财务指标信息，成功 3550 只
+2025-08-02 15:03:42,444 - INFO - 📈 已处理 3600/5839 只股票财务指标信息，成功 3600 只
+2025-08-02 15:03:55,342 - INFO - 📈 已处理 3650/5839 只股票财务指标信息，成功 3650 只
+2025-08-02 15:04:09,231 - INFO - 📈 已处理 3700/5839 只股票财务指标信息，成功 3700 只
+2025-08-02 15:04:22,487 - INFO - 📈 已处理 3750/5839 只股票财务指标信息，成功 3750 只
+2025-08-02 15:04:35,463 - INFO - 📈 已处理 3800/5839 只股票财务指标信息，成功 3800 只
+2025-08-02 15:04:48,832 - INFO - 📈 已处理 3850/5839 只股票财务指标信息，成功 3850 只
+2025-08-02 15:05:01,921 - INFO - 📈 已处理 3900/5839 只股票财务指标信息，成功 3900 只
+2025-08-02 15:05:15,674 - INFO - 📈 已处理 3950/5839 只股票财务指标信息，成功 3950 只
+2025-08-02 15:05:29,408 - INFO - 📈 已处理 4000/5839 只股票财务指标信息，成功 4000 只
+2025-08-02 15:05:42,317 - INFO - 📈 已处理 4050/5839 只股票财务指标信息，成功 4050 只
+2025-08-02 15:05:55,311 - INFO - 📈 已处理 4100/5839 只股票财务指标信息，成功 4100 只
+2025-08-02 15:06:08,584 - INFO - 📈 已处理 4150/5839 只股票财务指标信息，成功 4150 只
+2025-08-02 15:06:21,723 - INFO - 📈 已处理 4200/5839 只股票财务指标信息，成功 4200 只
+2025-08-02 15:06:34,205 - INFO - 📈 已处理 4250/5839 只股票财务指标信息，成功 4250 只
+2025-08-02 15:06:46,500 - INFO - 📈 已处理 4300/5839 只股票财务指标信息，成功 4300 只
+2025-08-02 15:06:58,389 - INFO - 📈 已处理 4350/5839 只股票财务指标信息，成功 4350 只
+2025-08-02 15:07:10,928 - INFO - 📈 已处理 4400/5839 只股票财务指标信息，成功 4400 只
+2025-08-02 15:07:24,066 - INFO - 📈 已处理 4450/5839 只股票财务指标信息，成功 4450 只
+2025-08-02 15:07:36,474 - INFO - 📈 已处理 4500/5839 只股票财务指标信息，成功 4500 只
+2025-08-02 15:07:48,617 - INFO - 📈 已处理 4550/5839 只股票财务指标信息，成功 4550 只
+2025-08-02 15:08:01,396 - INFO - 📈 已处理 4600/5839 只股票财务指标信息，成功 4600 只
+2025-08-02 15:08:13,766 - INFO - 📈 已处理 4650/5839 只股票财务指标信息，成功 4650 只
+2025-08-02 15:08:26,176 - INFO - 📈 已处理 4700/5839 只股票财务指标信息，成功 4700 只
+2025-08-02 15:08:39,435 - INFO - 📈 已处理 4750/5839 只股票财务指标信息，成功 4750 只
+2025-08-02 15:08:52,758 - INFO - 📈 已处理 4800/5839 只股票财务指标信息，成功 4800 只
+2025-08-02 15:09:05,545 - INFO - 📈 已处理 4850/5839 只股票财务指标信息，成功 4850 只
+2025-08-02 15:09:17,644 - INFO - 📈 已处理 4900/5839 只股票财务指标信息，成功 4900 只
+2025-08-02 15:09:29,758 - INFO - 📈 已处理 4950/5839 只股票财务指标信息，成功 4950 只
+2025-08-02 15:09:42,177 - INFO - 📈 已处理 5000/5839 只股票财务指标信息，成功 5000 只
+2025-08-02 15:09:54,211 - INFO - 📈 已处理 5050/5839 只股票财务指标信息，成功 5050 只
+2025-08-02 15:10:07,140 - INFO - 📈 已处理 5100/5839 只股票财务指标信息，成功 5100 只
+2025-08-02 15:10:19,806 - INFO - 📈 已处理 5150/5839 只股票财务指标信息，成功 5150 只
+2025-08-02 15:10:33,030 - INFO - 📈 已处理 5200/5839 只股票财务指标信息，成功 5200 只
+2025-08-02 15:10:45,440 - INFO - 📈 已处理 5250/5839 只股票财务指标信息，成功 5250 只
+2025-08-02 15:10:57,206 - INFO - 📈 已处理 5300/5839 只股票财务指标信息，成功 5300 只
+2025-08-02 15:11:09,460 - INFO - 📈 已处理 5350/5839 只股票财务指标信息，成功 5350 只
+2025-08-02 15:11:22,133 - INFO - 📈 已处理 5400/5839 只股票财务指标信息，成功 5400 只
+2025-08-02 15:11:34,890 - INFO - 📈 已处理 5450/5839 只股票财务指标信息，成功 5450 只
+2025-08-02 15:11:47,051 - INFO - 📈 已处理 5500/5839 只股票财务指标信息，成功 5500 只
+2025-08-02 15:12:00,081 - INFO - 📈 已处理 5550/5839 只股票财务指标信息，成功 5550 只
+2025-08-02 15:12:13,156 - INFO - 📈 已处理 5600/5839 只股票财务指标信息，成功 5600 只
+2025-08-02 15:12:25,776 - INFO - 📈 已处理 5650/5839 只股票财务指标信息，成功 5650 只
+2025-08-02 15:12:38,977 - INFO - 📈 已处理 5700/5839 只股票财务指标信息，成功 5700 只
+2025-08-02 15:12:51,835 - INFO - 📈 已处理 5750/5839 只股票财务指标信息，成功 5750 只
+2025-08-02 15:13:04,988 - INFO - 📈 已处理 5800/5839 只股票财务指标信息，成功 5800 只
+2025-08-02 15:13:14,700 - INFO - ✅ 今日股票财务指标信息更新完成: 5839 条记录
+2025-08-02 15:13:14,702 - INFO - ============================================================
+2025-08-02 15:13:14,702 - INFO - 📊 每日数据更新统计
+2025-08-02 15:13:14,702 - INFO - ============================================================
+2025-08-02 15:13:14,704 - INFO - ⏱️  更新耗时: 0:25:44.189352
+2025-08-02 15:13:14,704 - INFO - 📈 实时行情: 0 条
+2025-08-02 15:13:14,704 - INFO - 📊 今日K线: 5,839 条
+2025-08-02 15:13:14,704 - INFO - 📅 交易日历: 0 条
+2025-08-02 15:13:14,704 - INFO - ✅ 无错误
+2025-08-02 15:13:14,704 - INFO - ============================================================
+2025-08-02 15:13:14,712 - INFO - 🎉 每日数据更新完成！
+2025-08-02 15:13:14,712 - INFO - 数据库连接已关闭
+2025-08-02 15:13:14,712 - INFO - ✅ 每日数据更新成功完成
+2025-08-02 15:31:21,439 - INFO - 🌟 每日数据更新程序启动
+2025-08-02 15:31:21,440 - INFO - 🚀 开始每日数据更新...
+2025-08-02 15:31:21,440 - INFO - ============================================================
+2025-08-02 15:31:21,442 - INFO - ✅ 成功连接到MySQL数据库
+2025-08-02 15:31:21,442 - INFO - 📊 开始更新近7个自然日融资融券余额数据...
+2025-08-02 15:31:25,710 - INFO - ✅ 今日融资融券余额数据更新完成
+2025-08-02 15:31:25,710 - INFO - ============================================================
+2025-08-02 15:31:25,710 - INFO - 📊 每日数据更新统计
+2025-08-02 15:31:25,710 - INFO - ============================================================
+2025-08-02 15:31:25,711 - INFO - ⏱️  更新耗时: 0:00:04.270627
+2025-08-02 15:31:25,711 - INFO - 📈 实时行情: 0 条
+2025-08-02 15:31:25,711 - INFO - 📊 今日K线: 0 条
+2025-08-02 15:31:25,711 - INFO - 📅 交易日历: 0 条
+2025-08-02 15:31:25,711 - INFO - ✅ 无错误
+2025-08-02 15:31:25,711 - INFO - ============================================================
+2025-08-02 15:31:25,718 - INFO - 🎉 每日数据更新完成！
+2025-08-02 15:31:25,718 - INFO - 数据库连接已关闭
+2025-08-02 15:31:25,718 - INFO - ✅ 每日数据更新成功完成

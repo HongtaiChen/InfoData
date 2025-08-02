@@ -68,7 +68,7 @@ def create_tables():
         create_stock_market_daily_table(cursor)
         
         # 3. 创建股票实时行情表
-        create_stock_market_current_table(cursor)
+        # create_stock_market_current_table(cursor)
         
         # 4. 创建同花顺概念板块信息表
         create_ths_concept_info_table(cursor)
@@ -80,10 +80,10 @@ def create_tables():
         create_trade_calendar_table(cursor)
         
         # 7. 创建同花顺指数信息表
-        create_ths_index_info_table(cursor)
+        # create_ths_index_info_table(cursor)
         
         # 8. 创建指数历史数据表
-        create_index_market_daily_table(cursor)
+        # create_index_market_daily_table(cursor)
         
         # 9. 创建股票股本信息表
         create_stock_shares_table(cursor)
@@ -92,7 +92,7 @@ def create_tables():
         create_stock_industry_sw_table(cursor)
         
         # 11. 创建股票指数关系表
-        create_ths_stock_index_table(cursor)
+        # create_ths_stock_index_table(cursor)
         
         # 提交事务
         connection.commit()
@@ -183,6 +183,88 @@ def create_stock_market_current_table(cursor):
     """
     cursor.execute(sql)
     logger.info("✓ 股票实时行情表(stock_market_current)创建成功")
+    
+def create_stock_capital_flow_table(cursor):
+    """创建日度资金流向表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS stock_capital_flow (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(50) COMMENT '股票简称',
+        trade_date DATE NOT NULL COMMENT '交易日期',
+        main_net_inflow DECIMAL(24,4) COMMENT '主力资金净流入(元)',
+        max_net_inflow DECIMAL(24,4) COMMENT '特大单净流入(元)',
+        lg_net_inflow DECIMAL(24,4) COMMENT '大单净流入(元)',
+        mid_net_inflow DECIMAL(24,4) COMMENT '中单净流入(元)',
+        sm_net_inflow DECIMAL(24,4) COMMENT '小单净流入(元)',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_trade_date (trade_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='日度资金流向表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 日度资金流向表(stock_market_currstock_capital_flowent)创建成功")
+
+def create_stock_finance_table(cursor):
+    """创建股票财务核心指标表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS stock_finance (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(50) COMMENT '股票简称',
+        report_date DATE COMMENT '报告日期',
+        report_type VARCHAR(10) COMMENT '报告类型',
+        notice_date DATE COMMENT '公布日期',
+        basic_eps DECIMAL(24,4)  COMMENT '基本每股收益(元)',
+        diluted_eps DECIMAL(24,4)  COMMENT '稀释每股收益(元)',
+        non_gaap_eps DECIMAL(24,4)  COMMENT '扣非每股收益(元)',
+        net_asset_ps DECIMAL(24,4)  COMMENT '每股净资产(元)',
+        cap_reserve_ps DECIMAL(24,4)  COMMENT '每股公积金(元)',
+        undist_profit_ps DECIMAL(24,4)  COMMENT '每股未分配利润(元)',
+        oper_cf_ps DECIMAL(24,4)  COMMENT '每股经营现金流(元)',
+        total_rev DECIMAL(24,4)  COMMENT '营业总收入(元)',
+        gross_profit DECIMAL(24,4)  COMMENT '毛利润(元)',
+        net_profit_attr_sh DECIMAL(24,4)  COMMENT '归属净利润(元)',
+        non_gaap_net_profit DECIMAL(24,4)  COMMENT '扣非净利润(元)',
+        total_rev_yoy_gr DECIMAL(24,4)  COMMENT '营业总收入同比增长(%)',
+        net_profit_yoy_gr DECIMAL(24,4)  COMMENT '归属净利润同比增长(%)',
+        non_gaap_net_profit_yoy_gr DECIMAL(24,4)  COMMENT '扣非净利润同比增长(%)',
+        total_rev_qoq_gr DECIMAL(24,4)  COMMENT '营业总收入滚动环比增长(%)',
+        net_profit_qoq_gr DECIMAL(24,4)  COMMENT '归属净利润滚动环比增长(%)',
+        non_gaap_net_profit_qoq_gr DECIMAL(24,4)  COMMENT '扣非净利润滚动环比增长(%)',
+        roe_wtd DECIMAL(24,4) COMMENT '净资产收益率(加权)(%)',
+        roe_non_gaap_wtd DECIMAL(24,4) COMMENT '净资产收益率(扣非/加权)(%)',
+        roa_wtd DECIMAL(24,4) COMMENT '总资产收益率(加权)(%)',
+        gross_margin DECIMAL(24,4) COMMENT '毛利率(%)',
+        net_margin DECIMAL(24,4) COMMENT '净利率(%)',
+        adv_receipts_to_rev DECIMAL(24,4) COMMENT '预收账款/营业总收入',
+        net_cf_sales_to_rev	DECIMAL(24,4) COMMENT '销售净现金流/营业总收入',
+        oper_cf_to_rev	DECIMAL(24,4) COMMENT '经营净现金流/营业总收入',
+        eff_tax_rate DECIMAL(24,4) COMMENT '实际税率(%)',
+        curr_ratio DECIMAL(24,4) COMMENT '流动比率',
+        quick_ratio DECIMAL(24,4) COMMENT '速动比率',
+        cash_flow_ratio DECIMAL(24,4) COMMENT '现金流量比率',
+        asset_liab_ratio DECIMAL(24,4) COMMENT '资产负债率(%)',
+        equity_multiplier DECIMAL(24,4) COMMENT '权益系数',
+        equity_ratio DECIMAL(24,4) COMMENT '产权比率',
+        total_asset_turn_days DECIMAL(24,4) COMMENT '总资产周转天数(天)',
+        inv_turn_days DECIMAL(24,4) COMMENT '存货周转天数(天)',
+        acct_recv_turn_days DECIMAL(24,4) COMMENT '应收账款周转天数(天)',
+        total_asset_turn_rate DECIMAL(24,4) COMMENT '总资产周转率(次)',
+        inv_turn_rate DECIMAL(24,4) COMMENT '存货周转率(次)',
+        acct_recv_turn_rate DECIMAL(24,4) COMMENT '应收账款周转率(次)',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_exchange (report_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票财务核心指标表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 股票财务核心指标表(stock_finance)创建成功")
+
 
 def create_ths_concept_info_table(cursor):
     """创建同花顺概念板块信息表"""
@@ -203,13 +285,42 @@ def create_ths_concept_info_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 概念板块信息表(concept_info)创建成功")
 
+def create_ths_concept_market_table(cursor):
+    """创建同花顺概念指数K线数据表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS ths_concept_market (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        concept_code VARCHAR(20) NOT NULL COMMENT '概念代码',
+        concept_name VARCHAR(100) COMMENT '概念名称',
+        trade_date DATE NOT NULL COMMENT '交易日期',
+        open DECIMAL(10,3) COMMENT '开盘价',
+        close DECIMAL(10,3) COMMENT '收盘价',
+        high DECIMAL(10,3) COMMENT '最高价',
+        low DECIMAL(10,3) COMMENT '最低价',
+        volume BIGINT COMMENT '成交量(手)',      
+        amount DECIMAL(15,2) COMMENT '成交额(元)',
+        change_amount DECIMAL(10,3) COMMENT '涨跌额',
+        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',          
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        UNIQUE KEY uk_index_date (index_code, trade_date),
+        INDEX idx_index_code (index_code),
+        INDEX idx_trade_date (trade_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺概念指数K线数据表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 同花顺概念指数K线数据表(ths_index_market)创建成功")
+
 def create_ths_stock_concepts_table(cursor):
     """创建同花顺股票概念关系表"""
     sql = """
     CREATE TABLE IF NOT EXISTS ths_stock_concepts (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
-        concept_code VARCHAR(20) NOT NULL COMMENT '概念代码',
+        short_name VARCHAR(100) COMMENT '股票简称',
+        concept_code VARCHAR(20)  COMMENT '概念代码',
         concept_name VARCHAR(100) COMMENT '概念名称',
         source VARCHAR(10) COMMENT '数据源(ths/east)',
         reason VARCHAR(1000) COMMENT '概念原因	',
@@ -247,74 +358,6 @@ def create_trade_calendar_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 交易日历表(trade_calendar)创建成功")
 
-def create_ths_index_info_table(cursor):
-    """创建同花顺指数信息表"""
-    sql = """
-    CREATE TABLE IF NOT EXISTS ths_index_info (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
-        index_name VARCHAR(100) COMMENT '指数名称',
-        concept_code VARCHAR(20) COMMENT '概念代码',
-        source VARCHAR(10) COMMENT '来源',
-        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        data_source varchar(100) COMMENT '数据来源',
-        UNIQUE KEY uk_index_code (index_code),
-        INDEX idx_index_name (index_name),
-        INDEX idx_concept_code (concept_code),
-        INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺指数信息表'
-    """
-    cursor.execute(sql)
-    logger.info("✓ 同花顺指数信息表(index_info)创建成功")
-
-
-def create_ths_stock_index_table(cursor):
-    """创建同花顺股票指数关系表"""
-    sql = """
-    CREATE TABLE IF NOT EXISTS ths_stock_index (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
-        short_name VARCHAR(100)  COMMENT '股票简称',
-        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
-        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        data_source varchar(100) COMMENT '数据来源',
-        UNIQUE KEY uk_index_stock_code (index_code, stock_code),
-        INDEX idx_index_code (index_code),
-        INDEX idx_stock_code (stock_code),
-        INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='同花顺股票指数关系表'
-    """
-    cursor.execute(sql)
-    logger.info("✓ 同花顺股票指数关系表(index_info)创建成功")
-
-
-def create_index_market_daily_table(cursor):
-    """创建指数日K线数据表"""
-    sql = """
-    CREATE TABLE IF NOT EXISTS index_market_daily (
-        id BIGINT AUTO_INCREMENT PRIMARY KEY,
-        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
-        trade_date DATE NOT NULL COMMENT '交易日期',
-        trade_time DATETIME COMMENT '交易时间',
-        open DECIMAL(10,2) COMMENT '开盘点数',
-        high DECIMAL(10,2) COMMENT '最高点数',
-        low DECIMAL(10,2) COMMENT '最低点数',
-        close DECIMAL(10,2) COMMENT '收盘点数',
-        pre_close DECIMAL(10,2) COMMENT '昨收点数',
-        change_amount DECIMAL(10,2) COMMENT '涨跌点数',
-        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',
-        volume BIGINT COMMENT '成交量',
-        amount DECIMAL(15,2) COMMENT '成交额',
-        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        UNIQUE KEY uk_index_date (index_code, trade_date),
-        INDEX idx_index_code (index_code),
-        INDEX idx_trade_date (trade_date),
-        data_source varchar(100) COMMENT '数据来源',
-        INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='指数日K线数据表'
-    """
-    cursor.execute(sql)
-    logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")
     
 def create_stock_shares_table(cursor):
     """创建股票股本信息表数据表"""
@@ -357,6 +400,26 @@ def create_stock_industry_sw_table(cursor):
     """
     cursor.execute(sql)
     logger.info("✓ 指数日K线数据表(index_market_daily)创建成功")   
+
+def create_securities_margin_table(cursor):
+    """创建融资融券余额数据"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS securities_margin (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        trade_date DATE COMMENT '交易日期',
+        rzye DECIMAL(24,2)  COMMENT '融资余额（元）',
+        rqye DECIMAL(24,2)  COMMENT '融券余额（元）',
+        rzrqye DECIMAL(24,2)  COMMENT '融资融券余额（元）',
+        rzrqyecz DECIMAL(24,2)  COMMENT '融资融券余额差值（元）',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_trade_date (trade_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='融资融券余额数据'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 融资融券余额数据(securities_margin)创建成功")
+
 
 def show_tables():
     """显示创建的表"""

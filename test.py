@@ -1,10 +1,10 @@
 import adata
+import pprint
+# 886015
+df = adata.stock.market.get_market_concept_ths(index_code = '886015')
+#df = adata.stock.info.all_concept_code_ths()
 
-
-# k_type: k线类型：1.日；2.周；3.月 默认：1 日k
-res_df = adata.stock.info.get_industry_sw(stock_code='603918')
-print(res_df)
-
+pprint.pprint(df)
 
 
 # # df = adata.stock.market.get_market(

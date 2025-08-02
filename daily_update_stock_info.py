@@ -129,7 +129,7 @@ class DailyDataUpdater:
             logger.info("清空股票基本信息...")
             
             # 清空表
-            self.cursor.execute("DELETE FROM stock_info")
+            self.cursor.execute("truncate table stock_info")
             
             # 批量插入
             insert_sql = """
@@ -197,7 +197,7 @@ class DailyDataUpdater:
             logger.info("清空股票股本信息...")
             
             # 清空表
-            self.cursor.execute("DELETE FROM stock_shares")
+            self.cursor.execute("truncate table stock_shares")
             
 
             
@@ -257,6 +257,127 @@ class DailyDataUpdater:
             error_msg = f"更新今日股本信息失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
+ 
+ 
+    def insert_all_stock_finance(self):
+        """重新初始化股票财务指标信息"""
+        try:
+            
+            logger.info("清空股票财务指标信息...")
+            
+            # 清空表
+            self.cursor.execute("truncate table stock_finance")
+            
+
+            
+            logger.info("🚀 开始获取ADATA所有股票财务指标信息...")
+            
+            self.cursor.execute(f"SELECT stock_code,short_name  FROM stock_info a ORDER BY a.stock_code")
+            stocks = self.cursor.fetchall() # type: ignore            
+
+            success_count = 0
+            
+            for i, (stock_code, stock_name) in enumerate(stocks, 1):
+                try:
+                    data_source = 'ADATA'
+                    df = adata.stock.info.get_stock_shares(stock_code=stock_code)
+                    
+                    if df.empty:
+                        continue
+                    
+                    
+                    # 批量插入
+                    insert_sql = """
+                    INSERT INTO stock_finance (stock_code, short_name, report_date, report_type, notice_date, basic_eps, diluted_eps
+                                            , non_gaap_eps, net_asset_ps, cap_reserve_ps, undist_profit_ps, oper_cf_ps, total_rev
+                                            , gross_profit, net_profit_attr_sh, non_gaap_net_profit, total_rev_yoy_gr, net_profit_yoy_gr
+                                            , non_gaap_net_profit_yoy_gr, total_rev_qoq_gr, net_profit_qoq_gr, non_gaap_net_profit_qoq_gr
+                                            , roe_wtd, roe_non_gaap_wtd, roa_wtd, gross_margin, net_margin, adv_receipts_to_rev, net_cf_sales_to_rev
+                                            , oper_cf_to_rev, eff_tax_rate, curr_ratio, quick_ratio, cash_flow_ratio, asset_liab_ratio, equity_multiplier
+                                            , equity_ratio, total_asset_turn_days, inv_turn_days, acct_recv_turn_days, total_asset_turn_rate, inv_turn_rate
+                                            , acct_recv_turn_rate, update_time, data_source) 
+                    VALUES ( %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s,%s
+                            , %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s, %s
+                            , %s, %s, %s, %s, %s)
+                    """
+                                                            
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            stock_code,
+                            str(row.get('short_name')) if row.get('short_name') else None,
+                            str(row.get('report_date')) if row.get('report_date') else None,
+                            str(row.get('report_type')) if row.get('report_type') else None,
+                            str(row.get('notice_date')) if row.get('notice_date') else None,
+                            float(row.get('basic_eps', 0)) if pd.notna(row.get('basic_eps', 0))  else None, 
+                            float(row.get('diluted_eps', 0)) if pd.notna(row.get('diluted_eps', 0))  else None, 
+                            float(row.get('non_gaap_eps', 0.0)) if pd.notna(row.get('non_gaap_eps', 0.0))  else None, 
+                            float(row.get('net_asset_ps', 0)) if pd.notna(row.get('net_asset_ps', 0))  else None, 
+                            float(row.get('cap_reserve_ps', 0)) if pd.notna(row.get('cap_reserve_ps', 0))  else None, 
+                            float(row.get('undist_profit_ps', 0)) if pd.notna(row.get('undist_profit_ps', 0))  else None, 
+                            float(row.get('oper_cf_ps', 0)) if pd.notna(row.get('oper_cf_ps', 0))  else None, 
+                            float(row.get('total_rev', 0)) if pd.notna(row.get('total_rev', 0))  else None, 
+                            float(row.get('gross_profit', 0)) if pd.notna(row.get('gross_profit', 0))  else None,
+                            float(row.get('net_profit_attr_sh', 0)) if pd.notna(row.get('net_profit_attr_sh', 0))  else None, 
+                            float(row.get('non_gaap_net_profit', 0)) if pd.notna(row.get('non_gaap_net_profit', 0))  else None, 
+                            float(row.get('total_rev_yoy_gr', 0)) if pd.notna(row.get('total_rev_yoy_gr', 0))  else None, 
+                            float(row.get('net_profit_yoy_gr', 0)) if pd.notna(row.get('net_profit_yoy_gr', 0))  else None, 
+                            float(row.get('non_gaap_net_profit_yoy_gr', 0)) if pd.notna(row.get('non_gaap_net_profit_yoy_gr', 0))  else None,
+                            float(row.get('total_rev_qoq_gr', 0)) if pd.notna(row.get('total_rev_qoq_gr', 0))  else None, 
+                            float(row.get('net_profit_qoq_gr', 0)) if pd.notna(row.get('net_profit_qoq_gr', 0))  else None, 
+                            float(row.get('non_gaap_net_profit_qoq_gr', 0)) if pd.notna(row.get('non_gaap_net_profit_qoq_gr', 0))  else None, 
+                            float(row.get('roe_wtd', 0)) if pd.notna(row.get('roe_wtd', 0))  else None, 
+                            float(row.get('roe_non_gaap_wtd', 0)) if pd.notna(row.get('roe_non_gaap_wtd', 0))  else None,
+                            float(row.get('roa_wtd', 0)) if pd.notna(row.get('roa_wtd', 0))  else None, 
+                            float(row.get('gross_margin', 0)) if pd.notna(row.get('gross_margin', 0))  else None, 
+                            float(row.get('net_margin', 0)) if pd.notna(row.get('net_margin', 0))  else None, 
+                            float(row.get('adv_receipts_to_rev', 0)) if pd.notna(row.get('adv_receipts_to_rev', 0))  else None, 
+                            float(row.get('net_cf_sales_to_rev', 0)) if pd.notna(row.get('net_cf_sales_to_rev', 0))  else None,
+                            float(row.get('oper_cf_to_rev', 0)) if pd.notna(row.get('oper_cf_to_rev', 0))  else None, 
+                            float(row.get('eff_tax_rate', 0)) if pd.notna(row.get('eff_tax_rate', 0))  else None, 
+                            float(row.get('curr_ratio', 0)) if pd.notna(row.get('curr_ratio', 0))  else None, 
+                            float(row.get('quick_ratio', 0)) if pd.notna(row.get('quick_ratio', 0))  else None, 
+                            float(row.get('cash_flow_ratio', 0)) if pd.notna(row.get('cash_flow_ratio', 0))  else None,
+                            float(row.get('asset_liab_ratio', 0)) if pd.notna(row.get('asset_liab_ratio', 0))  else None, 
+                            float(row.get('equity_multiplier', 0)) if pd.notna(row.get('equity_multiplier', 0))  else None, 
+                            float(row.get('equity_ratio', 0)) if pd.notna(row.get('equity_ratio', 0))  else None, 
+                            float(row.get('total_asset_turn_days', 0)) if pd.notna(row.get('total_asset_turn_days', 0))  else None, 
+                            float(row.get('inv_turn_days', 0)) if pd.notna(row.get('inv_turn_days', 0))  else None,  
+                            float(row.get('acct_recv_turn_days', 0)) if pd.notna(row.get('acct_recv_turn_days', 0))  else None,
+                            float(row.get('total_asset_turn_rate', 0)) if pd.notna(row.get('total_asset_turn_rate', 0))  else None, 
+                            float(row.get('inv_turn_rate', 0)) if pd.notna(row.get('inv_turn_rate', 0))  else None, 
+                            float(row.get('acct_recv_turn_rate', 0)) if pd.notna(row.get('acct_recv_turn_rate', 0))  else None, 
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(stocks)} 只股票财务指标信息，成功 {success_count} 只")
+                    
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"{stock_code} {stock_name} 股票财务指标信息: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 今日股票财务指标信息更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新今日股票财务指标信息失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)
+            
 
     def insert_all_stock_industry_sw(self):
         """重新初始化股票申万一二级行业"""
@@ -265,7 +386,7 @@ class DailyDataUpdater:
             logger.info("清空股票申万一二级行业...")
             
             # 清空表
-            self.cursor.execute("DELETE FROM stock_industry_sw")
+            self.cursor.execute("truncate table stock_industry_sw")
             
 
             
@@ -324,6 +445,7 @@ class DailyDataUpdater:
             error_msg = f"更新今日申万一二级行业信息失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
+            
 
     def insert_all_ths_concept_code(self):
         """重新初始化同花顺的概念代码信息"""
@@ -332,7 +454,7 @@ class DailyDataUpdater:
             logger.info("清空同花顺的概念代码信息...")
             
             # 清空表
-            self.cursor.execute("DELETE FROM ths_concept_info")
+            self.cursor.execute("truncate table ths_concept_info")
             
              # 批量插入
             insert_sql = """
@@ -387,7 +509,72 @@ class DailyDataUpdater:
             if self.connection:
                 self.connection.rollback()
 
+    def insert_all_ths_stock_concepts(self):
+        """重新初始化同花顺股票概念关系表"""
+        try:
             
+            logger.info("清空同花顺股票概念关系...")
+            
+            # 清空表
+            self.cursor.execute("truncate table ths_stock_concepts")
+            
+
+            
+            logger.info("🚀 开始获取ADATA同花顺股票概念关系...")
+            
+            self.cursor.execute(f"SELECT index_code,concept_code, concept_name, source FROM ths_concept_info a ORDER BY a.index_code")
+            concepts = self.cursor.fetchall() # type: ignore            
+
+            success_count = 0
+            logger.info(f"获取概念代码，开始处理")
+            for i, (index_code, concept_code,concept_name,source) in enumerate(concepts, 1):
+                try:
+                    data_source = 'ADATA'
+                    df = adata.stock.info.concept_constituent_ths(index_code = index_code)
+                    if df.empty:
+                        continue
+                    
+                    logger.info(f"获取ADATA概念相关股票，开始处理")
+                    # 批量插入
+                    insert_sql = """
+                    INSERT INTO ths_stock_concepts (stock_code,short_name, index_code, concept_name, source, reason,update_time,data_source) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                                        
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            str(row.get('stock_code')) if row.get('stock_code') else None,
+                            str(row.get('short_name')) if row.get('short_name') else None,
+                            index_code,
+                            concept_name,
+                            source,                      
+                            None,  
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(index_code)} 只概念，成功 {success_count} 只")
+                    
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"{index_code} {concept_name}同花顺股票概念关系: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 今日同花顺股票概念关系更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新今日同花顺股票概念关系失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)                  
     
     def update_daily_kline(self):
         """更新近7个自然日K线数据"""
@@ -468,7 +655,202 @@ class DailyDataUpdater:
             error_msg = f"更新今日K线失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
+   
+    def update_stock_capital_flow(self):
+        """更新近7个自然日日度资金流"""
+        logger.info(f"📊 开始更新近7个自然日日度资金流）...")
+        
+        try:
+            # 获取所有股票  
+            self.cursor.execute(f"SELECT a.stock_code ,short_name  FROM stock_info a ORDER BY a.stock_code")
+            stocks = self.cursor.fetchall() # type: ignore
+            # print(stocks)
+            logger.info(f"📊 准备更新 {len(stocks)} 只股票的近7个自然日日度资金流")
+            
+            begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
+            end_date =   datetime.now().strftime('%Y%m%d')
+            success_count = 0
+            
+            for i, (stock_code, stock_name) in enumerate(stocks, 1):
+                try:
+                    data_source = 'ADATA'
+                    df = adata.stock.market.get_capital_flow(
+                        stock_code= stock_code,
+                        start_date = begin_date,
+                        end_date = end_date
+                    )
+                    
+                    if df.empty:
+                        continue
+                    
+                    # 删除今日旧数据
+                    self.cursor.execute("""
+                        DELETE FROM stock_capital_flow 
+                        WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
+                    """, (stock_code, begin_date, end_date))
+                    
+                    # 插入今日新数据
+                    insert_sql = """
+                        INSERT INTO stock_capital_flow 
+                        (stock_code, short_name, trade_date, main_net_inflow, max_net_inflow, lg_net_inflow, mid_net_inflow, sm_net_inflow, update_time,data_source) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            stock_code,
+                            stock_name,
+                            str(row.get('trade_date')) if row.get('trade_date') else None,
+                            float(row.get('main_net_inflow', 0.0)) if row.get('main_net_inflow') else None, 
+                            float(row.get('max_net_inflow', 0)) if row.get('max_net_inflow') else None, 
+                            float(row.get('lg_net_inflow', 0)) if row.get('lg_net_inflow') else None, 
+                            float(row.get('mid_net_inflow', 0)) if row.get('mid_net_inflow') else None, 
+                            float(row.get('sm_net_inflow', 0)) if row.get('sm_net_inflow') else None, 
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(stocks)} 只股票，成功 {success_count} 只")
+                    
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"{stock_code} {stock_name} 日度资金流向更新失败: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 今日日度资金更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新今日日度资金失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)  
+              
+    def update_ths_concept_market(self):
+        """重新初始化概念行情数据"""
+        logger.info(f"📊 开始初始化概念行情数据...")
+        
+        try:
+            # 删除所有概念板块行情据 
+            self.cursor.execute("TRUNCATE table ths_concept_market")    
+            
+            # 获取所有概念板块数据 
+            self.cursor.execute(f"SELECT index_code,concept_code, concept_name, source FROM ths_concept_info a ORDER BY a.index_code")
+            
+        
+            index_code = self.cursor.fetchall() # type: ignore
+            logger.info(f"📊 准备初始化 {len(index_code)} 只概念行情数据")
+            # print(index_code)
+            success_count = 0
+            
+            for i, (index_code, concept_code, concept_name, source) in enumerate(index_code, 1):
+                try:
+                    data_source = 'ADATA'
+                    df = adata.stock.market.get_market_concept_ths(
+                        index_code= index_code,
+                        k_type = 1
+                    )
+                    if df.empty:
+                        continue
+                    
+                    # 插入今日新数据
+                    insert_sql = """
+                        INSERT INTO ths_concept_market 
+                        (index_code, concept_code, concept_name, trade_date, open, close, high, low, volume, amount,change_amount,change_pct,update_time,data_source) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            index_code,
+                            concept_code,
+                            concept_name,
+                            str(row.get('trade_date')) if row.get('trade_date') else None,
+                            float(row.get('open', 0)) if row.get('open') else None, 
+                            float(row.get('close', 0)) if row.get('close') else None, 
+                            float(row.get('high', 0)) if row.get('high') else None, 
+                            float(row.get('low', 0)) if row.get('low') else None, 
+                            float(row.get('volume', 0)) if row.get('volume') else None, 
+                            float(row.get('amount', 0)) if row.get('amount') else None, 
+                            float(row.get('change', 0)) if row.get('change') else None, 
+                            float(row.get('change_pct', 0)) if row.get('change_pct') else None, 
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(index_code)} 只概念，成功 {success_count} 只")
+                    
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"{index_code} {concept_name} 概念行情更新失败: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 今日概念行情更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新今日概念行情失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)   
     
+    
+    def update_securities_margin(self):
+        """更新近7个自然日融资融券余额数据"""
+        logger.info(f"📊 开始更新近7个自然日融资融券余额数据...")
+        begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y-%m-%d')
+        
+        try:  
+            data_source = 'ADATA'
+            df = adata.sentiment.securities_margin(
+                start_date= '1990-01-01'
+            )
+            
+            # 删除今日旧数据
+            self.cursor.execute("""
+                DELETE FROM securities_margin 
+                WHERE trade_date >= %s 
+            """, (begin_date))
+            
+            # 插入今日新数据
+            insert_sql = """
+                INSERT INTO securities_margin 
+                (trade_date, rzye, rqye, rzrqye, rzrqyecz, update_time, data_source) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            for _, row in df.iterrows():
+                self.cursor.execute(insert_sql, (
+                    str(row.get('trade_date')) if row.get('trade_date') else None,
+                    float(row.get('rzye', 0)) if row.get('rzye') else None, 
+                    float(row.get('rqye', 0)) if row.get('rqye') else None, 
+                    float(row.get('rzrqye', 0)) if row.get('rzrqye') else None, 
+                    float(row.get('rzrqyecz', 0)) if row.get('rzrqyecz') else None, 
+                    datetime.now(),
+                    data_source
+                ))
+            
+            self.connection.commit() # type: ignore            
+            
+            logger.info(f"✅ 今日融资融券余额数据更新完成")
+
+            
+        except Exception as e:
+            error_msg = f"更新今日融资融券余额数据更新失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)   
 
     def run_daily_update(self):
         """执行每日数据更新"""
@@ -494,6 +876,21 @@ class DailyDataUpdater:
             
             # 5. 更新同花顺概念信息表
             # self.insert_all_ths_concept_code()
+            
+            # 6. 更新同花顺股票概念信息表
+            # self.insert_all_ths_stock_concepts()
+            
+            # 7. 更新日度资金流量
+            # self.update_stock_capital_flow()
+            
+            # 8. 更新所有概念指数板块行情数据
+            # self.update_ths_concept_market()
+            
+            # 9. 更新所有股票财务指标数据
+            # self.insert_all_stock_finance()
+            
+            # 10. 更新最近7个自然日融资融券余额数据
+            self.update_securities_margin()
             
             # 生成统计报告
             self.show_update_summary()

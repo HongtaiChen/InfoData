@@ -202,5 +202,195 @@
       "errors": []
     },
     "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T07:39:11.620006",
+    "duration": "0:00:00.139347",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日同花顺股票概念关系失败: name 'stock_name' is not defined"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T07:40:10.433746",
+    "duration": "0:52:09.319535",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5192,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T09:14:53.337984",
+    "duration": "0:05:45.485594",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 398,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T09:45:26.823784",
+    "duration": "0:00:00.007590",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日日度资金失败: (1054, \"Unknown column 'ca.stock_code' in 'field list'\")"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T09:46:16.084405",
+    "duration": "0:26:00.748944",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5536,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T10:40:42.822465",
+    "duration": "0:00:00.011281",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日概念行情失败: (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM ths_concept_market' at line 1\")"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T10:41:48.906299",
+    "duration": "0:00:00.100204",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T10:42:55.885227",
+    "duration": "0:00:00.621880",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T10:43:11.004987",
+    "duration": "0:00:00.151384",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T10:43:39.205973",
+    "duration": "0:00:39.491004",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新今日概念行情失败: name 'stock_code' is not defined"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T10:44:53.155879",
+    "duration": "0:03:52.106659",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 398,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T14:47:30.512839",
+    "duration": "0:25:44.191369",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5839,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-02",
+    "update_time": "2025-08-02T15:31:21.440107",
+    "duration": "0:00:04.271642",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
   }
 ]
