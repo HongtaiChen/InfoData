@@ -1,10 +1,10 @@
-import adata
-import pprint
-# 886015
-df = adata.stock.market.get_market_concept_ths(index_code = '886015')
-#df = adata.stock.info.all_concept_code_ths()
+# import adata
+# import pprint
+# # 886015
+# df = adata.stock.market.get_market_concept_ths(index_code = '886015')
+# #df = adata.stock.info.all_concept_code_ths()
 
-pprint.pprint(df)
+# pprint.pprint(df)
 
 
 # # df = adata.stock.market.get_market(
@@ -87,3 +87,171 @@ pprint.pprint(df)
 
 # today = datetime.now().strftime('%Y-%m-%d')
 # print(today)
+
+# import akshare as ak
+# import pandas as pd
+# from pyecharts.charts import *
+# from pyecharts import options as opts
+ 
+# df = ak.stock_zh_a_hist(symbol="600036", start_date='20250101',end_date='20250916', adjust="qfq").iloc[:, :6]
+# df.columns = ['date','open','close','high','low','volume',]
+ 
+# # 把date作为日期索引
+# df.index = pd.to_datetime(df.date)
+# df.index=df.index.strftime('%Y%m%d')
+# df=df.sort_index()
+# df['sma']=df.close.rolling(5).mean()
+# df['lma']=df.close.rolling(10).mean()
+# df['lma20']=df.close.rolling(20).mean()
+# df['lma30']=df.close.rolling(30).mean()
+# df['lma60']=df.close.rolling(60).mean()
+ 
+# kline = (
+#     Kline(init_opts=opts.InitOpts(width="1200px",height="600px"))
+#     .add_xaxis(xaxis_data=list(df.index)) #X轴数据
+#     .add_yaxis(
+#         series_name="klines", #序列名称
+#         y_axis=df[["open","close","low","high"]].values.tolist(), #Y轴数据
+#         itemstyle_opts=opts.ItemStyleOpts(color="#ec0000", color0="#00da3c"),
+#         markpoint_opts=opts.MarkPointOpts(
+#             data=[#添加标记符
+#             opts.MarkPointItem(type_='max', name='最大值'),
+#             opts.MarkPointItem(type_='min', name='最小值'), ],
+#             #symbol='circle',
+#             #symbol_size=[100,30]
+#         ),
+#     )
+#     .set_global_opts(
+#         title_opts=opts.TitleOpts(title="K线及均线",pos_left='45%'), #标题位置
+#         legend_opts=opts.LegendOpts(pos_right="35%",pos_top="5%"), #图例位置
+#         #legend_opts=opts.LegendOpts(is_show=True, pos_bottom=10, pos_left="center"),
+#         datazoom_opts=[
+#             opts.DataZoomOpts(
+#                 is_show=False,
+#                 type_="inside", #内部缩放
+#                 xaxis_index=[0,1],  #可缩放的x轴坐标编号
+#                 range_start=0, range_end=100, #初始显示范围
+#             ),
+#             opts.DataZoomOpts(
+#                 is_show=True, #显示滑块
+#                 type_="slider", #滑块缩放
+#                 xaxis_index=[0,1],  #可缩放的x轴坐标编号
+#                 pos_top="85%",
+#                 range_start=0, range_end=100, #初始显示范围
+#             ),
+#         ],
+#         yaxis_opts=opts.AxisOpts(
+#             is_scale=True, #缩放时是否显示0值
+#             splitarea_opts=opts.SplitAreaOpts( #分割显示设置
+#                 is_show=True, areastyle_opts=opts.AreaStyleOpts(opacity=1) ),
+#         ),
+#         tooltip_opts=opts.TooltipOpts( #提示框配置
+#             trigger="axis", #坐标轴触发提示
+#             axis_pointer_type="cross", #鼠标变为十字准星
+#             background_color="rgba(245, 245, 245, 0.8)", #背景颜色
+#             border_width=1, border_color="#ccc", #提示框配置
+#             textstyle_opts=opts.TextStyleOpts(color="#000"), #文字配置
+#         ),
+#         visualmap_opts=opts.VisualMapOpts( #视觉映射配置
+#             is_show=False, dimension=2,
+#             series_index=5, is_piecewise=True,
+#             pieces=[ {"value": 1, "color": "#00da3c"}, {"value": -1, "color": "#ec0000"},             ],
+#         ),
+#         axispointer_opts=opts.AxisPointerOpts( #轴指示器配置
+#             is_show=True,
+#             link=[{"xAxisIndex": "all"}],
+#             label=opts.LabelOpts(background_color="#777"), #显示标签设置
+#         ),
+#         brush_opts=opts.BrushOpts(
+#             x_axis_index="all", #所有series
+#             brush_link="all", #不同系列选中后联动
+#             out_of_brush={"colorAlpha": 0.1}, #高亮显示程度
+#             brush_type="lineX", #纵向选择
+#         ),
+#     )
+# )
+ 
+# #均线
+# line=Line()
+# line.add_xaxis( df.index.tolist() ) #X轴数据
+# line.add_yaxis( 'MA5', #序列名称
+#                 df.sma.round(2).tolist(), #Y轴数据
+#                 is_smooth=True, #平滑曲线
+#                 is_symbol_show=False #不显示折线的小圆圈
+# )
+# line.add_yaxis( 'MA10',df.lma.round(2).tolist(),is_smooth=True,is_symbol_show=False )
+# line.add_yaxis( 'MA20',df.lma20.round(2).tolist(),is_smooth=True,is_symbol_show=False )
+# line.add_yaxis( 'MA30',df.lma30.round(2).tolist(),is_smooth=True,is_symbol_show=False )
+# line.add_yaxis( 'MA60',df.lma60.round(2).tolist(),is_smooth=True,is_symbol_show=False )
+# line.set_series_opts(
+#     label_opts=opts.LabelOpts(is_show=False), #是否显示数据标签
+#     linestyle_opts=opts.LineStyleOpts(width=1), #线宽
+# )
+# line.set_global_opts(
+#     datazoom_opts=[
+#         opts.DataZoomOpts(
+#             is_show=False,
+#             type_="inside", #图内缩放调整
+#             xaxis_index=[0,1],  #可缩放的x轴坐标编号
+#             range_start=0, range_end=100, #初始显示范围
+#         ),
+#         opts.DataZoomOpts(
+#             is_show=True, #是否显示滑块
+#             type_="slider", #外部滑块缩放调整
+#             xaxis_index=[0,1],  #可缩放的x轴坐标编号
+#             pos_top="85%",
+#             range_start=0, range_end=100, #初始显示范围
+#         ),
+#     ],
+#     legend_opts=opts.LegendOpts(pos_right="20%",pos_top="5%"), #图例位置
+#     tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="cross") #趋势线设置
+# )
+# kline.overlap(line)
+ 
+# #成交量
+# bar = (
+#     Bar()
+#     .add_xaxis(xaxis_data=list(df.index)) #X轴数据
+#     .add_yaxis(
+#         series_name="volume",
+#         y_axis=df["volume"].tolist(), #Y轴数据
+#         xaxis_index=1,
+#         yaxis_index=1,
+#         label_opts=opts.LabelOpts(is_show=False),
+#         itemstyle_opts=opts.ItemStyleOpts(
+#             color='#ef232a' #'#14b143'
+#         ),
+#     )
+#     .set_global_opts(
+#         xaxis_opts=opts.AxisOpts(
+#             type_="category", #坐标轴类型-离散数据
+#             grid_index=1,
+#             axislabel_opts=opts.LabelOpts(is_show=False),
+#         ),
+#         legend_opts=opts.LegendOpts(is_show=False),
+#     )
+# )
+ 
+# #图像排列
+# grid_chart = Grid(
+#     init_opts=opts.InitOpts(
+#         width="1200px", #显示图形宽度
+#         height="600px",
+#         animation_opts=opts.AnimationOpts(animation=False), #关闭动画
+#     )
+# )
+ 
+# grid_chart.add( #加入均线图
+#     kline,
+#     grid_opts=opts.GridOpts(pos_left="10%", pos_right="8%", height="40%"),
+# )
+# grid_chart.add( #加入成交量图
+#     bar,
+#     grid_opts=opts.GridOpts(pos_left="10%", pos_right="8%", pos_top="60%", height="20%"),
+# )
+# grid_chart.render("volume.html")
+
+from datetime import datetime, timedelta
+import time
+current_year = datetime.now().year
+print(current_year)

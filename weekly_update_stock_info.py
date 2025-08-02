@@ -862,7 +862,7 @@ class DailyDataUpdater:
             total_inserted = 0
             
             # 更新当年和明年的交易日历
-            for year in [current_year, current_year + 1]:
+            for year in range(1990, 2026):
                 try:
                     df = adata.stock.info.trade_calendar(year=year)
                     if not df.empty:
@@ -881,7 +881,7 @@ class DailyDataUpdater:
                         for _, row in df.iterrows():
                             self.cursor.execute(insert_sql, (
                                 str(row.get('trade_date')),
-                                1 if row.get('is_trading_day') else 0,
+                                row.get('trade_status'),
                                 datetime.now()
                             ))
                         
@@ -911,34 +911,34 @@ class DailyDataUpdater:
         try:
             
             # # 1. 重新插入所有股票基本信息
-            self.insert_all_stock_info()
+            # self.insert_all_stock_info()
             
-            # # 2. 更新本周K线数据
-            self.update_daily_kline()
+            # # # 2. 更新本周K线数据
+            # self.update_daily_kline()
             
-            # 3. 更新股本信息
-            self.insert_all_stock_shares()
+            # # 3. 更新股本信息
+            # self.insert_all_stock_shares()
             
-            # 5. 更新同花顺概念信息表
-            self.insert_all_ths_concept_code()
+            # # 5. 更新同花顺概念信息表
+            # self.insert_all_ths_concept_code()
             
-            # 6. 更新同花顺股票概念信息表
-            self.insert_all_ths_stock_concepts()
+            # # 6. 更新同花顺股票概念信息表
+            # self.insert_all_ths_stock_concepts()
             
-            # 7. 更新日度资金流量
-            self.update_stock_capital_flow()
+            # # 7. 更新日度资金流量
+            # self.update_stock_capital_flow()
             
-            # 8. 更新所有概念指数板块行情数据
-            self.update_ths_concept_market()
+            # # 8. 更新所有概念指数板块行情数据
+            # self.update_ths_concept_market()
             
-            # 9. 更新所有股票财务指标数据
-            self.insert_all_stock_finance()
+            # # 9. 更新所有股票财务指标数据
+            # self.insert_all_stock_finance()
             
-            # 10. 更新最近7个自然日融资融券余额数据
-            self.update_securities_margin()
+            # # 10. 更新最近7个自然日融资融券余额数据
+            # self.update_securities_margin()
             
-            # 4. 更新股票申万行业一二级信息
-            self.insert_all_stock_industry_sw()
+            # # 4. 更新股票申万行业一二级信息
+            # self.insert_all_stock_industry_sw()
             
             # 3. 更新交易日历
             self.update_trade_calendar()
