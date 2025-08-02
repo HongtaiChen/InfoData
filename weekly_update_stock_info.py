@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-每日数据更新脚本
-自动更新股票实时行情、今日K线、交易日历等关键信息
+每周数据更新脚本
+自动更新股票实时行情、本周K线、交易日历等关键信息
 """
 
 import adata
@@ -41,7 +41,7 @@ logger = setup_logging()
 
 class DailyDataUpdater:
     def __init__(self, config_file='daily_update_stock_info_config.ini'):
-        """初始化每日数据更新器"""
+        """初始化每周数据更新器"""
         self.config = configparser.ConfigParser()
         self.config.read(config_file, encoding='utf-8')
         
@@ -111,7 +111,7 @@ class DailyDataUpdater:
             except:
                 history = []
         
-        # 添加今日记录
+        # 添加本周记录
         history.append(log_data)
         
         # 保留最近30天的记录
@@ -251,10 +251,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日股本信息更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周股本信息更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日股本信息失败: {str(e)}"
+            error_msg = f"更新本周股本信息失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
  
@@ -371,10 +371,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日股票财务指标信息更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周股票财务指标信息更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日股票财务指标信息失败: {str(e)}"
+            error_msg = f"更新本周股票财务指标信息失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
             
@@ -439,10 +439,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日申万一二级行业信息更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周申万一二级行业信息更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日申万一二级行业信息失败: {str(e)}"
+            error_msg = f"更新本周申万一二级行业信息失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
             
@@ -569,10 +569,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日同花顺股票概念关系更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周同花顺股票概念关系更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日同花顺股票概念关系失败: {str(e)}"
+            error_msg = f"更新本周同花顺股票概念关系失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)                  
     
@@ -603,13 +603,13 @@ class DailyDataUpdater:
                     if df.empty:
                         continue
                     
-                    # 删除今日旧数据
+                    # 删除本周旧数据
                     self.cursor.execute("""
                         DELETE FROM stock_market_daily 
                         WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
                     """, (stock_code, begin_date, end_date))
                     
-                    # 插入今日新数据
+                    # 插入本周新数据
                     insert_sql = """
                         INSERT INTO stock_market_daily 
                         (stock_code, trade_date, open, high, low, close, pre_close, 
@@ -649,10 +649,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日K线更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周K线更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日K线失败: {str(e)}"
+            error_msg = f"更新本周K线失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
    
@@ -683,13 +683,13 @@ class DailyDataUpdater:
                     if df.empty:
                         continue
                     
-                    # 删除今日旧数据
+                    # 删除本周旧数据
                     self.cursor.execute("""
                         DELETE FROM stock_capital_flow 
                         WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
                     """, (stock_code, begin_date, end_date))
                     
-                    # 插入今日新数据
+                    # 插入本周新数据
                     insert_sql = """
                         INSERT INTO stock_capital_flow 
                         (stock_code, short_name, trade_date, main_net_inflow, max_net_inflow, lg_net_inflow, mid_net_inflow, sm_net_inflow, update_time,data_source) 
@@ -725,10 +725,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日日度资金更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周日度资金更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日日度资金失败: {str(e)}"
+            error_msg = f"更新本周日度资金失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)  
               
@@ -759,7 +759,7 @@ class DailyDataUpdater:
                     if df.empty:
                         continue
                     
-                    # 插入今日新数据
+                    # 插入本周新数据
                     insert_sql = """
                         INSERT INTO ths_concept_market 
                         (index_code, concept_code, concept_name, trade_date, open, close, high, low, volume, amount,change_amount,change_pct,update_time,data_source) 
@@ -799,10 +799,10 @@ class DailyDataUpdater:
                     continue
             
             self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 今日概念行情更新完成: {success_count} 条记录")
+            logger.info(f"✅ 本周概念行情更新完成: {success_count} 条记录")
             
         except Exception as e:
-            error_msg = f"更新今日概念行情失败: {str(e)}"
+            error_msg = f"更新本周概念行情失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)   
     
@@ -815,16 +815,16 @@ class DailyDataUpdater:
         try:  
             data_source = 'ADATA'
             df = adata.sentiment.securities_margin(
-                start_date= '1990-01-01'
+                start_date= begin_date
             )
             
-            # 删除今日旧数据
+            # 删除本周旧数据
             self.cursor.execute("""
                 DELETE FROM securities_margin 
                 WHERE trade_date >= %s 
             """, (begin_date))
             
-            # 插入今日新数据
+            # 插入本周新数据
             insert_sql = """
                 INSERT INTO securities_margin 
                 (trade_date, rzye, rqye, rzrqye, rzrqyecz, update_time, data_source) 
@@ -844,17 +844,65 @@ class DailyDataUpdater:
             
             self.connection.commit() # type: ignore            
             
-            logger.info(f"✅ 今日融资融券余额数据更新完成")
+            logger.info(f"✅ 本周融资融券余额数据更新完成")
 
             
         except Exception as e:
-            error_msg = f"更新今日融资融券余额数据更新失败: {str(e)}"
+            error_msg = f"更新本周融资融券余额数据更新失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)   
+            
+            
+    def update_trade_calendar(self):
+        """更新交易日历"""
+        logger.info("📅 开始更新交易日历...")
+        
+        try:
+            current_year = datetime.now().year
+            total_inserted = 0
+            
+            # 更新当年和明年的交易日历
+            for year in [current_year, current_year + 1]:
+                try:
+                    df = adata.stock.info.trade_calendar(year=year)
+                    if not df.empty:
+                        # 删除该年的旧数据
+                        self.cursor.execute("""
+                            DELETE FROM trade_calendar 
+                            WHERE trade_date LIKE %s
+                        """, (f"{year}%",))
+                        
+                        # 插入新数据
+                        insert_sql = """
+                        INSERT INTO trade_calendar (trade_date, is_trading_day, update_time) 
+                        VALUES (%s, %s, %s)
+                        """
+                        
+                        for _, row in df.iterrows():
+                            self.cursor.execute(insert_sql, (
+                                str(row.get('trade_date')),
+                                1 if row.get('is_trading_day') else 0,
+                                datetime.now()
+                            ))
+                        
+                        self.connection.commit()
+                        total_inserted += len(df)
+                        logger.info(f"✅ {year} 年交易日历: {len(df)} 条记录")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ {year} 年交易日历更新失败: {str(e)}")
+            
+            self.update_stats['trade_calendar'] = total_inserted
+            logger.info(f"✅ 交易日历更新完成: {total_inserted} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新交易日历失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)
 
     def run_daily_update(self):
-        """执行每日数据更新"""
-        logger.info("🚀 开始每日数据更新...")
+        """执行每周数据更新"""
+        logger.info("🚀 开始每周数据更新...")
         logger.info("="*60)
         
         if not self.connect():
@@ -863,34 +911,37 @@ class DailyDataUpdater:
         try:
             
             # # 1. 重新插入所有股票基本信息
-            # self.insert_all_stock_info()
+            self.insert_all_stock_info()
             
-            # # 2. 更新今日K线数据
-            # self.update_daily_kline()
+            # # 2. 更新本周K线数据
+            self.update_daily_kline()
             
             # 3. 更新股本信息
-            # self.insert_all_stock_shares()
-            
-            # 4. 更新股票申万行业一二级信息
-            # self.insert_all_stock_industry_sw()
+            self.insert_all_stock_shares()
             
             # 5. 更新同花顺概念信息表
-            # self.insert_all_ths_concept_code()
+            self.insert_all_ths_concept_code()
             
             # 6. 更新同花顺股票概念信息表
-            # self.insert_all_ths_stock_concepts()
+            self.insert_all_ths_stock_concepts()
             
             # 7. 更新日度资金流量
-            # self.update_stock_capital_flow()
+            self.update_stock_capital_flow()
             
             # 8. 更新所有概念指数板块行情数据
-            # self.update_ths_concept_market()
+            self.update_ths_concept_market()
             
             # 9. 更新所有股票财务指标数据
-            # self.insert_all_stock_finance()
+            self.insert_all_stock_finance()
             
             # 10. 更新最近7个自然日融资融券余额数据
             self.update_securities_margin()
+            
+            # 4. 更新股票申万行业一二级信息
+            self.insert_all_stock_industry_sw()
+            
+            # 3. 更新交易日历
+            self.update_trade_calendar()
             
             # 生成统计报告
             self.show_update_summary()
@@ -898,11 +949,11 @@ class DailyDataUpdater:
             # 保存更新日志
             self.save_update_log()
             
-            logger.info("🎉 每日数据更新完成！")
+            logger.info("🎉 本周数据更新完成！")
             return True
             
         except Exception as e:
-            error_msg = f"每日更新执行失败: {str(e)}"
+            error_msg = f"本周更新执行失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             logger.error(f"详细错误: {traceback.format_exc()}")
             self.update_stats['errors'].append(error_msg)
@@ -916,11 +967,11 @@ class DailyDataUpdater:
         duration = datetime.now() - self.update_stats['start_time']
         
         logger.info("="*60)
-        logger.info("📊 每日数据更新统计")
+        logger.info("📊 本周数据更新统计")
         logger.info("="*60)
         logger.info(f"⏱️  更新耗时: {duration}")
         logger.info(f"📈 实时行情: {self.update_stats['current_market']:,} 条")
-        logger.info(f"📊 今日K线: {self.update_stats['daily_kline']:,} 条")
+        logger.info(f"📊 本周K线: {self.update_stats['daily_kline']:,} 条")
         logger.info(f"📅 交易日历: {self.update_stats['trade_calendar']:,} 条")
         
         if self.update_stats['errors']:
@@ -934,16 +985,16 @@ class DailyDataUpdater:
 
 def main():
     """主函数"""
-    logger.info("🌟 每日数据更新程序启动")
+    logger.info("🌟 每周数据更新程序启动")
     
     updater = DailyDataUpdater()
     success = updater.run_daily_update()
     
     if success:
-        logger.info("✅ 每日数据更新成功完成")
+        logger.info("✅ 每周数据更新成功完成")
         sys.exit(0)
     else:
-        logger.error("❌ 每日数据更新失败")
+        logger.error("❌ 每周数据更新失败")
         sys.exit(1)
 
 if __name__ == "__main__":
