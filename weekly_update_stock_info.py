@@ -914,7 +914,7 @@ class DailyDataUpdater:
             # self.insert_all_stock_info()
             
             # # # 2. 更新本周K线数据
-            # self.update_daily_kline()
+            self.update_daily_kline()
             
             # # 3. 更新股本信息
             # self.insert_all_stock_shares()
