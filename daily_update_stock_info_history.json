@@ -1,22 +1,6 @@
 [
   {
     "date": "2025-07-31",
-    "update_time": "2025-07-31T19:49:33.364813",
-    "duration": "0:00:16.979497",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新今日K线失败: not all arguments converted during string formatting"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-07-31",
     "update_time": "2025-07-31T19:57:30.460052",
     "duration": "0:00:16.908773",
     "stats": {
@@ -429,6 +413,20 @@
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 0,
+      "trade_calendar": 7669,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-03",
+    "update_time": "2025-08-03T15:52:36.395764",
+    "duration": "0:32:24.483004",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5417,
       "trade_calendar": 7669,
       "concept_info": 0,
       "errors": []

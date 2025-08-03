@@ -1,4 +1,5 @@
 
+-------------获取对应概念下的股票涨跌幅
 -- 获取上一个交易日日历
 with pre_trade_date as(
 select
@@ -72,3 +73,103 @@ left join begin_close_table b
 order by
 	b.trade_date,
 	((a.close-b.begin_close ) / b.begin_close)* 100 desc;
+
+
+----------------------获取股票当前总市值-------------------
+with max_change_date as
+(
+select
+	a.stock_code ,
+	max(change_date) change_date
+from
+	adata.stock_shares a
+group by
+	a.stock_code 
+)
+
+select
+	a.short_name ,
+	b.`close` * c.total_shares / 100000000 asset
+from
+	adata.stock_info a
+inner join adata.stock_market_daily b  
+on
+	CONCAT(a.stock_code, '.', a.exchange ) = b.stock_code
+inner join adata.stock_shares c  
+on
+	a.stock_code = c.stock_code
+inner join max_change_date d  
+on
+	c.stock_code = d.stock_code
+	and c.change_date = d.change_date
+where
+	b.trade_date = '20250801'
+
+
+-- 获取股票今年以来涨跌幅 -----
+with pre_trade_date as(
+select
+	a.*,
+	last_day(a.trade_date) last_month_date,
+	max(case when a.is_trading_day = 1 then a.trade_date else null end)over(order by a.trade_date ) pre_trade_date
+from
+	adata.trade_calendar a
+ where a.trade_date >= '20240101'
+  
+),
+ max_change_date as
+(
+select
+	a.stock_code ,
+	max(change_date) change_date
+from
+	adata.stock_shares a
+group by
+	a.stock_code 
+),
+total_asset as(
+select
+	a.short_name ,
+	a.stock_code,
+	CONCAT(a.stock_code, '.', a.exchange) concat_stock_code,
+	b.`close` * c.total_shares / 100000000 asset,
+	a.list_date
+from
+	adata.stock_info a
+inner join adata.stock_market_daily b  
+on
+	CONCAT(a.stock_code, '.', a.exchange ) = b.stock_code
+inner join adata.stock_shares c  
+on
+	a.stock_code = c.stock_code
+inner join max_change_date d  
+on
+	c.stock_code = d.stock_code
+	and c.change_date = d.change_date
+where
+	b.trade_date = '20250730'
+)
+select
+	a.short_name ,
+	a.stock_code,
+	a.asset,
+	a.list_date,
+	(EXP(SUM(LOG(1+ change_pct/100))) -1 )*100 growthrate
+from
+	total_asset a
+inner join adata.stock_market_daily b  
+on
+	a.concat_stock_code = b.stock_code
+inner join adata.stock_shares c  
+on
+	a.stock_code = c.stock_code
+inner join max_change_date d  
+on
+	c.stock_code = d.stock_code
+	and c.change_date = d.change_date
+where
+	b.trade_date between  '20250101' and '20250801'
+group by a.short_name ,
+	a.stock_code,
+	a.asset,
+	a.list_date
