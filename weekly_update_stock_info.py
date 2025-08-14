@@ -17,6 +17,7 @@ import configparser
 import traceback
 import tushare as ts
 import pandas as pd
+import akshare as ak
 
 # 设置aushare接口token
 ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
@@ -851,6 +852,62 @@ class DailyDataUpdater:
             error_msg = f"更新本周融资融券余额数据更新失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)   
+
+    def update_stock_dividend(self):
+        """更新近7个自然日股票分红派息数据"""
+        logger.info(f"📊 开始更新近7个自然日股票分红派息数据...")
+        # 获取所有日历数据 
+        begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y-%m-%d')
+        end_date =   datetime.now().strftime('%Y-%m-%d')
+        self.cursor.execute("""select date_format(trade_date,'%%Y%%m%%d') trade_date from adata.trade_calendar a where a.trade_date  >= %s  and a.trade_date <= %s """, (begin_date, end_date))
+        trade_dates = self.cursor.fetchall() # type: ignore
+        try:  
+            data_source = 'AKSHARE'
+            for i, (trade_date_tup) in enumerate(trade_dates, 1):
+                trade_date = trade_date_tup[0]
+                df = ak.news_trade_notify_dividend_baidu(
+                    date=trade_date   # type: ignore
+                )
+
+                # 删除本周旧数据
+                self.cursor.execute("""
+                    DELETE FROM stock_dividend 
+                    WHERE ex_date = %s 
+                """, (trade_date))
+                
+                # 插入本日新数据
+                insert_sql = """
+                    INSERT INTO stock_dividend 
+                    (stock_code, short_name, ex_date, dividend_amount, bonus_share, convert_share, physical_asset, exchange, report_date, update_time, data_source) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                for _, row in df.iterrows():
+                    self.cursor.execute(insert_sql, (
+                        str(row.get('股票代码')) if row.get('股票代码') else None,
+                        str(row.get('股票简称')) if row.get('股票简称') else None,
+                        str(row.get('除权日')) if pd.notna(row.get('除权日')) else None, 
+                        str(row.get('分红')) if pd.notna(row.get('分红')) else None, 
+                        str(row.get('送股')) if pd.notna(row.get('送股')) else None, 
+                        str(row.get('转增')) if pd.notna(row.get('转增')) else None, 
+                        str(row.get('实物')) if pd.notna(row.get('实物')) else None, 
+                        str(row.get('交易所')) if row.get('交易所') else None, 
+                        str(row.get('报告期')) if row.get('报告期') else None, 
+                        datetime.now(),
+                        data_source
+                    ))
+                 # 请求延迟
+                time.sleep(self.request_delay)
+                self.connection.commit() # type: ignore            
+                logger.info(f"✅ {trade_date}股票分红派息数据更新完成")
+
+            logger.info(f"✅ 本周股票分红派息数据更新完成")
+
+            
+        except Exception as e:
+            error_msg = f"更新本周股票分红派息数据更新失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)   
             
             
     def update_trade_calendar(self):
@@ -913,11 +970,11 @@ class DailyDataUpdater:
             # # 1. 重新插入所有股票基本信息
             # self.insert_all_stock_info()
             
-            # # # 2. 更新本周K线数据
-            self.update_daily_kline()
+            # # # # 2. 更新本周K线数据
+            # self.update_daily_kline()
             
-            # # 3. 更新股本信息
-            # self.insert_all_stock_shares()
+            # # # 3. 更新股本信息
+            # # self.insert_all_stock_shares()
             
             # # 5. 更新同花顺概念信息表
             # self.insert_all_ths_concept_code()
@@ -931,17 +988,20 @@ class DailyDataUpdater:
             # # 8. 更新所有概念指数板块行情数据
             # self.update_ths_concept_market()
             
-            # # 9. 更新所有股票财务指标数据
-            # self.insert_all_stock_finance()
+            # # # 9. 更新所有股票财务指标数据
+            # # self.insert_all_stock_finance()
             
             # # 10. 更新最近7个自然日融资融券余额数据
             # self.update_securities_margin()
             
             # # 4. 更新股票申万行业一二级信息
-            # self.insert_all_stock_industry_sw()
+            # # self.insert_all_stock_industry_sw()
             
-            # 3. 更新交易日历
-            self.update_trade_calendar()
+            # # 3. 更新交易日历
+            # # self.update_trade_calendar()
+            
+            # 11. 更新分红派息数据
+            self.update_stock_dividend()
             
             # 生成统计报告
             self.show_update_summary()

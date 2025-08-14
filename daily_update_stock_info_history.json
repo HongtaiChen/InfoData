@@ -1,8 +1,8 @@
 [
   {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T19:57:30.460052",
-    "duration": "0:00:16.908773",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:20:13.768597",
+    "duration": "0:00:00.011429",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -10,43 +10,15 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日K线失败: not all arguments converted during string formatting"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:02:24.085976",
-    "duration": "0:01:52.502960",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:05:03.245338",
-    "duration": "0:01:15.510701",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:08:13.087480",
-    "duration": "0:00:17.976471",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:20:54.527407",
+    "duration": "0:00:00.005968",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -54,15 +26,15 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日K线失败: not enough values to unpack (expected 2, got 1)"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:09:58.047327",
-    "duration": "0:00:19.762986",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:23:08.056606",
+    "duration": "0:00:00.011381",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -70,127 +42,15 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日K线失败: (1054, \"Unknown column 'stock_name' in 'field list'\")"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:10:50.500769",
-    "duration": "0:01:11.808101",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:12:28.313258",
-    "duration": "0:00:47.203104",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:14:51.449956",
-    "duration": "0:01:13.060576",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 161,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T20:24:26.386857",
-    "duration": "0:36:40.049175",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 5417,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-07-31",
-    "update_time": "2025-07-31T21:03:37.535361",
-    "duration": "0:40:53.588346",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 5440,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-01",
-    "update_time": "2025-08-01T20:09:21.481375",
-    "duration": "0:24:49.992167",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 5839,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T07:01:07.067011",
-    "duration": "0:00:01.991997",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T07:03:16.033866",
-    "duration": "0:00:00.928381",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T07:39:11.620006",
-    "duration": "0:00:00.139347",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:24:57.232746",
+    "duration": "0:00:00.015309",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -198,43 +58,15 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日同花顺股票概念关系失败: name 'stock_name' is not defined"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T07:40:10.433746",
-    "duration": "0:52:09.319535",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 5192,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T09:14:53.337984",
-    "duration": "0:05:45.485594",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 398,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T09:45:26.823784",
-    "duration": "0:00:00.007590",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:25:21.801270",
+    "duration": "0:00:00.010697",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -242,29 +74,15 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日日度资金失败: (1054, \"Unknown column 'ca.stock_code' in 'field list'\")"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T09:46:16.084405",
-    "duration": "0:26:00.748944",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 5536,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T10:40:42.822465",
-    "duration": "0:00:00.011281",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:25:31.521459",
+    "duration": "0:00:00.014364",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -272,57 +90,15 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日概念行情失败: (1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM ths_concept_market' at line 1\")"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T10:41:48.906299",
-    "duration": "0:00:00.100204",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T10:42:55.885227",
-    "duration": "0:00:00.621880",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T10:43:11.004987",
-    "duration": "0:00:00.151384",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T10:43:39.205973",
-    "duration": "0:00:39.491004",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:26:00.380787",
+    "duration": "0:00:00.029795",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -330,43 +106,47 @@
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": [
-        "更新今日概念行情失败: name 'stock_code' is not defined"
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
       ]
     },
     "success": false
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T10:44:53.155879",
-    "duration": "0:03:52.106659",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:26:21.093855",
+    "duration": "0:00:00.010076",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
-      "daily_kline": 398,
+      "daily_kline": 0,
       "trade_calendar": 0,
       "concept_info": 0,
-      "errors": []
+      "errors": [
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
+      ]
     },
-    "success": true
+    "success": false
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T14:47:30.512839",
-    "duration": "0:25:44.191369",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:26:58.829417",
+    "duration": "0:00:00.008523",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
-      "daily_kline": 5839,
+      "daily_kline": 0,
       "trade_calendar": 0,
       "concept_info": 0,
-      "errors": []
+      "errors": [
+        "更新本周股票分红派息数据更新失败: name 'index_code' is not defined"
+      ]
     },
-    "success": true
+    "success": false
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T15:31:21.440107",
-    "duration": "0:00:04.271642",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:27:34.016286",
+    "duration": "0:00:00.006795",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -378,9 +158,25 @@
     "success": true
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T18:33:02.732789",
-    "duration": "0:00:01.161755",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:29:03.341385",
+    "duration": "0:00:00.004962",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:30:46.603974",
+    "duration": "0:00:00.544000",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -392,42 +188,268 @@
     "success": true
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T18:34:46.545738",
-    "duration": "0:00:02.686359",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:31:18.633211",
+    "duration": "0:00:02.762742",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 0,
-      "trade_calendar": 7669,
+      "trade_calendar": 0,
       "concept_info": 0,
       "errors": []
     },
     "success": true
   },
   {
-    "date": "2025-08-02",
-    "update_time": "2025-08-02T18:36:01.235157",
-    "duration": "0:00:05.344925",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:31:41.172501",
+    "duration": "0:00:35.344438",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 0,
-      "trade_calendar": 7669,
+      "trade_calendar": 0,
       "concept_info": 0,
       "errors": []
     },
     "success": true
   },
   {
-    "date": "2025-08-03",
-    "update_time": "2025-08-03T15:52:36.395764",
-    "duration": "0:32:24.483004",
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:33:15.943364",
+    "duration": "0:00:01.020650",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
-      "daily_kline": 5417,
-      "trade_calendar": 7669,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: not enough arguments for format string"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:34:11.734434",
+    "duration": "0:00:02.344270",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:35:55.879857",
+    "duration": "0:00:00.774274",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: (1366, \"Incorrect decimal value: '0.50元' for column 'dividend_amount' at row 1\")"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:36:30.575759",
+    "duration": "0:00:01.560260",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:40:44.949138",
+    "duration": "0:00:00.983820",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: could not convert string to float: '0.50元'"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:41:35.226935",
+    "duration": "0:00:02.314748",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:42:16.514692",
+    "duration": "0:00:02.223694",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:42:30.060596",
+    "duration": "0:00:02.185667",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:51:21.982732",
+    "duration": "0:00:02.570581",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:52:53.434725",
+    "duration": "0:00:21.101446",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: HTTPSConnectionPool(host='finance.pae.baidu.com', port=443): Max retries exceeded with url: /api/financecalendar?start_date=2015-01-01&end_date=2015-01-01&market=&cate=notify_divide&rn=500&pn=0 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x0000026A675B1600>, 'Connection to finance.pae.baidu.com timed out. (connect timeout=None)'))"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:54:57.770829",
+    "duration": "0:00:05.360281",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: boolean value of NA is ambiguous"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T20:58:55.385336",
+    "duration": "0:01:22.498085",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: (1406, \"Data too long for column 'bonus_share' at row 1\")"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T21:03:58.598066",
+    "duration": "0:11:40.051165",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: HTTPSConnectionPool(host='finance.pae.baidu.com', port=443): Max retries exceeded with url: /api/financecalendar?start_date=2017-12-30&end_date=2017-12-30&market=&cate=notify_divide&rn=500&pn=0 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001D923ED1C90>, 'Connection to finance.pae.baidu.com timed out. (connect timeout=None)'))"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T21:16:26.627994",
+    "duration": "0:00:23.959900",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周股票分红派息数据更新失败: HTTPSConnectionPool(host='finance.pae.baidu.com', port=443): Max retries exceeded with url: /api/financecalendar?start_date=2018-01-03&end_date=2018-01-03&market=&cate=notify_divide&rn=500&pn=0 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001B521AA4F40>, 'Connection to finance.pae.baidu.com timed out. (connect timeout=None)'))"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T21:17:51.382231",
+    "duration": "0:20:45.690852",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-14",
+    "update_time": "2025-08-14T22:11:20.755728",
+    "duration": "0:00:02.690947",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
       "concept_info": 0,
       "errors": []
     },

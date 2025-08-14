@@ -420,6 +420,30 @@ def create_securities_margin_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 融资融券余额数据(securities_margin)创建成功")
 
+def create_stock_dividend_table(cursor):
+    """创建股票分红派息信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS stock_dividend (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(50) COMMENT '股票简称',
+        ex_date DATE COMMENT '除权日',
+        dividend_amount VARCHAR(20) COMMENT '分红',
+        bonus_share VARCHAR(40) COMMENT '送股',
+        convert_share VARCHAR(40) COMMENT '转增',
+        physical_asset VARCHAR(40) COMMENT '实物',
+        exchange VARCHAR(5) COMMENT '交易所(SZ/SH/BJ)',
+        report_date DATE COMMENT '报告日期',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_stockcode_exdate (stock_code,ex_date),
+        INDEX idx_ex_date (ex_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票分红派息信息表';
+    """
+    cursor.execute(sql)
+    logger.info("✓ 股票分红派息信息表(stock_dividend)创建成功")
+
 
 def show_tables():
     """显示创建的表"""

@@ -251,7 +251,14 @@
 # )
 # grid_chart.render("volume.html")
 
-from datetime import datetime, timedelta
-import time
-current_year = datetime.now().year
-print(current_year)
+# from datetime import datetime, timedelta
+# import time
+# current_year = datetime.now().year
+# print(current_year)
+
+
+
+import akshare as ak
+
+news_trade_notify_dividend_baidu_df = ak.news_trade_notify_dividend_baidu(date="19990726")
+print(news_trade_notify_dividend_baidu_df)
