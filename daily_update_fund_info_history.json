@@ -1,0 +1,30 @@
+[
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T15:49:56.100319",
+    "duration": "0:00:06.938024",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T15:51:45.997793",
+    "duration": "0:00:10.411322",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  }
+]

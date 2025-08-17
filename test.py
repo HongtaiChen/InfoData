@@ -258,7 +258,21 @@
 
 
 
+# import akshare as ak
+
+
+# stock_history_dividend_df = ak.stock_history_dividend()
+# print(stock_history_dividend_df)
+
+# import adata
+
+# df = adata.stock.market.get_market_concept_ths(
+#                         index_code= '885480',
+#                         k_type = 1
+#                     )
+
+
 import akshare as ak
 
-news_trade_notify_dividend_baidu_df = ak.news_trade_notify_dividend_baidu(date="19990726")
-print(news_trade_notify_dividend_baidu_df)
+fund_report_stock_cninfo_df = ak.fund_report_stock_cninfo(date="20250630")
+print(fund_report_stock_cninfo_df)

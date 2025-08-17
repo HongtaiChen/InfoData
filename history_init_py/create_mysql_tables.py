@@ -126,6 +126,26 @@ def create_stock_info_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 股票基本信息表(stock_info)创建成功")
 
+def create_stock_info_ex_table(cursor):
+    """创建股票基本信息表"""
+    sql = """
+CREATE TABLE IF NOT EXISTS stock_info_ex (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(50) COMMENT '股票简称',
+        type_name VARCHAR(50) COMMENT '股票分类',
+        exchange VARCHAR(5) COMMENT '交易所(SZ/SH/BJ)',
+        list_date DATE COMMENT '上市日期',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_exchange (exchange),
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票信息拓展表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 股票信息拓展表(stock_info_ex)创建成功")
+
 def create_stock_market_daily_table(cursor):
     """创建股票日K线数据表"""
     sql = """
@@ -423,26 +443,90 @@ def create_securities_margin_table(cursor):
 def create_stock_dividend_table(cursor):
     """创建股票分红派息信息表"""
     sql = """
-    CREATE TABLE IF NOT EXISTS stock_dividend (
+    CREATE TABLE IF NOT EXISTS ths_stock_dividend (
         id INT AUTO_INCREMENT PRIMARY KEY,
         stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
         short_name VARCHAR(50) COMMENT '股票简称',
-        ex_date DATE COMMENT '除权日',
-        dividend_amount VARCHAR(20) COMMENT '分红',
-        bonus_share VARCHAR(40) COMMENT '送股',
-        convert_share VARCHAR(40) COMMENT '转增',
-        physical_asset VARCHAR(40) COMMENT '实物',
-        exchange VARCHAR(5) COMMENT '交易所(SZ/SH/BJ)',
-        report_date DATE COMMENT '报告日期',
+        report_period VARCHAR(20) COMMENT '报告期',
+        board_date DATE COMMENT '董事会日期',
+        shareholders_meeting_date DATE COMMENT '股东大会预案公告日期',
+        implementation_date DATE COMMENT '实施公告日',
+        dividend_plan_desc VARCHAR(500) COMMENT '分红方案说明',
+        ashare_record_date DATE COMMENT 'A股股权登记日',
+        ashare_ex_date DATE COMMENT 'A股除权除息日',
+        dividend_amount_total VARCHAR(20) COMMENT 'AH分红总金额',
+        plan_progress VARCHAR(20) COMMENT '方案进度',
+        dividend_payout_ratio VARCHAR(20) COMMENT '股利支付率',
+        pre_tax_dividend_ratio VARCHAR(20) COMMENT '税前分红率',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
         data_source varchar(100) COMMENT '数据来源',
-        INDEX idx_stockcode_exdate (stock_code,ex_date),
-        INDEX idx_ex_date (ex_date),
+        INDEX idx_stockcode_exdate (stock_code,ashare_ex_date),
+        INDEX idx_ashare_ex_date (ashare_ex_date),
         INDEX idx_update_time (update_time)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票分红派息信息表';
     """
     cursor.execute(sql)
-    logger.info("✓ 股票分红派息信息表(stock_dividend)创建成功")
+    logger.info("✓ 股票分红派息信息表(ths_stock_dividend)创建成功")
+
+def create_stock_history_dividend_table(cursor):
+    """创建股票历史分红派息信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS stock_history_dividend (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(50) COMMENT '股票简称',
+        list_date DATE COMMENT '上市日期',
+        cumulative_dividends DECIMAL(10,2) COMMENT '累计股息，单位: %',
+        annual_average_dividend DECIMAL(6,2) COMMENT '年均股息，单位: %',
+        dividend_cnt BIGINT COMMENT '分红次数',
+        finance_total DECIMAL(10,2) COMMENT '融资总额，单位: 亿',
+        finance_cnt BIGINT COMMENT '融资次数	',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_stockcode (stock_code),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票历史分红派息信息表';
+    """
+    cursor.execute(sql)
+    logger.info("✓ 股票历史分红派息信息表(stock_history_dividend)创建成功")
+
+def create_fund_info_table(cursor):
+    """创建基金基本信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS fund_info (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        fund_code VARCHAR(10) NOT NULL COMMENT '基金代码',
+        fund_name VARCHAR(50) COMMENT '基金简称',
+        fund_type VARCHAR(50) COMMENT '基金类型',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        INDEX idx_fund_code (fund_code),
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='基金基本信息表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 基金基本信息表(fund_info)创建成功")
+
+
+def create_stock_hold_by_fund_table(cursor):
+    """创建基金股票重仓信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS stock_hold_by_fund (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        short_name VARCHAR(50) COMMENT '股票简称',
+        report_date DATE COMMENT '报告期',
+        hldfund_cnt BIGINT COMMENT '基金覆盖家数',
+        total_amount BIGINT COMMENT '持股总数',
+        total_asset DECIMAL(24,2) COMMENT '持股总市值',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_stockcode (stock_code),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票基金股票重仓信息表';
+    """
+    cursor.execute(sql)
+    logger.info("✓ 股票基金股票重仓信息表(stock_hold_by_fund)创建成功")
 
 
 def show_tables():

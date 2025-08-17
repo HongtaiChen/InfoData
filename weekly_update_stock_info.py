@@ -391,7 +391,7 @@ class DailyDataUpdater:
             
 
             
-            logger.info("🚀 开始获取ADATA所有股票股本信息...")
+            logger.info("🚀 开始获取ADATA所有股票申万一二级行业...")
             
             self.cursor.execute(f"SELECT stock_code,short_name FROM stock_info a ORDER BY a.stock_code")
             stocks = self.cursor.fetchall() # type: ignore            
@@ -535,7 +535,7 @@ class DailyDataUpdater:
                     if df.empty:
                         continue
                     
-                    logger.info(f"获取ADATA概念相关股票，开始处理")
+                    # logger.info(f"获取ADATA概念相关股票，开始处理")
                     # 批量插入
                     insert_sql = """
                     INSERT INTO ths_stock_concepts (stock_code,short_name, index_code, concept_name, source, reason,update_time,data_source) 
@@ -853,62 +853,110 @@ class DailyDataUpdater:
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)   
 
-    def update_stock_dividend(self):
-        """更新近7个自然日股票分红派息数据"""
-        logger.info(f"📊 开始更新近7个自然日股票分红派息数据...")
-        # 获取所有日历数据 
-        begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y-%m-%d')
-        end_date =   datetime.now().strftime('%Y-%m-%d')
-        self.cursor.execute("""select date_format(trade_date,'%%Y%%m%%d') trade_date from adata.trade_calendar a where a.trade_date  >= %s  and a.trade_date <= %s """, (begin_date, end_date))
-        trade_dates = self.cursor.fetchall() # type: ignore
-        try:  
+    def insert_stock_dividend(self):
+        """获取所有股票的分红派息数据"""       
+        try:            
+            logger.info(f"📊 开始获取所有股票的分红派息数据...")    
+            # 清空表
+            self.cursor.execute("truncate table ths_stock_dividend")            
+            self.cursor.execute(f"SELECT stock_code,short_name FROM stock_info a ORDER BY a.stock_code")
+            stock_codes = self.cursor.fetchall() # type: ignore            
+            success_count = 0
             data_source = 'AKSHARE'
-            for i, (trade_date_tup) in enumerate(trade_dates, 1):
-                trade_date = trade_date_tup[0]
-                df = ak.news_trade_notify_dividend_baidu(
-                    date=trade_date   # type: ignore
-                )
-
-                # 删除本周旧数据
-                self.cursor.execute("""
-                    DELETE FROM stock_dividend 
-                    WHERE ex_date = %s 
-                """, (trade_date))
-                
-                # 插入本日新数据
-                insert_sql = """
-                    INSERT INTO stock_dividend 
-                    (stock_code, short_name, ex_date, dividend_amount, bonus_share, convert_share, physical_asset, exchange, report_date, update_time, data_source) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                
-                for _, row in df.iterrows():
-                    self.cursor.execute(insert_sql, (
-                        str(row.get('股票代码')) if row.get('股票代码') else None,
-                        str(row.get('股票简称')) if row.get('股票简称') else None,
-                        str(row.get('除权日')) if pd.notna(row.get('除权日')) else None, 
-                        str(row.get('分红')) if pd.notna(row.get('分红')) else None, 
-                        str(row.get('送股')) if pd.notna(row.get('送股')) else None, 
-                        str(row.get('转增')) if pd.notna(row.get('转增')) else None, 
-                        str(row.get('实物')) if pd.notna(row.get('实物')) else None, 
-                        str(row.get('交易所')) if row.get('交易所') else None, 
-                        str(row.get('报告期')) if row.get('报告期') else None, 
-                        datetime.now(),
-                        data_source
-                    ))
-                 # 请求延迟
-                time.sleep(self.request_delay)
-                self.connection.commit() # type: ignore            
-                logger.info(f"✅ {trade_date}股票分红派息数据更新完成")
-
-            logger.info(f"✅ 本周股票分红派息数据更新完成")
+            logger.info(f"获取股票代码，开始处理")
+            for i, (stock_code, short_name) in enumerate(stock_codes, 1):
+                try:                   
+                    df = ak.stock_fhps_detail_ths(symbol=stock_code)
+                    if df.empty:
+                        continue
+                    insert_sql = """
+                    INSERT INTO ths_stock_dividend (stock_code, short_name, report_period, board_date, shareholders_meeting_date, implementation_date, dividend_plan_desc, ashare_record_date, ashare_ex_date, dividend_amount_total, plan_progress, dividend_payout_ratio, pre_tax_dividend_ratio, update_time, data_source) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s,%s, %s, %s, %s, %s, %s, %s)
+                    """                    
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            stock_code,
+                            short_name,
+                            str(row.get('报告期')) if pd.notna(row.get('报告期')) else None,
+                            str(row.get('董事会日期')) if pd.notna(row.get('董事会日期')) else None,
+                            str(row.get('股东大会预案公告日期')) if pd.notna(row.get('股东大会预案公告日期')) else None,
+                            str(row.get('实施公告日')) if pd.notna(row.get('实施公告日')) else None,
+                            str(row.get('分红方案说明')) if row.get('分红方案说明') else None,
+                            str(row.get('A股股权登记日')) if pd.notna(row.get('A股股权登记日')) else None,
+                            str(row.get('A股除权除息日')) if pd.notna(row.get('A股除权除息日')) else None,
+                            str(row.get('分红总额')) if row.get('分红总额') else None,
+                            str(row.get('方案进度')) if row.get('方案进度') else None,
+                            str(row.get('股利支付率')) if row.get('股利支付率') else None,
+                            str(row.get('税前分红率')) if row.get('税前分红率') else None,
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(stock_codes)} 只概念，成功 {success_count} 只")     
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    
+                except Exception as e:
+                    error_msg = f"获取所有股票的分红派息数据: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 本周获取所有股票的分红派息数据: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"获取本周获取所有股票的分红派息数据失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)                   
+        
+       
+    def insert_all_stock_history_dividend(self):
+        """重新初始化股票历史分红数据"""
+        try:
+            
+            logger.info("清空股票历史分红数据信息...")
+            
+            # 清空表
+            self.cursor.execute("truncate table stock_history_dividend")                      
+            logger.info("🚀 开始获取ADATA所有股票历史分红数据信息...")
+            
+            df = ak.stock_history_dividend()
+            data_source = 'AKSHARE'
+            # 插入本周新数据
+            insert_sql = """
+                INSERT INTO stock_history_dividend 
+                (stock_code, short_name, list_date, cumulative_dividends, annual_average_dividend, dividend_cnt, finance_total, finance_cnt, update_time, data_source) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            for _, row in df.iterrows():
+                self.cursor.execute(insert_sql, (
+                    str(row.get('代码')) if row.get('代码') else None,
+                    str(row.get('名称')) if row.get('名称') else None,
+                    str(row.get('上市日期')) if row.get('上市日期') else None,
+                    float(row.get('累计股息', 0)) if row.get('累计股息') else None, 
+                    float(row.get('年均股息', 0)) if row.get('年均股息') else None, 
+                    float(row.get('分红次数', 0)) if row.get('分红次数') else None, 
+                    float(row.get('融资总额', 0)) if row.get('融资总额') else None, 
+                    float(row.get('融资次数', 0)) if row.get('融资次数') else None, 
+                    datetime.now(),
+                    data_source
+                ))
+            
+            self.connection.commit() # type: ignore            
+            
+            logger.info(f"✅ 本周股票历史分红数据信息更新完成")
 
             
         except Exception as e:
-            error_msg = f"更新本周股票分红派息数据更新失败: {str(e)}"
+            error_msg = f"更新本周股票历史分红数据信息更新失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)   
-            
+
             
     def update_trade_calendar(self):
         """更新交易日历"""
@@ -967,14 +1015,14 @@ class DailyDataUpdater:
         
         try:
             
-            # # 1. 重新插入所有股票基本信息
+            # 1. 重新插入所有股票基本信息
             # self.insert_all_stock_info()
             
-            # # # # 2. 更新本周K线数据
+            # # 2. 更新本周K线数据
             # self.update_daily_kline()
             
-            # # # 3. 更新股本信息
-            # # self.insert_all_stock_shares()
+            # # 3. 更新股本信息
+            # self.insert_all_stock_shares()
             
             # # 5. 更新同花顺概念信息表
             # self.insert_all_ths_concept_code()
@@ -989,19 +1037,22 @@ class DailyDataUpdater:
             # self.update_ths_concept_market()
             
             # # # 9. 更新所有股票财务指标数据
-            # # self.insert_all_stock_finance()
+            # self.insert_all_stock_finance()
             
             # # 10. 更新最近7个自然日融资融券余额数据
             # self.update_securities_margin()
             
             # # 4. 更新股票申万行业一二级信息
-            # # self.insert_all_stock_industry_sw()
+            # self.insert_all_stock_industry_sw()
             
             # # 3. 更新交易日历
-            # # self.update_trade_calendar()
+            # self.update_trade_calendar()
             
             # 11. 更新分红派息数据
-            self.update_stock_dividend()
+            self.insert_stock_dividend()
+            
+            # 12. 更新历史分红派息数据  -- 数据用途不大，先不同步
+            # self.insert_all_stock_history_dividend()
             
             # 生成统计报告
             self.show_update_summary()

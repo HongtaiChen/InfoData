@@ -1,152 +1,8 @@
 [
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:20:13.768597",
-    "duration": "0:00:00.011429",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:20:54.527407",
-    "duration": "0:00:00.005968",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:23:08.056606",
-    "duration": "0:00:00.011381",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:24:57.232746",
-    "duration": "0:00:00.015309",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:25:21.801270",
-    "duration": "0:00:00.010697",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:25:31.521459",
-    "duration": "0:00:00.014364",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:26:00.380787",
-    "duration": "0:00:00.029795",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:26:21.093855",
-    "duration": "0:00:00.010076",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:26:58.829417",
-    "duration": "0:00:00.008523",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: name 'index_code' is not defined"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:27:34.016286",
-    "duration": "0:00:00.006795",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:17:19.795301",
+    "duration": "0:00:00.761078",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -158,25 +14,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:29:03.341385",
-    "duration": "0:00:00.004962",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: sequence item 0: expected str instance, tuple found"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:30:46.603974",
-    "duration": "0:00:00.544000",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:19:02.104730",
+    "duration": "0:00:00.831004",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -188,9 +28,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:31:18.633211",
-    "duration": "0:00:02.762742",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:19:50.971546",
+    "duration": "0:00:00.823183",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -202,9 +42,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:31:41.172501",
-    "duration": "0:00:35.344438",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:21:03.156710",
+    "duration": "0:00:00.748273",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -216,25 +56,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:33:15.943364",
-    "duration": "0:00:01.020650",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: not enough arguments for format string"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:34:11.734434",
-    "duration": "0:00:02.344270",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:21:50.458698",
+    "duration": "0:00:00.263650",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -246,25 +70,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:35:55.879857",
-    "duration": "0:00:00.774274",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: (1366, \"Incorrect decimal value: '0.50元' for column 'dividend_amount' at row 1\")"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:36:30.575759",
-    "duration": "0:00:01.560260",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:22:12.725265",
+    "duration": "0:00:00.258192",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -276,25 +84,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:40:44.949138",
-    "duration": "0:00:00.983820",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: could not convert string to float: '0.50元'"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:41:35.226935",
-    "duration": "0:00:02.314748",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:23:13.775001",
+    "duration": "0:00:00.135410",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -306,9 +98,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:42:16.514692",
-    "duration": "0:00:02.223694",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:29:07.245303",
+    "duration": "0:00:00.144417",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -320,9 +112,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:42:30.060596",
-    "duration": "0:00:02.185667",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:29:27.598071",
+    "duration": "0:00:00.755062",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -334,9 +126,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:51:21.982732",
-    "duration": "0:00:02.570581",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:29:34.670151",
+    "duration": "0:00:00.765731",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -348,89 +140,9 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:52:53.434725",
-    "duration": "0:00:21.101446",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: HTTPSConnectionPool(host='finance.pae.baidu.com', port=443): Max retries exceeded with url: /api/financecalendar?start_date=2015-01-01&end_date=2015-01-01&market=&cate=notify_divide&rn=500&pn=0 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x0000026A675B1600>, 'Connection to finance.pae.baidu.com timed out. (connect timeout=None)'))"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:54:57.770829",
-    "duration": "0:00:05.360281",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: boolean value of NA is ambiguous"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T20:58:55.385336",
-    "duration": "0:01:22.498085",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: (1406, \"Data too long for column 'bonus_share' at row 1\")"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T21:03:58.598066",
-    "duration": "0:11:40.051165",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: HTTPSConnectionPool(host='finance.pae.baidu.com', port=443): Max retries exceeded with url: /api/financecalendar?start_date=2017-12-30&end_date=2017-12-30&market=&cate=notify_divide&rn=500&pn=0 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001D923ED1C90>, 'Connection to finance.pae.baidu.com timed out. (connect timeout=None)'))"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T21:16:26.627994",
-    "duration": "0:00:23.959900",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周股票分红派息数据更新失败: HTTPSConnectionPool(host='finance.pae.baidu.com', port=443): Max retries exceeded with url: /api/financecalendar?start_date=2018-01-03&end_date=2018-01-03&market=&cate=notify_divide&rn=500&pn=0 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x000001B521AA4F40>, 'Connection to finance.pae.baidu.com timed out. (connect timeout=None)'))"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T21:17:51.382231",
-    "duration": "0:20:45.690852",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:29:58.378160",
+    "duration": "0:00:00.961489",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
@@ -442,9 +154,261 @@
     "success": true
   },
   {
-    "date": "2025-08-14",
-    "update_time": "2025-08-14T22:11:20.755728",
-    "duration": "0:00:02.690947",
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:30:32.111747",
+    "duration": "0:00:01.689017",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:31:22.397735",
+    "duration": "0:00:00.837771",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:32:17.179161",
+    "duration": "0:00:01.390862",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:32:34.513821",
+    "duration": "0:00:00.926148",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:32:49.683108",
+    "duration": "0:00:01.550411",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:33:21.712626",
+    "duration": "0:00:01.038931",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:33:36.007691",
+    "duration": "0:00:01.574476",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:34:04.595376",
+    "duration": "0:00:00.941029",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:34:19.243641",
+    "duration": "0:00:01.443865",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:44:37.333761",
+    "duration": "0:00:00.012614",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:45:10.370095",
+    "duration": "0:00:00.012033",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:47:10.005325",
+    "duration": "0:00:00.010471",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:47:25.420545",
+    "duration": "0:00:00.010431",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:47:46.806609",
+    "duration": "0:00:00.012591",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:48:38.802890",
+    "duration": "0:00:00.714504",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:49:40.661633",
+    "duration": "0:00:31.338063",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:54:24.836499",
+    "duration": "0:00:03.152011",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:55:23.402690",
+    "duration": "0:00:03.203870",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-16",
+    "update_time": "2025-08-16T16:55:55.774313",
+    "duration": "0:00:04.150791",
     "stats": {
       "stock_info": 0,
       "current_market": 0,
