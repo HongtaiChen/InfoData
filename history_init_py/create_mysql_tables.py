@@ -177,29 +177,27 @@ def create_stock_market_daily_table(cursor):
 def create_stock_market_current_table(cursor):
     """创建股票实时行情表"""
     sql = """
-    CREATE TABLE IF NOT EXISTS stock_market_current (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+     CREATE TABLE IF NOT EXISTS stock_market_current (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
         stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
-        short_name VARCHAR(50) COMMENT '股票简称',
-        current_price DECIMAL(10,3) COMMENT '现价',
-        change_amount DECIMAL(10,3) COMMENT '涨跌额',
-        change_percent DECIMAL(8,4) COMMENT '涨跌幅(%)',
+        trade_date DATE NOT NULL COMMENT '交易日期',
         open DECIMAL(10,3) COMMENT '开盘价',
         high DECIMAL(10,3) COMMENT '最高价',
         low DECIMAL(10,3) COMMENT '最低价',
+        close DECIMAL(10,3) COMMENT '收盘价',
         pre_close DECIMAL(10,3) COMMENT '昨收价',
-        volume BIGINT COMMENT '成交量',
-        amount DECIMAL(15,2) COMMENT '成交额',
+        change_amount DECIMAL(10,3) COMMENT '涨跌额',
+        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',
+        volume BIGINT COMMENT '成交量(手)',
+        amount DECIMAL(15,2) COMMENT '成交额(元)',
         turnover_ratio DECIMAL(8,4) COMMENT '换手率(%)',
-        pe_ratio DECIMAL(8,2) COMMENT '市盈率',
-        pb_ratio DECIMAL(8,2) COMMENT '市净率',
-        market_cap DECIMAL(15,2) COMMENT '总市值',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-        UNIQUE KEY uk_stock_code (stock_code),
-        INDEX idx_change_percent (change_percent),
         data_source varchar(100) COMMENT '数据来源',
+        UNIQUE KEY uk_stock_date (stock_code, trade_date),
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_trade_date (trade_date),
         INDEX idx_update_time (update_time)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票实时行情表'
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票每日最新数据表'
     """
     cursor.execute(sql)
     logger.info("✓ 股票实时行情表(stock_market_current)创建成功")

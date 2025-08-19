@@ -1,48 +1,6 @@
 [
   {
     "date": "2025-08-16",
-    "update_time": "2025-08-16T16:17:19.795301",
-    "duration": "0:00:00.761078",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:19:02.104730",
-    "duration": "0:00:00.831004",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:19:50.971546",
-    "duration": "0:00:00.823183",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
     "update_time": "2025-08-16T16:21:03.156710",
     "duration": "0:00:00.748273",
     "stats": {
@@ -413,6 +371,48 @@
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-18",
+    "update_time": "2025-08-18T21:34:20.576956",
+    "duration": "0:00:00.293813",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-19",
+    "update_time": "2025-08-19T07:38:28.178286",
+    "duration": "0:33:09.716255",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 1052,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-19",
+    "update_time": "2025-08-19T20:14:12.219182",
+    "duration": "0:00:13.579667",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 35,
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": []

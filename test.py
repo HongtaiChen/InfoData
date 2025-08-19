@@ -270,9 +270,24 @@
 #                         index_code= '885480',
 #                         k_type = 1
 #                     )
+# import akshare as ak
 
+# news_economic_baidu_df = ak.news_economic_baidu(date="20250815")
+# print(news_economic_baidu_df)
+
+
+# import akshare as ak
+
+# macro_info_ws_df = ak.macro_info_ws(date="20250817")
+# print(macro_info_ws_df)
+
+
+# import akshare as ak
+
+# stock_account_statistics_em_df = ak.stock_account_statistics_em()
+# print(stock_account_statistics_em_df)
 
 import akshare as ak
 
-fund_report_stock_cninfo_df = ak.fund_report_stock_cninfo(date="20250630")
-print(fund_report_stock_cninfo_df)
+stock_zh_a_hist_df = ak.stock_zh_a_hist(symbol="000001", period="daily", start_date="20170301", end_date='20240528', adjust="")
+print(stock_zh_a_hist_df)

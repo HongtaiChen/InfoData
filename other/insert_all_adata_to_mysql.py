@@ -633,6 +633,85 @@ class FullADataMySQLInserter:
             
         except Exception as e:
             logger.error(f"✗ 显示统计信息失败: {str(e)}")
+
+    def update_daily_kline_history(self):
+        """更新近7个自然日K线数据"""
+        logger.info(f"📊 开始更新近7个自然日K线数据）...")
+        
+        try:
+            # 获取所有股票  
+            self.cursor.execute(f"SELECT a.stock_code,short_name  FROM stock_info a where a.stock_code not in (select a.stock_code from adata.stock_market_daily a group by a.stock_code ) ORDER BY a.stock_code;")
+
+            stocks = self.cursor.fetchall() # type: ignore
+            # print(stocks)
+            logger.info(f"📊 准备更新 {len(stocks)} 只股票的近7个自然日K线数据")
+
+            begin_date = '19900101'
+            end_date =  '20250818'
+            success_count = 0
+            
+            for i, (stock_code, stock_name) in enumerate(stocks, 1):
+                try:
+                    # 请求延迟
+                    time.sleep(self.request_delay)
+                    data_source = 'AKSHARE'
+                    df = ak.stock_zh_a_hist(symbol=stock_code, period="daily", start_date=begin_date, end_date=end_date, adjust="qfq")
+                    
+                    if df.empty:
+                        continue
+                    
+                    # 删除本周旧数据
+                    # self.cursor.execute("""
+                    #     DELETE FROM stock_market_daily 
+                    #     WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
+                    # """, (stock_code, begin_date, end_date))
+                    
+                    # 插入本周新数据
+                    insert_sql = """
+                        INSERT INTO stock_market_daily 
+                        (stock_code, trade_date, open, high, low, close, pre_close, 
+                        change_amount, change_pct, volume, amount, turnover_ratio, update_time,data_source) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    for _, row in df.iterrows():
+                        self.cursor.execute(insert_sql, (
+                            stock_code,
+                            str(row.get('日期')) if row.get('日期') else None,
+                            float(row.get('开盘', 0)) if row.get('开盘') else None, 
+                            float(row.get('最高', 0)) if row.get('最高') else None, 
+                            float(row.get('最低', 0)) if row.get('最低') else None, 
+                            float(row.get('收盘', 0)) if row.get('收盘') else None, 
+                            None, 
+                            float(row.get('涨跌额', 0)) if row.get('涨跌额') else None, 
+                            float(row.get('涨跌幅', 0)) if row.get('涨跌幅') else None, 
+                            int(row.get('成交量', 0)) if row.get('成交量') else None, 
+                            float(row.get('成交额', 0)) if row.get('成交额') else None, 
+                            float(row.get('换手率', 0)) if row.get('换手率') else None, 
+                            datetime.now(),
+                            data_source
+                        ))
+                    
+                    self.connection.commit() # type: ignore
+                    success_count += 1
+                    logger.info(f"📈 已处理{stock_code} {stock_name} ")
+                    if i % 50 == 0:
+                        logger.info(f"📈 已处理 {i}/{len(stocks)} 只股票，成功 {success_count} 只")
+                    
+                    
+                    
+                except Exception as e:
+                    error_msg = f"{stock_code} {stock_name} K线更新失败: {str(e)}"
+                    logger.warning(f"⚠️ {error_msg}")
+                    continue
+            
+            self.update_stats['daily_kline'] = success_count
+            logger.info(f"✅ 本周K线更新完成: {success_count} 条记录")
+            
+        except Exception as e:
+            error_msg = f"更新本周K线失败: {str(e)}"
+            logger.error(f"❌ {error_msg}")
+            self.update_stats['errors'].append(error_msg)
     
     def run_full_collection(self, include_history=True, max_history_stocks=None):
         """运行完整的数据采集"""

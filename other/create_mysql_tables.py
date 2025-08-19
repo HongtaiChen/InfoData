@@ -130,7 +130,7 @@ def create_stock_market_daily_table(cursor):
         close DECIMAL(10,3) COMMENT '收盘价',
         pre_close DECIMAL(10,3) COMMENT '昨收价',
         change_amount DECIMAL(10,3) COMMENT '涨跌额',
-        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',
+        change_pct DECIMAL(12,4) COMMENT '涨跌幅(%)',
         volume BIGINT COMMENT '成交量(手)',
         amount DECIMAL(15,2) COMMENT '成交额(元)',
         turnover_ratio DECIMAL(8,4) COMMENT '换手率(%)',
