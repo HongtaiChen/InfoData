@@ -127,7 +127,7 @@ def create_stock_info_table(cursor):
     logger.info("✓ 股票基本信息表(stock_info)创建成功")
 
 def create_stock_info_ex_table(cursor):
-    """创建股票基本信息表"""
+    """创建股票扩展信息表"""
     sql = """
 CREATE TABLE IF NOT EXISTS stock_info_ex (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -173,6 +173,9 @@ def create_stock_market_daily_table(cursor):
     """
     cursor.execute(sql)
     logger.info("✓ 股票日K线数据表(stock_market_daily)创建成功")
+
+
+
 
 def create_stock_market_current_table(cursor):
     """创建股票实时行情表"""
@@ -330,6 +333,58 @@ def create_ths_concept_market_table(cursor):
     """
     cursor.execute(sql)
     logger.info("✓ 同花顺概念指数K线数据表(ths_index_market)创建成功")
+
+
+def create_cni_index_info_table(cursor):
+    """创建国证指数基本信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS cni_index_info (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        index_name VARCHAR(100) COMMENT '指数简称',
+        sample_number BIGINT COMMENT '样本数',
+        close DECIMAL(10,4) COMMENT '收盘点位',
+        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',    
+        pe_roll  DECIMAL(12,6) COMMENT 'PE滚动',  
+        volume DECIMAL(15,6) COMMENT '成交量，债券指数成交量单位为亿张，非债券指数成交量单位为万手',      
+        amount DECIMAL(15,6) COMMENT '成交额，单位: 亿元',
+        total_captital DECIMAL(15,6) COMMENT '总市值，单位: 亿元',      
+        free_float_captital DECIMAL(15,6) COMMENT '自由流通市值，单位: 亿元',    
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_index_code (index_code),
+        INDEX idx_index_name (index_name),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='国证指数基本信息表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 国证指数基本信息表(cni_index_info)创建成功")
+
+
+def create_cni_index_market_table(cursor):
+    """创建国证指数行情信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS cni_index_market (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        index_name VARCHAR(100) COMMENT '指数简称',
+        trade_date DATE NOT NULL COMMENT '交易日期',
+        open DECIMAL(10,4) COMMENT '开盘价',
+        high DECIMAL(10,4) COMMENT '最高价',
+        low DECIMAL(10,4) COMMENT '最低价',
+        close DECIMAL(10,4) COMMENT '收盘价',
+        volume DECIMAL(15,6) COMMENT '成交量，单位: 万手',      
+        amount DECIMAL(15,6) COMMENT '成交额，单位: 亿元',  
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_index_code (index_code),
+        INDEX idx_index_name (index_name),
+        INDEX idx_index_date (trade_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='国证指数行情信息表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 国证指数行情信息表(cni_index_market)创建成功")
 
 def create_ths_stock_concepts_table(cursor):
     """创建同花顺股票概念关系表"""

@@ -173,3 +173,24 @@ group by a.short_name ,
 	a.stock_code,
 	a.asset,
 	a.list_date
+
+
+----- 查出2024年所有股票的分红总金额-----------------
+select a.stock_code, a.short_name ,sum(dividend_amount) dividend_amount
+from (
+select a.*,
+        CAST(
+        -- 数字部分转为DECIMAL，乘以单位对应的倍数
+        (REGEXP_SUBSTR(a.dividend_amount_total , '^[0-9.]+') + 0)  -- 字符串转数值
+        * CASE 
+            WHEN dividend_amount_total LIKE '%亿' THEN 100000000  -- 1亿 = 10^8
+            WHEN dividend_amount_total LIKE '%万' THEN 10000       -- 1万 = 10^4
+            ELSE 1  -- 无单位则不乘（如纯数字）
+        END 
+    AS DECIMAL(20, 4)) 
+     as dividend_amount 
+     from adata.ths_stock_dividend a
+where a.board_date  >= '2024-01-01'
+  and a.board_date  <= '2024-12-31'
+) a
+group by a.stock_code, a.short_name 

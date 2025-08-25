@@ -288,6 +288,10 @@
 # print(stock_account_statistics_em_df)
 
 import akshare as ak
+stock_zh_index_daily_df = ak.stock_zh_index_daily(symbol="sz399002")
+print(stock_zh_index_daily_df)
 
-stock_zh_a_hist_df = ak.stock_zh_a_hist(symbol="000001", period="daily", start_date="20170301", end_date='20240528', adjust="")
-print(stock_zh_a_hist_df)
+import akshare as ak
+
+index_hist_cni_df = ak.index_hist_cni(symbol="399005", start_date="20230114", end_date="20240114")
+print(index_hist_cni_df)

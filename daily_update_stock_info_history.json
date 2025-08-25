@@ -1,90 +1,6 @@
 [
   {
     "date": "2025-08-16",
-    "update_time": "2025-08-16T16:21:03.156710",
-    "duration": "0:00:00.748273",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:21:50.458698",
-    "duration": "0:00:00.263650",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:22:12.725265",
-    "duration": "0:00:00.258192",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:23:13.775001",
-    "duration": "0:00:00.135410",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:29:07.245303",
-    "duration": "0:00:00.144417",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:29:27.598071",
-    "duration": "0:00:00.755062",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
     "update_time": "2025-08-16T16:29:34.670151",
     "duration": "0:00:00.765731",
     "stats": {
@@ -413,6 +329,92 @@
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 35,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-21",
+    "update_time": "2025-08-21T20:51:29.087893",
+    "duration": "0:43:11.028795",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 5724,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-23",
+    "update_time": "2025-08-23T08:50:36.169941",
+    "duration": "0:59:50.566243",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 919,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-23",
+    "update_time": "2025-08-23T18:52:22.466676",
+    "duration": "1:17:15.949362",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 2285,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-24",
+    "update_time": "2025-08-24T08:34:04.592103",
+    "duration": "7:46:18.410664",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 4421,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-24",
+    "update_time": "2025-08-24T16:39:01.804139",
+    "duration": "0:00:11.541531",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周K线失败: not enough values to unpack (expected 2, got 1)"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-08-24",
+    "update_time": "2025-08-24T16:40:55.056182",
+    "duration": "0:06:33.694421",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 50,
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": []
