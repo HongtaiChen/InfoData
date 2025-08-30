@@ -62,7 +62,8 @@ line.add_xaxis(df.index.strftime('%Y-%m-%d').tolist()) # type: ignore
 # 循环添加股票的数据
 for i in range( len( stock_codes ) ):
     line.add_yaxis(stock_codes[i] , df[stock_codes[i]].tolist())
-
+    print(stock_codes[i])
+    print(df[stock_codes[i]].tolist())
 
 # 设置图表标题、坐标轴标签等
 line.set_global_opts(
@@ -71,9 +72,10 @@ line.set_global_opts(
     yaxis_opts=opts.AxisOpts(name='Price')
 )
 
+
 # 渲染生成 HTML 文件（可选）
 # line.render_notebook()
 
-current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
-html_path = os.path.join(current_dir, 'stock_price_comparison.html')
-line.render(html_path)
+# current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+# html_path = os.path.join(current_dir, 'stock_price_comparison.html')
+# line.render(html_path)
