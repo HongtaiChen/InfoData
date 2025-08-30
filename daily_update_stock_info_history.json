@@ -1,48 +1,6 @@
 [
   {
     "date": "2025-08-16",
-    "update_time": "2025-08-16T16:29:34.670151",
-    "duration": "0:00:00.765731",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:29:58.378160",
-    "duration": "0:00:00.961489",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:30:32.111747",
-    "duration": "0:00:01.689017",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
     "update_time": "2025-08-16T16:31:22.397735",
     "duration": "0:00:00.837771",
     "stats": {
@@ -415,6 +373,48 @@
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 50,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-26",
+    "update_time": "2025-08-26T21:06:03.492681",
+    "duration": "0:00:21.911202",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 12,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-26",
+    "update_time": "2025-08-26T21:24:54.070671",
+    "duration": "0:10:48.490944",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 381,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-30",
+    "update_time": "2025-08-30T07:46:35.579033",
+    "duration": "0:18:39.199110",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 993,
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": []

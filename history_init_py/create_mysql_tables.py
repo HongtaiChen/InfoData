@@ -386,6 +386,34 @@ def create_cni_index_market_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 国证指数行情信息表(cni_index_market)创建成功")
 
+def create_dc_index_market_table(cursor):
+    """创建东财指数行情信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS dc_index_market (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        index_name VARCHAR(100) COMMENT '指数简称',
+        trade_date DATE NOT NULL COMMENT '交易日期',
+        open DECIMAL(10,4) COMMENT '开盘价',
+        high DECIMAL(10,4) COMMENT '最高价',
+        low DECIMAL(10,4) COMMENT '最低价',
+        close DECIMAL(10,4) COMMENT '收盘价',
+        volume BIGINT COMMENT '成交量，单位: 手',      
+        amount BIGINT COMMENT '成交额，单位: 元',
+        change_amount DECIMAL(10,3) COMMENT '涨跌额',
+        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',  
+        turnover_ratio DECIMAL(8,4) COMMENT '换手率(%)',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_index_code (index_code),
+        INDEX idx_index_name (index_name),
+        INDEX idx_index_date (trade_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='东财指数行情信息表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 东财指数行情信息表(dc_index_market)创建成功")
+
 def create_ths_stock_concepts_table(cursor):
     """创建同花顺股票概念关系表"""
     sql = """

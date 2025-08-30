@@ -406,46 +406,34 @@ class DailyDataUpdater:
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
 
-    def update_cni_index_market(self):
+    def update_dc_index_market(self):
         """更新近7个自然日关键指数行情数据"""
         logger.info(f"📊 开始更新近7个自然日K线指数行情数据）...")
         
         try:
-            begin_date =  (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
-            end_date =  datetime.now().strftime('%Y%m%d')
-            begin_date_del =  (datetime.now() +timedelta(days=-7)).strftime('%Y-%m-%d')
-            end_date_del =  datetime.now().strftime('%Y-%m-%d')              
-            # 获取关键指数信息  
-            self.cursor.execute("select a.index_code, a.index_name from cni_index_info a")
 
-            indexs = self.cursor.fetchall() # type: ignore
-            # print(stocks)
-            logger.info(f"📊 准备更新 {len(indexs)} 只股票的近7个自然日K线数据")
-
-          
+            begin_date =  '19900101'
+            end_date = datetime.now().strftime('%Y%m%d')           
+            indexs = [ ['000001','上证指数'],['399001','深证成指'],['399006','创业板'],['899050','北证50'],['000688','科创50']
+                      ,['000300','沪深300'],['000852','中证1000'],['000016','上证50'],['000905','中证500'],['399330','深证100']
+                      ,['000698','科创100'],['399673','创业板50']] # type: ignore
+            logger.info(f"📊 准备更新 {len(indexs)} 关键指数的近7个自然日K线数据")
+            self.cursor.execute("truncate table dc_index_market;")          
             success_count = 0
             
             for i, (index_code, index_name) in enumerate(indexs, 1):
                 try:
                     # 请求延迟
                     time.sleep(self.request_delay)
-                    data_source = 'AKSHARE'
-                    df = ak.index_hist_cni(symbol=index_code, start_date=begin_date, end_date=end_date)
-                    
+                    df = ak.index_zh_a_hist(symbol=index_code, period="daily", start_date=begin_date, end_date=end_date)                    
                     if df.empty:
                         continue
-                    
-                    # 删除本周旧数据
-                    self.cursor.execute("""
-                        DELETE FROM cni_index_market 
-                        WHERE index_code = %s AND trade_date >= %s AND trade_date <= %s
-                    """, (index_code, begin_date_del, end_date_del))
-                    
+                                       
                     # 插入本周新数据
                     insert_sql = """
-                        INSERT INTO cni_index_market 
-                        (index_code, index_name, trade_date, open, high, low, close, volume, amount, update_time, data_source) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO dc_index_market 
+                        (index_code, index_name, trade_date, open, high, low, close, volume, amount,change_amount,change_pct,turnover_ratio, update_time, data_source) 
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
                     for _, row in df.iterrows():
@@ -453,13 +441,15 @@ class DailyDataUpdater:
                             index_code,
                             index_name,
                             str(row.get('日期')) if pd.notna(row.get('日期')) else None,
-                            float(row.get('开盘价', 0)) if pd.notna(row.get('开盘价', 0))  else None,
-                            float(row.get('最高价', 0)) if pd.notna(row.get('最高价', 0))  else None,
-                            float(row.get('最低价', 0)) if pd.notna(row.get('最低价', 0))  else None,
-                            float(row.get('收盘价', 0)) if pd.notna(row.get('收盘价', 0))  else None,
-                            float(row.get('涨跌幅', 0)) if pd.notna(row.get('涨跌幅', 0))  else None,
+                            float(row.get('开盘', 0)) if pd.notna(row.get('开盘', 0))  else None,
+                            float(row.get('最高', 0)) if pd.notna(row.get('最高', 0))  else None,
+                            float(row.get('最低', 0)) if pd.notna(row.get('最低', 0))  else None,
+                            float(row.get('收盘', 0)) if pd.notna(row.get('收盘', 0))  else None,                            
                             float(row.get('成交量', 0)) if pd.notna(row.get('成交量', 0))  else None,
                             float(row.get('成交额', 0)) if pd.notna(row.get('成交额', 0))  else None,
+                            float(row.get('涨跌额', 0)) if pd.notna(row.get('涨跌额', 0))  else None,
+                            float(row.get('涨跌幅', 0)) if pd.notna(row.get('涨跌幅', 0))  else None,
+                            float(row.get('换手率', 0)) if pd.notna(row.get('换手率', 0))  else None,
                             datetime.now(),
                             'AKSHARE'
                         ))
@@ -484,8 +474,6 @@ class DailyDataUpdater:
             error_msg = f"更新本周指数K线失败: {str(e)}"
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
-
-
 
     def update_daily_kline_adata(self):
             """更新近7个自然日K线数据"""
@@ -822,26 +810,29 @@ class DailyDataUpdater:
         try:
             
             # 1. 重新插入所有股票基本信息
-            # self.insert_all_stock_info()
+            self.insert_all_stock_info()
             
             
             # 2. 更新本周K线数据
-            self.update_daily_kline()           
+            # self.update_daily_kline()     
             
-            # # 5. 更新同花顺概念信息表
-            # self.insert_all_ths_concept_code()
+            # 3.  更新关键指数数据
+            self.update_dc_index_market()      
             
-            # # 6. 更新同花顺股票概念信息表
-            # self.insert_all_ths_stock_concepts()
+            # 5. 更新同花顺概念信息表
+            self.insert_all_ths_concept_code()
+            
+            # 6. 更新同花顺股票概念信息表
+            self.insert_all_ths_stock_concepts()
+            
+            # 8. 更新所有概念指数板块行情数据
+            self.update_ths_concept_market()   
             
             # # 7. 更新日度资金流量
-            # self.update_stock_capital_flow()
-            
-            # # 8. 更新所有概念指数板块行情数据
-            # self.update_ths_concept_market()      
+            self.update_stock_capital_flow()
             
             # # 10. 更新最近7个自然日融资融券余额数据
-            # self.update_securities_margin()           
+            self.update_securities_margin()           
             
             # 生成统计报告
             self.show_update_summary()
