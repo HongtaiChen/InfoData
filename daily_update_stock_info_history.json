@@ -1,132 +1,6 @@
 [
   {
     "date": "2025-08-16",
-    "update_time": "2025-08-16T16:31:22.397735",
-    "duration": "0:00:00.837771",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:32:17.179161",
-    "duration": "0:00:01.390862",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:32:34.513821",
-    "duration": "0:00:00.926148",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:32:49.683108",
-    "duration": "0:00:01.550411",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:33:21.712626",
-    "duration": "0:00:01.038931",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:33:36.007691",
-    "duration": "0:00:01.574476",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:34:04.595376",
-    "duration": "0:00:00.941029",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:34:19.243641",
-    "duration": "0:00:01.443865",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:44:37.333761",
-    "duration": "0:00:00.012614",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
     "update_time": "2025-08-16T16:45:10.370095",
     "duration": "0:00:00.012033",
     "stats": {
@@ -415,6 +289,134 @@
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 993,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-30",
+    "update_time": "2025-08-30T16:26:11.587755",
+    "duration": "0:00:02.659989",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 1,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-30",
+    "update_time": "2025-08-30T17:07:06.185764",
+    "duration": "2:22:03.040724",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 994,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-31",
+    "update_time": "2025-08-31T08:30:29.047007",
+    "duration": "0:21:46.656777",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 520,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-31",
+    "update_time": "2025-08-31T13:38:51.157986",
+    "duration": "0:08:55.706949",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 109,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-31",
+    "update_time": "2025-08-31T13:48:55.558879",
+    "duration": "0:00:21.523882",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 9,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-31",
+    "update_time": "2025-08-31T13:49:20.594132",
+    "duration": "0:00:13.732898",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 7,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-08-31",
+    "update_time": "2025-08-31T14:19:20.152153",
+    "duration": "0:00:00.046507",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": [
+        "更新本周K线失败: too many values to unpack (expected 2)"
+      ]
+    },
+    "success": false
+  },
+  {
+    "date": "2025-09-02",
+    "update_time": "2025-09-02T19:45:50.070166",
+    "duration": "1:36:12.542378",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 2688,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T07:26:51.426989",
+    "duration": "0:00:10.917433",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 1,
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": []

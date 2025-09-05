@@ -194,3 +194,82 @@ where a.board_date  >= '2024-01-01'
   and a.board_date  <= '2024-12-31'
 ) a
 group by a.stock_code, a.short_name 
+
+-------------- 获取所有2024年有分红或者送股企业的年度总分红 ----------------
+with dividends as(
+select a.*,
+	   SUBSTRING_INDEX(
+    SUBSTRING_INDEX(dividend_plan_desc, '派', -1), -- 从右向左取“派”后的所有内容
+    '元', 1 -- 从左向右取“元”前的内容
+  ) as dividend_amount
+from adata.ths_stock_dividend a 
+where a.report_period = '2024年报'
+  and a.dividend_plan_desc <> '不分配不转增'
+),
+changedate as(
+select a.stock_code, max(change_date) change_date
+  from adata.stock_shares a left join dividends b on a.stock_code = b.stock_code   
+where a.change_date <= b.implementation_date 
+ group by a.stock_code 
+)
+select
+	a.stock_code,
+	a.short_name,
+	sum(dividend_amount) dividend_amount
+from
+	(
+	select
+		a.stock_code ,
+		b.short_name ,
+		a.total_shares * b. dividend_amount / 10 as dividend_amount
+	from
+		adata.stock_shares a
+	join dividends b on
+		a.stock_code = b.stock_code
+	join changedate c on
+		a.change_date = c.change_date
+		and a.stock_code = c.stock_code 
+) a
+group by
+	a.stock_code,
+	a.short_name;
+
+
+------ 获取所有股票的动态股息率 ----------------
+with dividends as(
+select a.*,
+	   SUBSTRING_INDEX(
+    SUBSTRING_INDEX(dividend_plan_desc, '派', -1),  -- 从右向左取“派”后的所有内容
+    '元', 1                                   -- 从左向右取“元”前的内容
+  ) AS dividend_amount
+from adata.ths_stock_dividend a 
+where a.report_period  = '2024年报'
+  and a.dividend_plan_desc  <> '不分配不转增'
+),
+changedate as(
+select a.stock_code, max(change_date) change_date
+  from adata.stock_shares  a left join dividends b  on a.stock_code  = b.stock_code   
+where a.change_date <= b.implementation_date 
+ group by a.stock_code 
+),
+divdends_total as(
+select a.stock_code,a.short_name, sum(dividend_amount) dividend_amount
+ from (
+select a.stock_code , b.short_name ,a.total_shares * b. dividend_amount/ 10 as dividend_amount
+  from adata.stock_shares  a join dividends b  on a.stock_code  = b.stock_code   join changedate c on a.change_date  = c.change_date and a.stock_code  = c.stock_code 
+) a
+group by a.stock_code,a.short_name
+),
+price_changedate as(
+select a.stock_code ,a.trade_date , a.`close` ,b.total_shares ,a.`close` * b.total_shares as total_price ,ROW_NUMBER() OVER ( PARTITION BY stock_code,trade_date  ORDER BY change_date desc ) AS rn
+  from adata.stock_market_daily a left join adata.stock_shares  b  on a.stock_code  = b.stock_code and a.trade_date >= b.change_date    
+where a.trade_date  >= '2025-07-01'
+),
+price_total as(
+select  *
+  from price_changedate a  
+where a.rn = 1 
+)
+select a.*, b.*, b.dividend_amount / a.total_price   as gxl
+  from price_total a left join divdends_total b on a.stock_code  = b.stock_code 
+--where a.stock_code  = '002594'

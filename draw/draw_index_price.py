@@ -46,7 +46,7 @@ if __name__ == "__main__":
     connection = pymysql.connect(**db_config)
     try:
         # 用pandas读取MySQL数据为DataFrame
-        sql = "select index_name, trade_date,close from dc_index_market a  where a.trade_date >= '20250729' order by a.trade_date;"
+        sql = "select index_name, trade_date,close from dc_index_market a  where a.trade_date >= '20221001' and a.index_name in ('上证指数','沪深300','创业板','北证50','科创50','中证1000') order by a.trade_date;"
         df = pd.read_sql(sql, connection)
         # 1. 获取去重的日期列表（用于X轴）
         trade_dates = df.drop_duplicates(subset=['trade_date'], keep='first')['trade_date'].sort_values()
