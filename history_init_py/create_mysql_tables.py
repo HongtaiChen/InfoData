@@ -107,6 +107,91 @@ def create_tables():
         logger.error(f"✗ 创建数据表失败: {str(e)}")
         return False
 
+
+def create_finance_calendar_table(cursor):
+    """创建财经日历数据表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS finance_calendar (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        event_date DATE NOT NULL COMMENT '日期',
+        title VARCHAR(200) COMMENT '事件标题',
+        content VARCHAR(400) COMMENT '事件内容',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_event_date (event_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='创建财经日历数据表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 创建财经日历数据表(stock_info)创建成功")
+
+def create_finance_concept_analysis_table(cursor):
+    """创建财经事件与概念关联分析结果"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS finance_concept_analysis (
+        `id` int NOT NULL AUTO_INCREMENT,
+        event_date DATE NOT NULL COMMENT '日期',
+        title VARCHAR(200) COMMENT '事件标题',
+        content VARCHAR(400) COMMENT '事件内容',
+        `concept_code` varchar(20) NOT NULL COMMENT '概念代码',
+        `concept_name` varchar(100) DEFAULT NULL COMMENT '概念名称',
+        `relation_type` varchar(10) DEFAULT NULL COMMENT '关联类型(利好/利空)',
+        `relation_degree` int DEFAULT NULL COMMENT '关联程度(1-10)',
+        `analysis` text COMMENT '分析依据',
+        `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (`id`),
+        KEY `idx_event_date` (`event_date`),
+        KEY `idx_concept_code` (`concept_code`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='财经事件与概念关联分析结果';
+    """
+    cursor.execute(sql)
+    logger.info("✓ 创建财经事件与概念关联分析结果")
+
+# todo    
+def create_finance_news_main_table(cursor):
+    """创建财经主要事件信息表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS finance_news_main (
+        `id` int NOT NULL AUTO_INCREMENT,
+        event_date DATE NOT NULL COMMENT '日期',
+        summary text COMMENT '新闻概览',
+        interval_time timestamp COMMENT '事件内容',
+        interval_time timestamp COMMENT '事件内容',
+        url varchar(100) COMMENT '事件内容',
+        update_time timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        data_source varchar(100) COMMENT '数据来源',
+        KEY `idx_event_date` (`event_date`),
+        KEY `idx_concept_code` (`concept_code`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='财经主要事件信息表';
+    """
+    cursor.execute(sql)
+    logger.info("✓ 创建财经主要事件信息表")
+
+def create_bond_profit_daily_table(cursor):
+    """创建国债收益率数据表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS bond_profit_daily (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        trade_date DATE NOT NULL COMMENT '交易日期',
+        cn_bond_2y DECIMAL(8,2) COMMENT '中国国债收益率2年',
+        cn_bond_5y DECIMAL(8,2) COMMENT '中国国债收益率5年',
+        cn_bond_10y DECIMAL(8,2) COMMENT '中国国债收益率10年',
+        cn_bond_30y DECIMAL(8,2) COMMENT '中国国债收益率30年',
+        cn_bond_10y_2y_spread DECIMAL(8,2) COMMENT '中国国债收益率10年-2年',
+        us_bond_2y DECIMAL(8,2) COMMENT '美国国债收益率2年',
+        us_bond_5y DECIMAL(8,2) COMMENT '美国国债收益率5年',
+        us_bond_10y DECIMAL(8,2) COMMENT '美国国债收益率10年',
+        us_bond_30y DECIMAL(8,2) COMMENT '美国国债收益率30年',
+        us_bond_10y_2y_spread DECIMAL(8,2) COMMENT '美国国债收益率10年-2年',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_trade_date (trade_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='国债收益率数据表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 国债收益率表(bond_profit_daily)创建成功")
+
+
 def create_stock_info_table(cursor):
     """创建股票基本信息表"""
     sql = """

@@ -27,7 +27,7 @@ pro = ts.pro_api()
 # 配置日志
 def setup_logging():
     #todo:
-    log_file = f"D:\\Project\\ADATA\\adata\\log\\daily_update_fund_info_{datetime.now().strftime('%Y%m%d')}.log"  
+    log_file = f"D:\\Project\\ADATA\\adata\\log\\daily_update_bond_info_{datetime.now().strftime('%Y%m%d')}.log"  
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -41,7 +41,7 @@ def setup_logging():
 logger = setup_logging()
 
 class DailyDataUpdater:
-    def __init__(self, config_file='daily_update_fund_info_config.ini'):
+    def __init__(self, config_file='daily_update_bond_info_config.ini'):
         """初始化每周数据更新器"""
         self.config = configparser.ConfigParser()
         self.config.read(config_file, encoding='utf-8')
@@ -101,7 +101,7 @@ class DailyDataUpdater:
             'success': len(self.update_stats['errors']) == 0
         }
         
-        log_file = 'daily_update_fund_info_history.json'
+        log_file = 'daily_update_bond_info_history.json'
         history = []
         
         # 加载历史记录
@@ -123,39 +123,45 @@ class DailyDataUpdater:
             json.dump(history, f, ensure_ascii=False, indent=2)
             
                    
-    def insert_all_fund_info(self):
-        """重新初始化基金基本信息"""
+    def insert_all_bond_profit_daily(self):
+        """初始化债券收益率信息表"""
         try:
             
-            logger.info("清空基金基本信息...")
+            logger.info("清空债券收益率信息表...")
             
             # 清空表
-            self.cursor.execute("truncate table fund_info")
+            self.cursor.execute("truncate table bond_profit_daily")
             
             # 批量插入
             insert_sql = """
-            INSERT INTO fund_info (fund_code, fund_name, fund_type, data_source, update_time) 
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO bond_profit_daily (trade_date, cn_bond_2y, cn_bond_5y, cn_bond_10y, cn_bond_30y, cn_bond_10y_2y_spread, us_bond_2y, us_bond_5y, us_bond_10y, us_bond_30y, us_bond_10y_2y_spread, update_time, data_source) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
-            logger.info("🚀 开始获取ADATA所有基金基本信息...")
+            logger.info("🚀 开始获取债券收益率信息...")
             
-            # 获取ADATA数据
-            df = ak.fund_name_em()
-            logger.info(f"📊 获取到 {len(df)} 只基金信息")
+            df = ak.bond_zh_us_rate(start_date="19901219")
+            logger.info(f"📊 获取到 {len(df)}条债券收益率数据")
             
             batch_data = []
             insert_count = 0
             
             for _, row in df.iterrows():
-                try:
-                    
+                try:               
                     batch_data.append((
-                        str(row.get('基金代码')) if row.get('基金代码') else None,
-                        str(row.get('基金简称')) if row.get('基金简称') else None,
-                        str(row.get('基金类型')) if row.get('基金类型') else None,
-                        'AKSHARE',
-                        datetime.now()
+                        str(row.get('日期')) if pd.notna(row.get('日期')) else None,
+                        float(row.get('中国国债收益率2年', 0)) if pd.notna(row.get('中国国债收益率2年', 0))  else None,
+                        float(row.get('中国国债收益率5年', 0)) if pd.notna(row.get('中国国债收益率5年', 0))  else None,
+                        float(row.get('中国国债收益率10年', 0)) if pd.notna(row.get('中国国债收益率10年', 0))  else None,
+                        float(row.get('中国国债收益率30年', 0)) if pd.notna(row.get('中国国债收益率30年', 0))  else None,
+                        float(row.get('中国国债收益率10年-2年', 0)) if pd.notna(row.get('中国国债收益率10年-2年', 0))  else None,
+                        float(row.get('美国国债收益率2年', 0)) if pd.notna(row.get('美国国债收益率2年', 0))  else None,
+                        float(row.get('美国国债收益率5年', 0)) if pd.notna(row.get('美国国债收益率5年', 0))  else None,
+                        float(row.get('美国国债收益率10年', 0)) if pd.notna(row.get('美国国债收益率10年', 0))  else None,
+                        float(row.get('美国国债收益率30年', 0)) if pd.notna(row.get('美国国债收益率30年', 0))  else None,
+                        float(row.get('美国国债收益率10年-2年', 0)) if pd.notna(row.get('美国国债收益率10年-2年', 0))  else None,
+                        datetime.now(),
+                        'AKSHARE'
                     ))
                     
                     # 批量插入
@@ -163,11 +169,11 @@ class DailyDataUpdater:
                         self.cursor.executemany(insert_sql, batch_data)
                         self.connection.commit()
                         insert_count += len(batch_data)
-                        logger.info(f"📈 已插入 {insert_count} 只基金信息")
+                        logger.info(f"📈 已插入 {insert_count}条债券收益率数据")
                         batch_data = []
                         
                 except Exception as e:
-                    logger.warning(f"处理基金 {row['基金代码']} 失败: {str(e)}")
+                    logger.warning(f"债券收益率数据更新失败: {str(e)}")
                     continue
             
             # 插入剩余数据
@@ -176,93 +182,12 @@ class DailyDataUpdater:
                 self.connection.commit()
                 insert_count += len(batch_data)
             
-            logger.info(f"✅ 成功插入 {insert_count} 只基金基本信息")
+            logger.info(f"✅ 成功插入 {insert_count} 条债券收益率数据")
             
         except Exception as e:
-            logger.error(f"✗ 插入基金基本信息失败: {str(e)}")
+            logger.error(f"✗ 插入债券收益率数据: {str(e)}")
             if self.connection:
-                self.connection.rollback()           
-
-
-    def update_stock_hold_by_fund(self):
-        """更新近1个季度基金重仓股票数据"""
-        logger.info(f"📊 开始更新近1个季度基金重仓股票数据）...")
-        
-        try:
-            # 获取所有股票  
-            self.cursor.execute(f"SELECT concat(a.stock_code,'.',exchange) stock_code,short_name  FROM stock_info a ORDER BY a.stock_code")
-            stocks = self.cursor.fetchall() # type: ignore
-            # print(stocks)
-            logger.info(f"📊 准备更新 {len(stocks)} 只股票的近7个自然日K线数据")
-            
-            begin_date = (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
-            end_date =   datetime.now().strftime('%Y%m%d')
-            success_count = 0
-            
-            for i, (stock_code, stock_name) in enumerate(stocks, 1):
-                try:
-                    data_source = 'AUSHARE'
-                    df = pro.daily(
-                        ts_code=stock_code, 
-                        start_date=begin_date, 
-                        end_date=end_date
-                    )
-                    
-                    if df.empty:
-                        continue
-                    
-                    # 删除本周旧数据
-                    self.cursor.execute("""
-                        DELETE FROM stock_market_daily 
-                        WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
-                    """, (stock_code, begin_date, end_date))
-                    
-                    # 插入本周新数据
-                    insert_sql = """
-                        INSERT INTO stock_market_daily 
-                        (stock_code, trade_date, open, high, low, close, pre_close, 
-                        change_amount, change_pct, volume, amount, update_time,data_source) 
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                    
-                    for _, row in df.iterrows():
-                        self.cursor.execute(insert_sql, (
-                            stock_code,
-                            str(row.get('trade_date')) if row.get('trade_date') else None,
-                            float(row.get('open', 0)) if row.get('open') else None, 
-                            float(row.get('high', 0)) if row.get('high') else None, 
-                            float(row.get('low', 0)) if row.get('low') else None, 
-                            float(row.get('close', 0)) if row.get('close') else None, 
-                            float(row.get('pre_close', 0)) if row.get('pre_close') else None, 
-                            float(row.get('change', 0)) if row.get('change') else None, 
-                            float(row.get('pct_chg', 0)) if row.get('pct_chg') else None, 
-                            int(row.get('vol', 0)) if row.get('vol') else None, 
-                            float(row.get('amount', 0)) if row.get('amount') else None, 
-                            datetime.now(),
-                            data_source
-                        ))
-                    
-                    self.connection.commit() # type: ignore
-                    success_count += 1
-                    
-                    if i % 50 == 0:
-                        logger.info(f"📈 已处理 {i}/{len(stocks)} 只股票，成功 {success_count} 只")
-                    
-                    # 请求延迟
-                    time.sleep(self.request_delay)
-                    
-                except Exception as e:
-                    error_msg = f"{stock_code} {stock_name} K线更新失败: {str(e)}"
-                    logger.warning(f"⚠️ {error_msg}")
-                    continue
-            
-            self.update_stats['daily_kline'] = success_count
-            logger.info(f"✅ 本周K线更新完成: {success_count} 条记录")
-            
-        except Exception as e:
-            error_msg = f"更新本周K线失败: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            self.update_stats['errors'].append(error_msg)
+                self.connection.rollback()
 
 
     def run_daily_update(self):
@@ -275,7 +200,7 @@ class DailyDataUpdater:
         
         try:
             #1. 初始化基金信息表
-            self.insert_all_fund_info()
+            self.insert_all_bond_profit_daily()
             
             # 生成统计报告
             self.show_update_summary()

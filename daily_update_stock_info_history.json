@@ -1,159 +1,5 @@
 [
   {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:45:10.370095",
-    "duration": "0:00:00.012033",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:47:10.005325",
-    "duration": "0:00:00.010471",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:47:25.420545",
-    "duration": "0:00:00.010431",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:47:46.806609",
-    "duration": "0:00:00.012591",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:48:38.802890",
-    "duration": "0:00:00.714504",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:49:40.661633",
-    "duration": "0:00:31.338063",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:54:24.836499",
-    "duration": "0:00:03.152011",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:55:23.402690",
-    "duration": "0:00:03.203870",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-16",
-    "update_time": "2025-08-16T16:55:55.774313",
-    "duration": "0:00:04.150791",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-18",
-    "update_time": "2025-08-18T21:34:20.576956",
-    "duration": "0:00:00.293813",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-19",
-    "update_time": "2025-08-19T07:38:28.178286",
-    "duration": "0:33:09.716255",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 1052,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
     "date": "2025-08-19",
     "update_time": "2025-08-19T20:14:12.219182",
     "duration": "0:00:13.579667",
@@ -417,6 +263,160 @@
       "stock_info": 0,
       "current_market": 0,
       "daily_kline": 1,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T08:12:05.475438",
+    "duration": "0:00:05.370212",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T08:12:43.252888",
+    "duration": "0:01:17.301669",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 11,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T08:19:28.323086",
+    "duration": "0:03:13.840711",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 11,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T08:33:34.753543",
+    "duration": "2:15:36.170781",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 3425,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T11:00:21.070923",
+    "duration": "0:01:47.652791",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 29,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T13:37:10.587403",
+    "duration": "0:00:00.641487",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T13:40:00.723986",
+    "duration": "0:00:00.680316",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T13:43:57.188457",
+    "duration": "0:00:06.675493",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T13:45:20.075625",
+    "duration": "0:00:05.952867",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T14:20:04.588482",
+    "duration": "0:00:06.779557",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-06",
+    "update_time": "2025-09-06T14:21:27.876595",
+    "duration": "0:00:06.845987",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
       "trade_calendar": 0,
       "concept_info": 0,
       "errors": []

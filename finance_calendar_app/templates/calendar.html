@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>财经日历</title>
+    <style>
+        /* 全局样式重置与基础设置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+        body {
+            background-color: #f8f9fa;
+            padding: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        /* 头部导航样式 */
+        .calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            gap: 15px;
+        }
+        .calendar-header a {
+            text-decoration: none;
+            color: #007bff;
+            font-size: 16px;
+            padding: 5px 10px;
+            border: 1px solid #007bff;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .calendar-header a:hover {
+            background-color: #007bff;
+            color: white;
+        }
+        .calendar-header h2 {
+            font-size: 24px;
+            color: #333;
+            font-weight: 600;
+        }
+        /* 日期分组容器 */
+        .event-group {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        /* 日期标题栏（可点击） */
+        .event-date {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 15px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .event-date:hover {
+            background-color: #0056b3;
+        }
+        .event-date .arrow {
+            font-size: 18px;
+            transition: transform 0.3s ease;
+        }
+        .event-date.expanded .arrow {
+            transform: rotate(90deg);
+        }
+        /* 事件列表容器（默认隐藏，点击日期展开） */
+        .events-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease;
+        }
+        .events-container.expanded {
+            max-height: 2000px; /* 足够大的高度，容纳所有事件 */
+            padding: 15px;
+        }
+        /* 单个事件样式 */
+        .event-item {
+            padding: 12px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .event-item:last-child {
+            border-bottom: none;
+        }
+        .event-title {
+            color: #007bff;
+            font-size: 16px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .event-title:hover {
+            text-decoration: underline;
+        }
+        .event-title .content-arrow {
+            font-size: 14px;
+            transition: transform 0.3s ease;
+        }
+        .event-title.expanded .content-arrow {
+            transform: rotate(90deg);
+        }
+        /* 事件内容（默认隐藏，点击标题展开） */
+        .event-content {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .event-content.expanded {
+            max-height: 500px; /* 容纳长内容，可根据需求调整 */
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="calendar-header">
+        <a href="/?date={{ prev_month }}-01">&lt; 上一月</a>
+        <h2>{{ current_month }} 财经日历</h2>
+        <a href="/?date={{ next_month }}-01">下一月 &gt;</a>
+    </div>
+
+    {% for date, events in date_groups.items() %}
+    <div class="event-group">
+        <!-- 日期栏：默认添加 expanded 类实现展开 -->
+        <div class="event-date expanded" data-date="{{ date }}">
+            {{ date }} {{ week_day(date) }}
+            <span class="arrow">▶</span>
+        </div>
+        <!-- 事件容器：默认添加 expanded 类实现展开 -->
+        <div class="events-container expanded">
+            {% for event in events %}
+            <div class="event-item">
+                <!-- 事件标题栏：点击展开/收起单条内容 -->
+                <div class="event-title" data-event-id="{{ loop.index }}">
+                    {{ loop.index }}# {{ event.title }}
+                    <span class="content-arrow">▸</span>
+                </div>
+                <!-- 事件内容：默认隐藏 -->
+                <div class="event-content">
+                    {{ event.content }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <script>
+        // 计算星期几（供模板调用的函数已在 Flask 中注册，这里仅为前端备用）
+        function week_day(date_str) {
+            const date = new Date(date_str);
+            const weeks = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+            return weeks[date.getDay()];
+        }
+
+        // 日期栏点击：展开/收起当天所有事件
+        document.querySelectorAll('.event-date').forEach(dateElem => {
+            dateElem.addEventListener('click', function() {
+                const container = this.nextElementSibling;
+                const isExpanded = container.classList.contains('expanded');
+                container.classList.toggle('expanded', !isExpanded);
+                this.classList.toggle('expanded', !isExpanded);
+            });
+        });
+
+        // 事件标题点击：展开/收起单条事件内容
+        document.querySelectorAll('.event-title').forEach(titleElem => {
+            titleElem.addEventListener('click', function() {
+                const contentElem = this.nextElementSibling;
+                const isExpanded = contentElem.classList.contains('expanded');
+                contentElem.classList.toggle('expanded', !isExpanded);
+                this.classList.toggle('expanded', !isExpanded);
+            });
+        });
+    </script>
+</body>
+</html>

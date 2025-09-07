@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2025-09-07",
+    "update_time": "2025-09-07T11:55:20.618376",
+    "duration": "0:00:04.632281",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  }
+]

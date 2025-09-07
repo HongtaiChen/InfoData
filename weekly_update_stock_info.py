@@ -18,6 +18,8 @@ import traceback
 import tushare as ts
 import pandas as pd
 import akshare as ak
+import requests
+
 
 # 设置aushare接口token
 ts.set_token('d74c40bf7bb33a39e27a8e8f47d1d628b09560c652f9caf713dc9db0')
@@ -414,14 +416,13 @@ class DailyDataUpdater:
         logger.info(f"📊 开始更新近7个自然日K线数据）...")
         
         try:
-            begin_date =  '19900101'
+            begin_date =  (datetime.now() +timedelta(days=-7)).strftime('%Y%m%d')
             end_date =  datetime.now().strftime('%Y%m%d')
-            begin_date_del =  '1990-01-01'
-            end_date_del =  datetime.now().strftime('%Y-%m-%d')              
+            begin_date_del =  (datetime.now() +timedelta(days=-7)).strftime('%Y-%m-%d')
+            end_date_del =  datetime.now().strftime('%Y-%m-%d')             
             # 获取所有股票  
-            # self.cursor.execute("with tmp as(SELECT a.stock_code,short_name, b.trade_date  FROM stock_info a left join adata.stock_market_daily_ex b on a.stock_code = b.stock_code and b.trade_date  = '20250829' where b.trade_date is null ) select a.stock_code,a.short_name from tmp a left join stock_market_daily b on a.stock_code = b.stock_code  and b.trade_date  >= '20250822' where b.trade_date is not null group by a.stock_code,a.short_name order by a.stock_code;")
-            self.cursor.execute("SELECT a.stock_code,short_name  FROM stock_info a left join adata.stock_market_daily_ex b on a.stock_code = b.stock_code  where b.trade_date is null group by a.stock_code,a.short_name order by a.stock_code  ;")
-
+            #self.cursor.execute("SELECT a.stock_code,short_name  FROM stock_info a left join adata.stock_market_daily_ex b on a.stock_code = b.stock_code  where b.trade_date is null group by a.stock_code,a.short_name order by a.stock_code  ;")
+            self.cursor.execute("with tmp as(SELECT a.stock_code,short_name, b.trade_date  FROM stock_info a left join adata.stock_market_daily_ex b on a.stock_code = b.stock_code and b.trade_date  = '20250905' where b.trade_date is null ) select a.stock_code,a.short_name from tmp a left join stock_market_daily_ex b on a.stock_code = b.stock_code  and b.trade_date  >= '20250822' where b.trade_date is not null group by a.stock_code,a.short_name order by a.stock_code;")
             stocks = self.cursor.fetchall() # type: ignore
             # print(stocks)
             logger.info(f"📊 准备更新 {len(stocks)} 只股票的近7个自然日K线数据")
@@ -440,10 +441,10 @@ class DailyDataUpdater:
                         continue
                     
                     # 删除本周旧数据
-                    # self.cursor.execute("""
-                    #     DELETE FROM stock_market_daily_ex 
-                    #     WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
-                    # """, (stock_code, begin_date_del, end_date_del))
+                    self.cursor.execute("""
+                        DELETE FROM stock_market_daily_ex 
+                        WHERE stock_code = %s AND trade_date >= %s AND trade_date <= %s
+                    """, (stock_code, begin_date_del, end_date_del))
                     
                     # 插入本周新数据
                     insert_sql = """
@@ -492,7 +493,126 @@ class DailyDataUpdater:
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)
 
-
+    def update_finance_calendar(self):
+        """更新过去6个月到未来6个月的财经日历数据"""
+        logger.info(f"📊 开始更新财经日历数据（过去6个月至未来6个月）...")
+        
+        try:
+            # 获取当前日期
+            today = datetime.now()
+            # 计算需要更新的月份范围（过去6个月到未来6个月，共13个月）
+            months_to_update = []
+            for i in range(-6, 7):  # -6到6包含13个月份（含当前月）
+                # 计算目标年月
+                target_month = today.month + i
+                target_year = today.year
+                # 处理月份跨年度的情况
+                if target_month > 12:
+                    target_year += 1
+                    target_month -= 12
+                elif target_month < 1:
+                    target_year -= 1
+                    target_month += 12
+                # 格式化为"YYYY-MM"
+                year_month = f"{target_year}-{target_month:02d}"
+                months_to_update.append(year_month)
+            
+            # 遍历每个月份更新数据
+            for year_month in months_to_update:
+                logger.info(f"🔄 开始处理 {year_month} 的财经日历数据")
+                data_list = []  # 每个月份单独维护数据列表
+                # 删除本周旧数据
+                logger.info(f"✅ {year_month} 数据清空")
+                self.cursor.execute("""
+                    DELETE FROM finance_calendar 
+                    WHERE event_date LIKE %s
+                """, (f"{year_month}%",))
+                # 1. 构造请求
+                url = "https://app.jiuyangongshe.com/jystock-app/api/v1/timeline/list"
+                headers = {
+                    "Host": "app.jiuyangongshe.com",
+                    "Origin": "https://www.jiuyangongshe.com",
+                    "Referer": "https://www.jiuyangongshe.com/",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+                    "Content-Type": "application/json",
+                    "token": "1cc6380a05c652b922b3d85124c85473",  # 注意：过期需更新
+                    "platform": "3",
+                    "Cookie": "SESSION=NDZkNDU2ODYtODEwYi00ZGZkLWEyY2ItNjgxYzY4ZWMzZDEy",  # 过期需更新
+                    "timestamp": str(int(time.time() * 1000))
+                }
+                payload = {"date": year_month, "grade": "0"}
+                
+                # 2. 发送请求并解析数据
+                try:
+                    response = requests.post(
+                        url,
+                        headers=headers,
+                        data=json.dumps(payload),
+                        timeout=30
+                    )
+                    response.raise_for_status()
+                    resp_data = response.json()
+                    events = resp_data.get("data", [])
+                    
+                    if not events:
+                        logger.info(f"📭 {year_month} 暂无财经日历数据")
+                        continue
+                    
+                    # 3. 解析数据并收集
+                    for date_group in events:
+                        event_date = date_group.get("date")
+                        event_list = date_group.get("list", [])
+                        
+                        for event in event_list:
+                            event_title = event.get("title", "").strip()
+                            event_content = event.get("content", "").strip()
+                            
+                            if not event_date or not event_title:
+                                logger.warning(f"🚫 {year_month} 跳过无效数据：日期={event_date}，标题={event_title}")
+                                continue
+                            
+                            single_data = (
+                                event_date,
+                                event_title,
+                                event_content,
+                                datetime.now(),
+                                "JY"
+                            )
+                            data_list.append(single_data)
+                            # 仅打印较长标题的前30个字符，避免日志过长
+                            display_title = event_title[:30] + "..." if len(event_title) > 30 else event_title
+                            logger.debug(f"📥 {year_month} 收集事件：{event_date} {display_title}")
+                    
+                    # 4. 批量插入当前月份数据
+                    if data_list:
+                        insert_query = """
+                            INSERT IGNORE INTO finance_calendar (
+                                event_date, title, content, update_time, data_source
+                            ) VALUES (%s, %s, %s, %s, %s)
+                        """
+                        self.cursor.executemany(insert_query, data_list)
+                        self.connection.commit()
+                        logger.info(f"✅ {year_month} 成功更新 {len(data_list)} 条数据")
+                    else:
+                        logger.info(f"📭 {year_month} 无有效数据可更新")
+                
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"⚠️ {year_month} 请求失败：{str(e)}")
+                    if self.connection:
+                        self.connection.rollback()
+                except Exception as e:
+                    logger.error(f"⚠️ {year_month} 处理失败：{str(e)}")
+                    if self.connection:
+                        self.connection.rollback()
+            
+            logger.info(f"🏁 所有月份财经日历数据更新完成")
+        
+        except Exception as e:
+            logger.error(f"⚠️ 整体更新流程失败：{str(e)}")
+            if self.connection:
+                self.connection.rollback()
+            
+            
 
     def update_dc_index_market(self):
         """更新近7个自然日关键指数行情数据"""
@@ -902,12 +1022,15 @@ class DailyDataUpdater:
             
             
             # 2. 更新本周K线数据
-            self.update_daily_kline()     
-            # self.update_daily_kline_ex()
+            # self.update_daily_kline()     
+            self.update_daily_kline_ex()
             
             
             # # 3.  更新关键指数数据
-            # self.update_dc_index_market()      
+            # self.update_dc_index_market()    
+            
+            # 4. 更新财经日历数据
+            # self.update_finance_calendar()  
             
             # # 5. 更新同花顺概念信息表
             # self.insert_all_ths_concept_code()

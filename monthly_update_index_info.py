@@ -27,7 +27,7 @@ pro = ts.pro_api()
 # 配置日志
 def setup_logging():
     #todo:
-    log_file = f"daily_update_fund_info_{datetime.now().strftime('%Y%m%d')}.log"  
+    log_file = f"D:\\Project\\ADATA\\adata\\log\\daily_update_fund_info_{datetime.now().strftime('%Y%m%d')}.log"  
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
