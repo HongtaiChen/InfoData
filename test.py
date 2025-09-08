@@ -1,4 +1,4 @@
 import akshare as ak
 
-bond_zh_us_rate_df = ak.bond_zh_us_rate(start_date="19901219")
-print(bond_zh_us_rate_df)
+stock_zh_a_spot_em_df = ak.stock_zh_a_spot_em()
+print(stock_zh_a_spot_em_df)

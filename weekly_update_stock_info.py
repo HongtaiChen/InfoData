@@ -323,7 +323,64 @@ class DailyDataUpdater:
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)                  
     
+    def update_future_spot_price(self):
+        """更新现货期货价格数据"""
+        logger.info(f"📊 开始更新近7个自然日现货期货价格数据）...")
+        
+        try:
+            start_date_str = "20240101"
+            end_date_str = "20250101"
 
+            # 转换为datetime对象
+            start_date = datetime.strptime(start_date_str, "%Y%m%d")
+            end_date = datetime.strptime(end_date_str, "%Y%m%d")
+
+            # 循环获取每一天
+            current_date = start_date
+            while current_date <= end_date:
+                # 输出日期，格式为YYYYMMDD
+                # 日期加1天
+                current_date += timedelta(days=1)         
+                logger.info(f"📊 准备更新{current_date}日现货期货价格数据")
+                data_source = 'AKSHARE'
+                df = ak.futures_spot_price_previous(current_date.strftime("%Y%m%d"))
+                if df.empty:
+                        continue
+                # 删除本周旧数据
+                self.cursor.execute("""
+                    DELETE FROM futures_spot_price 
+                    WHERE  trade_date = %s 
+                """, (current_date.strftime("%Y%m%d")))
+                
+                # 插入本周新数据
+                insert_sql = """
+                    INSERT INTO futures_spot_price 
+                    (trade_date, good_name, spot_price, main_contract_code, main_contract_price, main_contract_basis, main_contract_change_pct, main_basis_high_180d, main_basis_low_180d, main_basis_avg_180d, update_time, data_source) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                
+                for _, row in df.iterrows():
+                    self.cursor.execute(insert_sql, (
+                            current_date.strftime("%Y-%m-%d"),
+                            str(row.get('商品')) if pd.notna(row.get('商品')) else None,
+                            float(row.get('现货价格', 0)) if pd.notna(row.get('现货价格', 0))  else None,
+                            str(row.get('主力合约代码')) if pd.notna(row.get('主力合约代码')) else None,
+                            float(row.get('主力合约价格', 0)) if pd.notna(row.get('主力合约价格', 0))  else None,
+                            float(row.get('主力合约基差', 0)) if pd.notna(row.get('主力合约基差', 0))  else None,
+                            float(row.get('主力合约变动百分比', 0)) if pd.notna(row.get('主力合约变动百分比', 0))  else None,
+                            float(row.get('180日内主力基差最高', 0)) if pd.notna(row.get('180日内主力基差最高', 0))  else None,
+                            float(row.get('180日内主力基差最低', 0)) if pd.notna(row.get('180日内主力基差最低', 0))  else None,
+                            float(row.get('180日内主力基差平均', 0)) if pd.notna(row.get('180日内主力基差平均', 0))  else None,
+                            datetime.now(),
+                            'AKSHARE'
+                        ))
+                
+                self.connection.commit() # type: ignore
+                logger.info(f"📈 已处理{current_date}日现货期货价格数据")
+            
+        except Exception as e:
+            eerror_msg = f"更新本周现货期货数据失败: {str(e)}"
+            logger.error(f"❌ {eerror_msg}")
     
 
     def update_daily_kline(self):
@@ -615,8 +672,8 @@ class DailyDataUpdater:
             
 
     def update_dc_index_market(self):
-        """更新近7个自然日关键指数行情数据"""
-        logger.info(f"📊 开始更新近7个自然日K线指数行情数据）...")
+        """更新截止到最新日期关键指数行情数据"""
+        logger.info(f"📊 开始更新截止到最新日期K线指数行情数据）...")
         
         try:
 
@@ -624,7 +681,7 @@ class DailyDataUpdater:
             end_date = datetime.now().strftime('%Y%m%d')           
             indexs = [ ['000001','上证指数'],['399001','深证成指'],['399006','创业板'],['899050','北证50'],['000688','科创50']
                       ,['000300','沪深300'],['000852','中证1000'],['000016','上证50'],['000905','中证500'],['399330','深证100']
-                      ,['000698','科创100'],['399673','创业板50']] # type: ignore
+                      ,['000698','科创100'],['399673','创业板50'],['931775','中证全指房地产指数']] # type: ignore
             logger.info(f"📊 准备更新 {len(indexs)} 关键指数的近7个自然日K线数据")
             self.cursor.execute("truncate table dc_index_market;")          
             success_count = 0
@@ -1023,11 +1080,11 @@ class DailyDataUpdater:
             
             # 2. 更新本周K线数据
             # self.update_daily_kline()     
-            self.update_daily_kline_ex()
+            # self.update_daily_kline_ex()
             
             
             # # 3.  更新关键指数数据
-            # self.update_dc_index_market()    
+            self.update_dc_index_market()    
             
             # 4. 更新财经日历数据
             # self.update_finance_calendar()  
@@ -1038,10 +1095,13 @@ class DailyDataUpdater:
             # # 6. 更新同花顺股票概念信息表
             # self.insert_all_ths_stock_concepts()
             
+            # 7. 更新现货期货价格
+            # self.update_future_spot_price()
+            
             # # 8. 更新所有概念指数板块行情数据
             # self.update_ths_concept_market()   
             
-            # # # 7. 更新日度资金流量
+            # # # 9. 更新日度资金流量
             # self.update_stock_capital_flow()
             
             # # # 10. 更新最近7个自然日融资融券余额数据

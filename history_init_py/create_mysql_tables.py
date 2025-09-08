@@ -191,6 +191,31 @@ def create_bond_profit_daily_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 国债收益率表(bond_profit_daily)创建成功")
 
+def create_futures_spot_price_table(cursor):
+    """创建现货期货价格表"""
+    sql = """
+    CREATE TABLE IF NOT EXISTS futures_spot_price (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        trade_date DATE NOT NULL COMMENT '交易日期',
+        good_name varchar(20) COMMENT '商品名称',
+        spot_price DECIMAL(8,2) COMMENT '现货价格',
+        main_contract_code varchar(20) COMMENT '主力合约代码',
+        main_contract_price DECIMAL(8,2) COMMENT '主力合约价格',
+        main_contract_basis DECIMAL(8,2) COMMENT '主力合约基差',
+        main_contract_change_pct DECIMAL(8,2) COMMENT '主力合约变动百分比',
+        main_basis_high_180d DECIMAL(8,2) COMMENT '180日内主力基差最高',
+        main_basis_low_180d DECIMAL(8,2) COMMENT '180日内主力基差最低',
+        main_basis_avg_180d DECIMAL(8,2) COMMENT '180日内主力基差平均',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_trade_date (trade_date),
+        INDEX idx_good_name (good_name),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='现货期货价格表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 现货期货价格表(futures_spot_price)创建成功")
+
 
 def create_stock_info_table(cursor):
     """创建股票基本信息表"""
@@ -268,22 +293,30 @@ def create_stock_market_current_table(cursor):
      CREATE TABLE IF NOT EXISTS stock_market_current (
         id BIGINT AUTO_INCREMENT PRIMARY KEY,
         stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
-        trade_date DATE NOT NULL COMMENT '交易日期',
-        open DECIMAL(10,3) COMMENT '开盘价',
-        high DECIMAL(10,3) COMMENT '最高价',
-        low DECIMAL(10,3) COMMENT '最低价',
-        close DECIMAL(10,3) COMMENT '收盘价',
-        pre_close DECIMAL(10,3) COMMENT '昨收价',
-        change_amount DECIMAL(10,3) COMMENT '涨跌额',
+        stock_name VARCHAR(200) NOT NULL COMMENT '股票名称',
+        new DECIMAL(10,3) COMMENT '最新价',
         change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',
+        change_amount DECIMAL(10,3) COMMENT '涨跌额',
         volume BIGINT COMMENT '成交量(手)',
         amount DECIMAL(15,2) COMMENT '成交额(元)',
+        amplitude DECIMAL(8,4) COMMENT '振幅(%)',
+        high DECIMAL(10,3) COMMENT '最高价',
+        low DECIMAL(10,3) COMMENT '最低价',
+        open DECIMAL(10,3) COMMENT '开盘价',
+        pre_close DECIMAL(10,3) COMMENT '昨收价',
+        volume_ratio DECIMAL(8,4) COMMENT '量比',
         turnover_ratio DECIMAL(8,4) COMMENT '换手率(%)',
+        dynamic_pe DECIMAL(24,4) COMMENT '市盈率-动态',
+        pb DECIMAL(8,4) COMMENT '市净率',
+        total_captital DECIMAL(15,2) COMMENT '总市值(元)',
+        float_captital DECIMAL(15,2) COMMENT '流通市值(元)',
+        rise_speed DECIMAL(8,4) COMMENT '涨速',
+        5m_change_pct DECIMAL(8,4) COMMENT '5分钟涨跌幅(%)',
+        60d_change_pct DECIMAL(8,4) COMMENT '60日涨跌幅(%)',
+        ytd_change_pct DECIMAL(8,4) COMMENT '年初至今涨跌幅(%)',
         update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
         data_source varchar(100) COMMENT '数据来源',
-        UNIQUE KEY uk_stock_date (stock_code, trade_date),
         INDEX idx_stock_code (stock_code),
-        INDEX idx_trade_date (trade_date),
         INDEX idx_update_time (update_time)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股票每日最新数据表'
     """
