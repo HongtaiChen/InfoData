@@ -1,0 +1,889 @@
+2025-09-10 20:12:54,833 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 20:12:54,839 - INFO - 🚀 开始每周数据更新...
+2025-09-10 20:12:54,839 - INFO - ============================================================
+2025-09-10 20:12:54,854 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 20:12:54,854 - INFO - 📊 开始更新最新股票价格数据）...
+2025-09-10 20:13:04,952 - INFO - 📈 已处理完成 
+2025-09-10 20:13:04,953 - INFO - ============================================================
+2025-09-10 20:13:04,953 - INFO - 📊 本日数据更新统计
+2025-09-10 20:13:04,953 - INFO - ============================================================
+2025-09-10 20:13:04,954 - INFO - ⏱️  更新耗时: 0:00:10.113819
+2025-09-10 20:13:04,954 - INFO - 📈 实时行情: 0 条
+2025-09-10 20:13:04,954 - INFO - 📊 本日K线: 0 条
+2025-09-10 20:13:04,954 - INFO - 📅 交易日历: 0 条
+2025-09-10 20:13:04,954 - INFO - ✅ 无错误
+2025-09-10 20:13:04,954 - INFO - ============================================================
+2025-09-10 20:13:04,962 - INFO - 🎉 本日数据更新完成！
+2025-09-10 20:13:04,962 - INFO - 数据库连接已关闭
+2025-09-10 20:13:04,962 - INFO - ✅ 每周数据更新成功完成
+2025-09-10 20:58:30,065 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 20:58:30,067 - INFO - 🚀 开始每周数据更新...
+2025-09-10 20:58:30,067 - INFO - ============================================================
+2025-09-10 20:58:30,071 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 20:58:30,071 - INFO - 开始获取从 2025-09-03 20:58:30.071576 到 2025-09-10 20:58:30.071576 的机构调研数据，共 8 天
+2025-09-10 20:58:30,071 - INFO - 正在获取 20250910 的数据（1/8）
+2025-09-10 20:58:30,173 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,175 - INFO - 正在获取 20250911 的数据（2/8）
+2025-09-10 20:58:30,273 - ERROR - 获取 20250911 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,274 - INFO - 正在获取 20250912 的数据（3/8）
+2025-09-10 20:58:30,374 - ERROR - 获取 20250912 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,375 - INFO - 正在获取 20250913 的数据（4/8）
+2025-09-10 20:58:30,468 - ERROR - 获取 20250913 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,469 - INFO - 正在获取 20250914 的数据（5/8）
+2025-09-10 20:58:30,569 - ERROR - 获取 20250914 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,570 - INFO - 正在获取 20250915 的数据（6/8）
+2025-09-10 20:58:30,679 - ERROR - 获取 20250915 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,680 - INFO - 正在获取 20250916 的数据（7/8）
+2025-09-10 20:58:30,779 - ERROR - 获取 20250916 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,780 - INFO - 正在获取 20250917 的数据（8/8）
+2025-09-10 20:58:30,875 - ERROR - 获取 20250917 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 20:58:30,876 - INFO - 所有日期的数据处理完成
+2025-09-10 20:58:30,876 - INFO - ============================================================
+2025-09-10 20:58:30,876 - INFO - 📊 本周数据更新统计
+2025-09-10 20:58:30,877 - INFO - ============================================================
+2025-09-10 20:58:30,877 - INFO - ⏱️  更新耗时: 0:00:00.808898
+2025-09-10 20:58:30,877 - INFO - 📈 实时行情: 0 条
+2025-09-10 20:58:30,877 - INFO - 📊 本周K线: 0 条
+2025-09-10 20:58:30,878 - INFO - 📅 交易日历: 0 条
+2025-09-10 20:58:30,878 - INFO - ✅ 无错误
+2025-09-10 20:58:30,878 - INFO - ============================================================
+2025-09-10 20:58:30,899 - INFO - 🎉 本周数据更新完成！
+2025-09-10 20:58:30,900 - INFO - 数据库连接已关闭
+2025-09-10 20:58:30,900 - INFO - ✅ 每周数据更新成功完成
+2025-09-10 21:02:29,313 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:02:29,314 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:02:29,314 - INFO - ============================================================
+2025-09-10 21:02:29,317 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:02:29,317 - INFO - 开始获取从 2025-09-03 21:02:29.317636 到 2025-09-10 21:02:29.317636 的机构调研数据，共 8 天
+2025-09-10 21:02:29,317 - INFO - 正在获取 20250910 的数据（1/8）
+2025-09-10 21:02:29,594 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:29,597 - INFO - 正在获取 20250911 的数据（2/8）
+2025-09-10 21:02:29,729 - ERROR - 获取 20250911 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:29,730 - INFO - 正在获取 20250912 的数据（3/8）
+2025-09-10 21:02:29,925 - ERROR - 获取 20250912 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:29,926 - INFO - 正在获取 20250913 的数据（4/8）
+2025-09-10 21:02:30,156 - ERROR - 获取 20250913 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:30,157 - INFO - 正在获取 20250914 的数据（5/8）
+2025-09-10 21:02:30,271 - ERROR - 获取 20250914 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:30,273 - INFO - 正在获取 20250915 的数据（6/8）
+2025-09-10 21:02:30,374 - ERROR - 获取 20250915 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:30,374 - INFO - 正在获取 20250916 的数据（7/8）
+2025-09-10 21:02:30,461 - ERROR - 获取 20250916 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:30,462 - INFO - 正在获取 20250917 的数据（8/8）
+2025-09-10 21:02:30,560 - ERROR - 获取 20250917 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:02:30,561 - INFO - 所有日期的数据处理完成
+2025-09-10 21:02:30,562 - INFO - ============================================================
+2025-09-10 21:02:30,562 - INFO - 📊 本周数据更新统计
+2025-09-10 21:02:30,562 - INFO - ============================================================
+2025-09-10 21:02:30,562 - INFO - ⏱️  更新耗时: 0:00:01.247835
+2025-09-10 21:02:30,562 - INFO - 📈 实时行情: 0 条
+2025-09-10 21:02:30,563 - INFO - 📊 本周K线: 0 条
+2025-09-10 21:02:30,563 - INFO - 📅 交易日历: 0 条
+2025-09-10 21:02:30,563 - INFO - ✅ 无错误
+2025-09-10 21:02:30,563 - INFO - ============================================================
+2025-09-10 21:02:30,577 - INFO - 🎉 本周数据更新完成！
+2025-09-10 21:02:30,577 - INFO - 数据库连接已关闭
+2025-09-10 21:02:30,577 - INFO - ✅ 每周数据更新成功完成
+2025-09-10 21:05:33,845 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:05:33,846 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:05:33,846 - INFO - ============================================================
+2025-09-10 21:05:33,849 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:05:33,849 - INFO - 开始获取从 2025-09-03 21:05:33.849055 到 2025-09-10 21:05:33.849055 的机构调研数据，共 8 天
+2025-09-10 21:05:33,849 - INFO - 正在获取 20250910 的数据（1/8）
+2025-09-10 21:05:34,122 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,123 - INFO - 正在获取 20250911 的数据（2/8）
+2025-09-10 21:05:34,219 - ERROR - 获取 20250911 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,220 - INFO - 正在获取 20250912 的数据（3/8）
+2025-09-10 21:05:34,317 - ERROR - 获取 20250912 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,318 - INFO - 正在获取 20250913 的数据（4/8）
+2025-09-10 21:05:34,415 - ERROR - 获取 20250913 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,415 - INFO - 正在获取 20250914 的数据（5/8）
+2025-09-10 21:05:34,505 - ERROR - 获取 20250914 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,506 - INFO - 正在获取 20250915 的数据（6/8）
+2025-09-10 21:05:34,596 - ERROR - 获取 20250915 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,597 - INFO - 正在获取 20250916 的数据（7/8）
+2025-09-10 21:05:34,678 - ERROR - 获取 20250916 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,679 - INFO - 正在获取 20250917 的数据（8/8）
+2025-09-10 21:05:34,779 - ERROR - 获取 20250917 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:05:34,780 - INFO - 所有日期的数据处理完成
+2025-09-10 21:05:34,780 - INFO - ============================================================
+2025-09-10 21:05:34,780 - INFO - 📊 本周数据更新统计
+2025-09-10 21:05:34,780 - INFO - ============================================================
+2025-09-10 21:05:34,781 - INFO - ⏱️  更新耗时: 0:00:00.934158
+2025-09-10 21:05:34,781 - INFO - 📈 实时行情: 0 条
+2025-09-10 21:05:34,781 - INFO - 📊 本周K线: 0 条
+2025-09-10 21:05:34,781 - INFO - 📅 交易日历: 0 条
+2025-09-10 21:05:34,781 - INFO - ✅ 无错误
+2025-09-10 21:05:34,781 - INFO - ============================================================
+2025-09-10 21:05:34,789 - INFO - 🎉 本周数据更新完成！
+2025-09-10 21:05:34,790 - INFO - 数据库连接已关闭
+2025-09-10 21:05:34,790 - INFO - ✅ 每周数据更新成功完成
+2025-09-10 21:13:44,944 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:13:44,945 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:13:44,945 - INFO - ============================================================
+2025-09-10 21:13:44,949 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:13:44,949 - INFO - 开始获取从 2025-09-03 21:13:44.949026 到 2025-09-10 21:13:44.949026 的机构调研数据，共 8 天
+2025-09-10 21:13:44,949 - INFO - 正在获取 20250910 的数据（1/8）
+2025-09-10 21:13:45,050 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,051 - INFO - 正在获取 20250910 的数据（2/8）
+2025-09-10 21:13:45,180 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,181 - INFO - 正在获取 20250910 的数据（3/8）
+2025-09-10 21:13:45,298 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,300 - INFO - 正在获取 20250910 的数据（4/8）
+2025-09-10 21:13:45,501 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,503 - INFO - 正在获取 20250910 的数据（5/8）
+2025-09-10 21:13:45,604 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,606 - INFO - 正在获取 20250910 的数据（6/8）
+2025-09-10 21:13:45,679 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,680 - INFO - 正在获取 20250910 的数据（7/8）
+2025-09-10 21:13:45,764 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,764 - INFO - 正在获取 20250910 的数据（8/8）
+2025-09-10 21:13:45,849 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:13:45,849 - INFO - 所有日期的数据处理完成
+2025-09-10 21:13:45,851 - INFO - ============================================================
+2025-09-10 21:13:45,851 - INFO - 📊 本周数据更新统计
+2025-09-10 21:13:45,851 - INFO - ============================================================
+2025-09-10 21:13:45,851 - INFO - ⏱️  更新耗时: 0:00:00.906170
+2025-09-10 21:13:45,851 - INFO - 📈 实时行情: 0 条
+2025-09-10 21:13:45,852 - INFO - 📊 本周K线: 0 条
+2025-09-10 21:13:45,852 - INFO - 📅 交易日历: 0 条
+2025-09-10 21:13:45,852 - INFO - ✅ 无错误
+2025-09-10 21:13:45,852 - INFO - ============================================================
+2025-09-10 21:13:45,860 - INFO - 🎉 本周数据更新完成！
+2025-09-10 21:13:45,861 - INFO - 数据库连接已关闭
+2025-09-10 21:13:45,861 - INFO - ✅ 每周数据更新成功完成
+2025-09-10 21:14:15,718 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:14:15,719 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:14:15,719 - INFO - ============================================================
+2025-09-10 21:14:15,742 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:14:15,743 - INFO - 开始获取从 2025-07-12 21:14:15.743212 到 2025-09-10 21:14:15.743212 的机构调研数据，共 61 天
+2025-09-10 21:14:15,743 - INFO - 正在获取 20250910 的数据（1/61）
+2025-09-10 21:14:15,841 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:15,843 - INFO - 正在获取 20250910 的数据（2/61）
+2025-09-10 21:14:15,928 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:15,928 - INFO - 正在获取 20250910 的数据（3/61）
+2025-09-10 21:14:16,019 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,019 - INFO - 正在获取 20250910 的数据（4/61）
+2025-09-10 21:14:16,106 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,106 - INFO - 正在获取 20250910 的数据（5/61）
+2025-09-10 21:14:16,192 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,192 - INFO - 正在获取 20250910 的数据（6/61）
+2025-09-10 21:14:16,279 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,280 - INFO - 正在获取 20250910 的数据（7/61）
+2025-09-10 21:14:16,380 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,383 - INFO - 正在获取 20250910 的数据（8/61）
+2025-09-10 21:14:16,463 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,464 - INFO - 正在获取 20250910 的数据（9/61）
+2025-09-10 21:14:16,548 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,549 - INFO - 正在获取 20250910 的数据（10/61）
+2025-09-10 21:14:16,633 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,634 - INFO - 正在获取 20250910 的数据（11/61）
+2025-09-10 21:14:16,731 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,731 - INFO - 正在获取 20250910 的数据（12/61）
+2025-09-10 21:14:16,813 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,813 - INFO - 正在获取 20250910 的数据（13/61）
+2025-09-10 21:14:16,914 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:16,915 - INFO - 正在获取 20250910 的数据（14/61）
+2025-09-10 21:14:16,998 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,000 - INFO - 正在获取 20250910 的数据（15/61）
+2025-09-10 21:14:17,083 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,084 - INFO - 正在获取 20250910 的数据（16/61）
+2025-09-10 21:14:17,171 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,172 - INFO - 正在获取 20250910 的数据（17/61）
+2025-09-10 21:14:17,248 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,248 - INFO - 正在获取 20250910 的数据（18/61）
+2025-09-10 21:14:17,333 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,334 - INFO - 正在获取 20250910 的数据（19/61）
+2025-09-10 21:14:17,436 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,437 - INFO - 正在获取 20250910 的数据（20/61）
+2025-09-10 21:14:17,512 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,514 - INFO - 正在获取 20250910 的数据（21/61）
+2025-09-10 21:14:17,598 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,598 - INFO - 正在获取 20250910 的数据（22/61）
+2025-09-10 21:14:17,683 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,684 - INFO - 正在获取 20250910 的数据（23/61）
+2025-09-10 21:14:17,766 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,767 - INFO - 正在获取 20250910 的数据（24/61）
+2025-09-10 21:14:17,856 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,858 - INFO - 正在获取 20250910 的数据（25/61）
+2025-09-10 21:14:17,934 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:17,935 - INFO - 正在获取 20250910 的数据（26/61）
+2025-09-10 21:14:18,033 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,034 - INFO - 正在获取 20250910 的数据（27/61）
+2025-09-10 21:14:18,118 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,119 - INFO - 正在获取 20250910 的数据（28/61）
+2025-09-10 21:14:18,268 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,269 - INFO - 正在获取 20250910 的数据（29/61）
+2025-09-10 21:14:18,353 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,354 - INFO - 正在获取 20250910 的数据（30/61）
+2025-09-10 21:14:18,456 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,457 - INFO - 正在获取 20250910 的数据（31/61）
+2025-09-10 21:14:18,546 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,546 - INFO - 正在获取 20250910 的数据（32/61）
+2025-09-10 21:14:18,636 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,636 - INFO - 正在获取 20250910 的数据（33/61）
+2025-09-10 21:14:18,718 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,719 - INFO - 正在获取 20250910 的数据（34/61）
+2025-09-10 21:14:18,815 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,816 - INFO - 正在获取 20250910 的数据（35/61）
+2025-09-10 21:14:18,893 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,894 - INFO - 正在获取 20250910 的数据（36/61）
+2025-09-10 21:14:18,982 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:18,986 - INFO - 正在获取 20250910 的数据（37/61）
+2025-09-10 21:14:19,125 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,126 - INFO - 正在获取 20250910 的数据（38/61）
+2025-09-10 21:14:19,348 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,349 - INFO - 正在获取 20250910 的数据（39/61）
+2025-09-10 21:14:19,441 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,442 - INFO - 正在获取 20250910 的数据（40/61）
+2025-09-10 21:14:19,516 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,516 - INFO - 正在获取 20250910 的数据（41/61）
+2025-09-10 21:14:19,602 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,603 - INFO - 正在获取 20250910 的数据（42/61）
+2025-09-10 21:14:19,683 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,684 - INFO - 正在获取 20250910 的数据（43/61）
+2025-09-10 21:14:19,769 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,770 - INFO - 正在获取 20250910 的数据（44/61）
+2025-09-10 21:14:19,845 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,846 - INFO - 正在获取 20250910 的数据（45/61）
+2025-09-10 21:14:19,950 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:19,950 - INFO - 正在获取 20250910 的数据（46/61）
+2025-09-10 21:14:20,022 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,023 - INFO - 正在获取 20250910 的数据（47/61）
+2025-09-10 21:14:20,100 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,101 - INFO - 正在获取 20250910 的数据（48/61）
+2025-09-10 21:14:20,171 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,172 - INFO - 正在获取 20250910 的数据（49/61）
+2025-09-10 21:14:20,247 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,248 - INFO - 正在获取 20250910 的数据（50/61）
+2025-09-10 21:14:20,335 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,336 - INFO - 正在获取 20250910 的数据（51/61）
+2025-09-10 21:14:20,399 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,400 - INFO - 正在获取 20250910 的数据（52/61）
+2025-09-10 21:14:20,490 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,492 - INFO - 正在获取 20250910 的数据（53/61）
+2025-09-10 21:14:20,646 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,646 - INFO - 正在获取 20250910 的数据（54/61）
+2025-09-10 21:14:20,716 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,716 - INFO - 正在获取 20250910 的数据（55/61）
+2025-09-10 21:14:20,792 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:20,793 - INFO - 正在获取 20250910 的数据（56/61）
+2025-09-10 21:14:21,026 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:21,027 - INFO - 正在获取 20250910 的数据（57/61）
+2025-09-10 21:14:21,130 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:21,131 - INFO - 正在获取 20250910 的数据（58/61）
+2025-09-10 21:14:21,212 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:21,213 - INFO - 正在获取 20250910 的数据（59/61）
+2025-09-10 21:14:21,596 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:21,597 - INFO - 正在获取 20250910 的数据（60/61）
+2025-09-10 21:14:21,673 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:21,673 - INFO - 正在获取 20250910 的数据（61/61）
+2025-09-10 21:14:21,762 - ERROR - 获取 20250910 的数据时出错: 'NoneType' object is not subscriptable
+Traceback (most recent call last):
+  File "d:\Project\ADATA\adata\weekly_update_stock_info.py", line 1058, in update_stock_jgdy_detail
+    df = ak.stock_jgdy_tj_em(date=date_str)
+  File "D:\condaenv\env\wencai\lib\site-packages\akshare\stock_feature\stock_jgdy_em.py", line 40, in stock_jgdy_tj_em
+    total_page = data_json["result"]["pages"]
+TypeError: 'NoneType' object is not subscriptable
+2025-09-10 21:14:21,762 - INFO - 所有日期的数据处理完成
+2025-09-10 21:14:21,763 - INFO - ============================================================
+2025-09-10 21:14:21,763 - INFO - 📊 本周数据更新统计
+2025-09-10 21:14:21,763 - INFO - ============================================================
+2025-09-10 21:14:21,763 - INFO - ⏱️  更新耗时: 0:00:06.044063
+2025-09-10 21:14:21,763 - INFO - 📈 实时行情: 0 条
+2025-09-10 21:14:21,763 - INFO - 📊 本周K线: 0 条
+2025-09-10 21:14:21,763 - INFO - 📅 交易日历: 0 条
+2025-09-10 21:14:21,763 - INFO - ✅ 无错误
+2025-09-10 21:14:21,763 - INFO - ============================================================
+2025-09-10 21:14:21,770 - INFO - 🎉 本周数据更新完成！
+2025-09-10 21:14:21,770 - INFO - 数据库连接已关闭
+2025-09-10 21:14:21,771 - INFO - ✅ 每周数据更新成功完成
+2025-09-10 21:20:29,355 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:20:29,356 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:20:29,356 - INFO - ============================================================
+2025-09-10 21:20:29,360 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:20:29,360 - INFO - 开始获取从 2025-07-12 21:20:29.360104 到 2025-09-10 21:20:29.360104 的机构调研数据，共 61 天
+2025-09-10 21:20:29,360 - INFO - 正在获取 20250712 的数据（1/61）
+2025-09-10 21:20:36,679 - WARNING - 处理记录 600019 时出错: (1406, "Data too long for column 'receptionist_place' at row 1")
+2025-09-10 21:20:39,911 - WARNING - 处理记录 002126 时出错: (1406, "Data too long for column 'receptionist_name' at row 1")
+2025-09-10 21:20:40,731 - INFO - 数据库连接已关闭
+2025-09-10 21:24:19,762 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:24:19,762 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:24:19,762 - INFO - ============================================================
+2025-09-10 21:24:19,765 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:24:19,766 - INFO - 开始获取从 2025-07-12 21:24:19.766929 到 2025-09-10 21:24:19.766929 的机构调研数据，共 61 天
+2025-09-10 21:24:19,766 - INFO - 正在获取 20250712 的数据（1/61）
+2025-09-10 21:24:39,973 - INFO - 20250712 的数据处理完成，共 3109 条记录
+2025-09-10 21:24:39,973 - INFO - 正在获取 20250713 的数据（2/61）
+2025-09-10 21:24:43,625 - INFO - 数据库连接已关闭
+2025-09-10 21:29:26,728 - INFO - 🌟 每周数据更新程序启动
+2025-09-10 21:29:26,729 - INFO - 🚀 开始每周数据更新...
+2025-09-10 21:29:26,729 - INFO - ============================================================
+2025-09-10 21:29:26,732 - INFO - ✅ 成功连接到MySQL数据库
+2025-09-10 21:29:26,732 - INFO - 开始获取从 2024-09-10 21:29:26.732089 开始 的机构调研数据，共 365 days, 0:00:00 天
+2025-09-10 21:31:59,761 - INFO - 数据处理完成，共 23456 条记录
+2025-09-10 21:31:59,761 - INFO - 所有日期的数据处理完成
+2025-09-10 21:31:59,767 - INFO - ============================================================
+2025-09-10 21:31:59,767 - INFO - 📊 本周数据更新统计
+2025-09-10 21:31:59,768 - INFO - ============================================================
+2025-09-10 21:31:59,768 - INFO - ⏱️  更新耗时: 0:02:33.038376
+2025-09-10 21:31:59,768 - INFO - 📈 实时行情: 0 条
+2025-09-10 21:31:59,768 - INFO - 📊 本周K线: 0 条
+2025-09-10 21:31:59,768 - INFO - 📅 交易日历: 0 条
+2025-09-10 21:31:59,768 - INFO - ✅ 无错误
+2025-09-10 21:31:59,768 - INFO - ============================================================
+2025-09-10 21:31:59,776 - INFO - 🎉 本周数据更新完成！
+2025-09-10 21:31:59,776 - INFO - 数据库连接已关闭
+2025-09-10 21:31:59,777 - INFO - ✅ 每周数据更新成功完成

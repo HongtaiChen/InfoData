@@ -1,105 +1,5 @@
 [
   {
-    "date": "2025-08-31",
-    "update_time": "2025-08-31T08:30:29.047007",
-    "duration": "0:21:46.656777",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 520,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-31",
-    "update_time": "2025-08-31T13:38:51.157986",
-    "duration": "0:08:55.706949",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 109,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-31",
-    "update_time": "2025-08-31T13:48:55.558879",
-    "duration": "0:00:21.523882",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 9,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-31",
-    "update_time": "2025-08-31T13:49:20.594132",
-    "duration": "0:00:13.732898",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 7,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-08-31",
-    "update_time": "2025-08-31T14:19:20.152153",
-    "duration": "0:00:00.046507",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 0,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": [
-        "更新本周K线失败: too many values to unpack (expected 2)"
-      ]
-    },
-    "success": false
-  },
-  {
-    "date": "2025-09-02",
-    "update_time": "2025-09-02T19:45:50.070166",
-    "duration": "1:36:12.542378",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 2688,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
-    "date": "2025-09-06",
-    "update_time": "2025-09-06T07:26:51.426989",
-    "duration": "0:00:10.917433",
-    "stats": {
-      "stock_info": 0,
-      "current_market": 0,
-      "daily_kline": 1,
-      "trade_calendar": 0,
-      "concept_info": 0,
-      "errors": []
-    },
-    "success": true
-  },
-  {
     "date": "2025-09-06",
     "update_time": "2025-09-06T08:12:05.475438",
     "duration": "0:00:05.370212",
@@ -411,6 +311,104 @@
     "date": "2025-09-08",
     "update_time": "2025-09-08T21:48:30.084112",
     "duration": "0:00:09.928556",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T20:12:54.839192",
+    "duration": "0:00:10.114817",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T20:58:30.067400",
+    "duration": "0:00:00.810906",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T21:02:29.314634",
+    "duration": "0:00:01.248835",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T21:05:33.846056",
+    "duration": "0:00:00.936157",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T21:13:44.945030",
+    "duration": "0:00:00.907174",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T21:14:15.719149",
+    "duration": "0:00:06.044063",
+    "stats": {
+      "stock_info": 0,
+      "current_market": 0,
+      "daily_kline": 0,
+      "trade_calendar": 0,
+      "concept_info": 0,
+      "errors": []
+    },
+    "success": true
+  },
+  {
+    "date": "2025-09-10",
+    "update_time": "2025-09-10T21:29:26.729089",
+    "duration": "0:02:33.040376",
     "stats": {
       "stock_info": 0,
       "current_market": 0,

@@ -323,6 +323,33 @@ def create_stock_market_current_table(cursor):
     cursor.execute(sql)
     logger.info("✓ 股票实时行情表(stock_market_current)创建成功")
     
+
+def create_stock_jgdy_detail_table(cursor):
+    """创建机构调研详细表"""
+    sql = """
+     CREATE TABLE IF NOT EXISTS stock_jgdy_detail (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        stock_code VARCHAR(10) NOT NULL COMMENT '股票代码',
+        stock_name VARCHAR(200) NOT NULL COMMENT '股票名称',
+        new DECIMAL(10,3) COMMENT '最新价',
+        change_pct DECIMAL(8,4) COMMENT '涨跌幅(%)',
+        received_institution_count BIGINT COMMENT '接待机构数量',
+        received_method text COMMENT'接待方式',
+        receptionist_name text COMMENT'接待人员',
+        receptionist_place text COMMENT'接待地点',
+        receptionist_date DATE COMMENT'接待日期',
+        announcement_date DATE COMMENT'公告日期',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+        data_source varchar(100) COMMENT '数据来源',
+        INDEX idx_receptionist_date_stock_code (stock_code,receptionist_date),
+        INDEX idx_stock_code (stock_code),
+        INDEX idx_receptionist_date(receptionist_date),
+        INDEX idx_update_time (update_time)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='机构调研详细表'
+    """
+    cursor.execute(sql)
+    logger.info("✓ 机构调研详细表(stock_jgdy_detail)创建成功")
+    
 def create_stock_capital_flow_table(cursor):
     """创建日度资金流向表"""
     sql = """

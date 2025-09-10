@@ -1016,6 +1016,71 @@ class DailyDataUpdater:
             logger.error(f"❌ {error_msg}")
             self.update_stats['errors'].append(error_msg)   
 
+    def update_stock_jgdy_detail(self):
+        """
+        获取指定日期范围内的机构调研数据
+        :param start_date: 开始日期，格式为'YYYYMMDD'
+        :param end_date: 结束日期，格式为'YYYYMMDD'
+        """
+        try:
+            # 转换日期格式以便迭代
+            start_date = (datetime.now() +timedelta(days=-365))     
+            day_count = datetime.now() - start_date
+            logger.info(f"开始获取从 {start_date} 开始的机构调研数据，共 {day_count} 天")
+
+            # 定义SQL插入语句
+            insert_sql = """
+            INSERT INTO stock_jgdy_detail 
+            (stock_code, stock_name, new, change_pct, received_institution_count,
+            received_method, receptionist_name, receptionist_place, receptionist_date,
+            announcement_date, data_source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            # 删除本周旧数据
+            self.cursor.execute("""
+                DELETE FROM stock_jgdy_detail 
+                WHERE  receptionist_date >= %s 
+            """, (start_date.strftime("%Y-%m-%d")))
+            try:
+                # 调用akshare接口获取数据
+                df = ak.stock_jgdy_tj_em(date=start_date.strftime("%Y%m%d"))
+                # 处理每条记录
+                for _, row in df.iterrows():
+                    try:
+                        # 准备参数
+                        params = (
+                            str(row['代码']).strip() if pd.notna(row['代码']) else None,
+                            str(row['名称']).strip() if pd.notna(row['名称']) else None,
+                            float(row['最新价']) if pd.notna(row['最新价']) else None,
+                            float(row['涨跌幅']) if pd.notna(row['涨跌幅']) else None,
+                            int(row['接待机构数量']) if pd.notna(row['接待机构数量']) else None,
+                            str(row['接待方式']).strip() if pd.notna(row['接待方式']) else None,
+                            str(row['接待人员']).strip() if pd.notna(row['接待人员']) else None,
+                            str(row['接待地点']).strip() if pd.notna(row['接待地点']) else None,
+                            datetime.strptime(str(row['接待日期']), '%Y-%m-%d').date() if pd.notna(row['接待日期']) else None,
+                            datetime.strptime(str(row['公告日期']), '%Y-%m-%d').date() if pd.notna(row['公告日期']) else None,
+                            'AKSHARE'
+                        )                   
+                        # 执行插入
+                        self.cursor.execute(insert_sql, params) # type: ignore
+                    
+                    except Exception as e:
+                        logger.warning(f"处理记录 {row.get('代码', '未知代码')} 时出错: {str(e)}")
+                        continue
+                    self.connection.commit() # type: ignore
+                logger.info(f"数据处理完成，共 {len(df)} 条记录")
+                            
+            except Exception as e:
+                logger.error(f"获取数据时出错: {str(e)}", exc_info=True)
+            
+            logger.info("所有日期的数据处理完成")
+
+        except Exception as e:
+            logger.error(f"获取 的数据时出错: {str(e)}")
+   
+
+        
+
           
         
        
@@ -1084,7 +1149,7 @@ class DailyDataUpdater:
             
             
             # # 3.  更新关键指数数据
-            self.update_dc_index_market()    
+            # self.update_dc_index_market()    
             
             # 4. 更新财经日历数据
             # self.update_finance_calendar()  
@@ -1105,7 +1170,10 @@ class DailyDataUpdater:
             # self.update_stock_capital_flow()
             
             # # # 10. 更新最近7个自然日融资融券余额数据
-            # self.update_securities_margin()           
+            # self.update_securities_margin()    
+            
+            # 更新机构调研详细报告
+            self.update_stock_jgdy_detail()       
             
             # 生成统计报告
             self.show_update_summary()
