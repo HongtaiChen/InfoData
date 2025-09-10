@@ -273,3 +273,60 @@ where a.rn = 1
 select a.*, b.*, b.dividend_amount / a.total_price   as gxl
   from price_total a left join divdends_total b on a.stock_code  = b.stock_code 
 --where a.stock_code  = '002594'
+
+
+------------ 获取机构调研次数与股票涨跌关系-----------
+WITH monthly_research_stats AS (
+    -- 第一步：先按“股票+月份”统计基础调研数据（同之前逻辑）
+    SELECT 
+        stock_code,
+        stock_name,
+        DATE_FORMAT(receptionist_date, '%Y-%m') AS research_month,
+        SUM(received_institution_count) AS monthly_total_institutions,  -- 当月接待机构总数
+        COUNT(DISTINCT receptionist_date) AS monthly_research_days       -- 当月调研天数
+    FROM stock_jgdy_detail
+    WHERE receptionist_date >= '2025-01-01'  -- 筛选2025年1月及以后
+    GROUP BY stock_code, stock_name, DATE_FORMAT(receptionist_date, '%Y-%m')
+)
+-- 第三步：行转列核心逻辑（按股票分组，月份转为列）
+SELECT 
+    -- 股票基础信息
+    mrs_base.stock_code,
+    mrs_base.stock_name,
+    
+    -- 2025年各月接待机构总数（行转列核心：每个月份对应一列）
+    MAX(CASE WHEN mrs_base.research_month = '2025-01' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202501,
+    MAX(CASE WHEN mrs_base.research_month = '2025-02' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202502,
+    MAX(CASE WHEN mrs_base.research_month = '2025-03' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202503,
+    MAX(CASE WHEN mrs_base.research_month = '2025-04' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202504,
+    MAX(CASE WHEN mrs_base.research_month = '2025-05' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202505,
+    MAX(CASE WHEN mrs_base.research_month = '2025-06' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202506,
+    MAX(CASE WHEN mrs_base.research_month = '2025-07' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202507,
+    MAX(CASE WHEN mrs_base.research_month = '2025-08' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202508,
+    MAX(CASE WHEN mrs_base.research_month = '2025-09' THEN mrs_base.monthly_total_institutions ELSE 0 END) AS inst_count_202509,
+    -- 如需后续月份，按此格式扩展（如inst_count_202510、inst_count_202511等）
+    
+    -- 2025年各月调研天数（可选，按需添加）
+    MAX(CASE WHEN mrs_base.research_month = '2025-01' THEN mrs_base.monthly_research_days ELSE 0 END) AS research_days_202501,
+    MAX(CASE WHEN mrs_base.research_month = '2025-02' THEN mrs_base.monthly_research_days ELSE 0 END) AS research_days_202502,
+    -- 同理可扩展其他月份的调研天数
+    
+    -- 2025年1月以来累计接待机构总数（汇总指标）
+    SUM(mrs_base.monthly_total_institutions) AS total_inst_count_2025,
+    
+    -- 关联最新行情数据
+    lmd.5m_change_pct,
+    lmd.`60d_change_pct`,
+    lmd.ytd_change_pct
+
+FROM monthly_research_stats mrs_base
+-- 左关联最新行情（确保有调研数据的股票都显示，无行情则为NULL）
+ JOIN stock_market_current lmd 
+    ON mrs_base.stock_code = lmd.stock_code
+
+-- 按股票分组：将同一股票的不同月份数据聚合到一行
+GROUP BY mrs_base.stock_code, mrs_base.stock_name, 
+         lmd.5m_change_pct, lmd.60d_change_pct, lmd.ytd_change_pct
+
+-- 排序：按累计接待机构数降序，看最受关注的股票
+ORDER BY total_inst_count_2025 DESC;

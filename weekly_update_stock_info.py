@@ -1024,7 +1024,7 @@ class DailyDataUpdater:
         """
         try:
             # 转换日期格式以便迭代
-            start_date = (datetime.now() +timedelta(days=-365))     
+            start_date = (datetime.now() +timedelta(days=-7))     
             day_count = datetime.now() - start_date
             logger.info(f"开始获取从 {start_date} 开始的机构调研数据，共 {day_count} 天")
 
