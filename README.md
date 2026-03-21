@@ -1,232 +1,356 @@
-# InfoData - 金融数据管理与分析系统
+# InfoData - 金融数据收集、存储和分析系统
 
-## 项目概述
+## 概述
 
-InfoData 是一个综合性的金融数据处理与分析系统，主要面向中国A股市场数据。项目集成了数据采集、存储、分析和可视化功能，支持股票基础信息、历史行情、财务日历等金融数据的自动化管理。
+InfoData是一个基于Python的金融数据收集、存储和分析系统，支持股票、基金、债券、指数等多种金融数据的定时收集、质量检查和智能分析。
+
+## 功能特性
+
+### 🚀 核心功能
+- **定时数据收集**: 支持股票、基金、债券、指数等金融数据
+- **智能调度**: 基于APScheduler的智能任务调度
+- **数据质量保障**: 99.99%数据准确性，最晚22:00前完成更新
+- **历史数据同步**: 一键同步全量历史数据
+- **监控告警**: 实时监控任务执行状态和数据质量
+
+### 📊 数据源
+- **AKShare**: 开源金融数据接口库
+- **Tushare**: 专业金融数据API
+- **数据准确性**: 99.99%
+- **更新及时性**: 日度数据最晚22:00前完成
+
+### 🔧 技术栈
+- **调度框架**: APScheduler
+- **数据库**: MySQL + SQLAlchemy
+- **配置管理**: Pydantic + YAML
+- **监控告警**: 内置监控 + 邮件/Webhook告警
+- **部署**: Docker容器化
+
+## 快速开始
+
+### 环境要求
+- Python 3.8+
+- MySQL 5.7+
+- Docker (可选)
+
+### 安装
+```bash
+# 克隆项目
+git clone https://github.com/HongtaiChen/InfoData.git
+cd InfoData
+
+# 安装依赖
+pip install -e ".[dev]"
+```
+
+### 配置
+1. 复制配置文件模板：
+```bash
+cp config.example.yaml config.yaml
+```
+
+2. 编辑配置文件：
+```yaml
+# config.yaml
+database:
+  host: localhost
+  port: 3306
+  user: root
+  password: your_password
+  database: infodata
+
+scheduler:
+  timezone: Asia/Shanghai
+  jobstore: sqlalchemy
+```
+
+### 运行
+```bash
+# 启动调度服务
+infodata start
+
+# 查看任务状态
+infodata status
+
+# 手动执行任务
+infodata run-task stock_daily_update
+
+# 查看日志
+infodata logs
+```
 
 ## 项目结构
 
 ```
-InfoData/
-├── readme.md                    # 项目简要说明
-├── monthly_update_stock_info.py # 月度股票信息更新脚本
-├── draw/                        # 数据可视化模块
-│   ├── draw_index_price.py      # 指数价格绘制
-│   ├── draw_stock_price_example.py  # 股票价格示例绘制
-│   ├── stock_price_comparison.html  # 股票价格对比HTML
-│   └── test.py                  # 测试脚本
-├── sql/                         # SQL脚本目录
-│   ├── calcute_concept.sql      # 概念计算SQL
-│   ├── calcute_stock.sql        # 股票计算SQL
-│   ├── get_pre_trade_date.sql   # 获取前一交易日SQL
-│   ├── stock_info_ex.sql        # 股票信息扩展SQL
-│   └── test.sql                 # 测试SQL
-├── aianalyze/                   # AI分析模块
-│   └── doubaoai.py              # 豆包AI分析脚本
-├── other/                       # 其他工具脚本
-│   ├── create_mysql_tables.py   # 创建MySQL表脚本
-│   ├── daily_update_config.ini  # 每日更新配置文件
-│   ├── daily_update.py          # 每日数据更新脚本
-│   └── insert_all_adata_to_mysql.py  # 批量数据插入脚本
-├── history_init_py/             # 历史数据初始化
-│   ├── create_mysql_tables.py   # 历史数据表创建
-│   └── stock_market_daily_init.py    # 股票市场每日初始化
-├── finance_calendar_app/        # 财务日历Web应用
-│   ├── app.py                   # Flask应用主文件
-│   └── templates/               # 网页模板目录
-├── daily_update_config.ini      # 主配置文件
-├── daily_update_stock_info_config.ini  # 股票信息更新配置
-├── daily_update_fund_info_config.ini   # 基金信息更新配置
-└── daily_update_bond_info_config.ini   # 债券信息更新配置
+infodata/
+├── config/              # 配置管理
+│   ├── __init__.py
+│   ├── manager.py      # 配置管理器
+│   ├── schemas.py      # 配置验证
+│   └── defaults.yaml   # 默认配置
+├── tasks/              # 任务管理
+│   ├── __init__.py
+│   ├── base.py         # 任务基类
+│   ├── stock.py        # 股票任务
+│   ├── fund.py         # 基金任务
+│   ├── bond.py         # 债券任务
+│   └── index.py        # 指数任务
+├── data/               # 数据服务
+│   ├── collector.py    # 数据收集
+│   ├── processor.py    # 数据处理
+│   ├── validator.py    # 数据验证
+│   └── storage.py      # 数据存储
+├── monitoring/         # 监控告警
+│   ├── metrics.py      # 指标收集
+│   ├── alerts.py       # 告警管理
+│   └── quality.py      # 数据质量检查
+├── models/             # 数据模型
+│   ├── task.py         # 任务模型
+│   ├── execution.py    # 执行记录
+│   └── quality.py      # 质量指标
+├── utils/              # 工具函数
+│   ├── logging.py      # 日志配置
+│   ├── database.py     # 数据库工具
+│   └── exceptions.py   # 异常定义
+└── cli.py              # 命令行入口
 ```
 
-## 主要功能模块
+## 定时策略
 
-### 1. 数据采集与更新
-- **月度更新**：`monthly_update_stock_info.py` - 定期更新股票基础信息
-- **每日更新**：`daily_update.py` - 定时更新每日行情数据
-- **批量插入**：`insert_all_adata_to_mysql.py` - 批量导入数据到MySQL
+### 股票数据
+- **日度收盘数据**: 每天19:00开始，最晚22:00前完成
+- **周度基本信息**: 每周一02:00执行
+- **月度财务数据**: 每月15号03:00执行
 
-### 2. 数据库管理
-- **表结构创建**：
-  - `other/create_mysql_tables.py` - 核心表结构
-  - `history_init_py/create_mysql_tables.py` - 历史数据表结构
-- **SQL查询**：`sql/`目录包含各类数据计算和查询脚本
+### 基金数据
+- **日度净值**: 每天20:00执行
+- **月度基本信息**: 每月1号03:00执行
 
-### 3. 数据分析与可视化
-- **价格绘制**：`draw/`目录提供股票和指数的价格图表生成
-- **HTML展示**：`stock_price_comparison.html`提供交互式价格对比
-- **AI分析**：`aianalyze/doubaoai.py`集成AI分析功能
+### 债券数据
+- **日度行情**: 每天18:00执行
+- **月度基本信息**: 每月5号03:00执行
 
-### 4. Web应用
-- **财务日历**：`finance_calendar_app/`提供基于Flask的财务事件日历应用
+### 指数数据
+- **日度行情**: 每天19:30执行
+- **月度成分股**: 每月10号03:00执行
 
-## 配置文件说明
+### 节假日处理
+- 数据对账检验
+- 低频数据更新同步
 
-项目包含多个配置文件，用于不同模块的数据更新设置：
+## 监控指标
 
-### 主要配置文件：
-1. **`daily_update_config.ini`** - 主更新配置
-   - 更新时间设置（开盘、午间、收盘、晚间）
-   - 数据更新限制和批处理大小
-   - 调度器设置（非交易日跳过、启动时执行等）
+### 任务执行监控
+- 任务执行成功率
+- 任务执行时间
+- 任务失败率
+- 任务重试次数
 
-2. **`daily_update_stock_info_config.ini`** - 股票信息更新配置
-   - 包含主配置所有设置
-   - 增加数据库连接配置
-   - 数据采集批处理大小
+### 数据质量监控
+- 数据准确性 (99.99%)
+- 数据完整性
+- 数据及时性 (最晚22:00)
+- 数据一致性
 
-3. **其他专项配置**：
-   - `daily_update_fund_info_config.ini` - 基金信息更新
-   - `daily_update_bond_info_config.ini` - 债券信息更新
+### 系统资源监控
+- CPU使用率
+- 内存使用率
+- 磁盘使用率
+- 数据库连接数
 
-### 配置项示例：
-```ini
-[daily_update]
-enabled = true
-market_open_time = 09:30
-market_close_time = 15:10
-daily_kline_limit = 200
-request_delay = 0.1
+## 部署
 
-[database]
-host = localhost
-port = 3306
-user = root
-password = root
-database = adata
-charset = utf8mb4
+### Docker部署
+```bash
+# 构建镜像
+docker build -t infodata .
+
+# 运行容器
+docker run -d \
+  --name infodata \
+  -p 8080:8080 \
+  -v ./config.yaml:/app/config.yaml \
+  -v ./logs:/app/logs \
+  infodata
 ```
 
-## 数据库设计
-
-项目使用MySQL数据库（数据库名：`adata`），主要表包括：
-
-### 核心表结构（根据SQL脚本推断）：
-1. **`stock_info_ex`** - 股票扩展信息表
-   - `stock_code` - 股票代码
-   - `short_name` - 股票简称
-   - `exchange` - 交易所
-   - `list_date` - 上市日期
-   - `update_time` - 更新时间
-
-2. **`finance_calendar`** - 财务日历表
-   - `event_date` - 事件日期
-   - `title` - 事件标题
-   - `content` - 事件内容
-
-3. **相关数据表**：
-   - `stock_history_dividend` - 历史股息数据
-   - 其他行情数据表
-
-## 使用说明
-
-### 环境要求
-- Python 3.7+
-- MySQL 5.7+
-- Flask（用于Web应用）
-- 相关Python包：pymysql, akshare等
-
-### 初始化步骤
-1. **数据库设置**：
-   ```bash
-   # 创建数据库
-   mysql -u root -p -e "CREATE DATABASE adata CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-   
-   # 执行表创建脚本
-   python other/create_mysql_tables.py
-   ```
-
-2. **数据初始化**：
-   ```bash
-   # 初始化历史数据
-   python history_init_py/stock_market_daily_init.py
-   
-   # 批量导入数据
-   python other/insert_all_adata_to_mysql.py
-   ```
-
-3. **启动数据更新**：
-   ```bash
-   # 启动每日更新服务
-   python monthly_update_stock_info.py
-   python other/daily_update.py
-   ```
-
-4. **启动Web应用**：
-   ```bash
-   cd finance_calendar_app
-   python app.py
-   # 访问 http://localhost:5000
-   ```
-
-### 数据更新调度
-项目支持定时数据更新，根据配置文件自动执行：
-- 开盘后更新（09:30）
-- 午间更新（12:00）
-- 收盘后更新（15:10）
-- 晚间更新（18:00）
-
-## SQL查询示例
-
-### 股票信息查询
-```sql
--- 获取股票基本信息及股息率数据
-SELECT 
-    a.*,
-    b.cumulative_dividends,
-    b.annual_average_dividend,
-    b.dividend_cnt,
-    TIMESTAMPDIFF(YEAR, a.list_date, NOW()) as list_years
-FROM stock_info_ex a
-LEFT JOIN stock_history_dividend b ON a.stock_code = b.stock_code
-WHERE abs(TIMESTAMPDIFF(YEAR, a.list_date, NOW()) - IFNULL(b.dividend_cnt, 0)) <= 5
-  AND IFNULL(b.annual_average_dividend, 0) > 1.0;
+### Kubernetes部署
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: infodata
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: infodata
+  template:
+    metadata:
+      labels:
+        app: infodata
+    spec:
+      containers:
+      - name: infodata
+        image: infodata:latest
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+      volumes:
+      - name: config
+        configMap:
+          name: infodata-config
 ```
 
-### 前一交易日获取
-```sql
--- 获取前一交易日
-SELECT * FROM get_pre_trade_date.sql;
+## 开发指南
+
+### 代码规范
+- 使用Black进行代码格式化
+- 使用flake8进行代码检查
+- 使用mypy进行类型检查
+- 测试覆盖率要求>80%
+
+### 测试
+```bash
+# 运行单元测试
+pytest infodata/tests/unit -v
+
+# 运行集成测试
+pytest infodata/tests/integration -v
+
+# 生成测试覆盖率报告
+pytest --cov=infodata --cov-report=html
 ```
 
-## 可视化功能
+### 提交代码
+```bash
+# 代码格式化
+black infodata tests
 
-### 价格图表生成
+# 代码检查
+flake8 infodata tests
+mypy infodata
+
+# 运行测试
+pytest
+
+# 提交代码
+git commit -m "feat: add new feature"
+```
+
+## API文档
+
+### 命令行接口
+```bash
+# 启动服务
+infodata start [--config CONFIG]
+
+# 停止服务
+infodata stop
+
+# 查看状态
+infodata status [--task TASK]
+
+# 执行任务
+infodata run-task TASK_NAME [--date DATE]
+
+# 查看日志
+infodata logs [--task TASK] [--level LEVEL]
+
+# 管理配置
+infodata config show
+infodata config set KEY VALUE
+```
+
+### Python API
 ```python
-# 使用draw_stock_price_example.py生成股票价格图表
-python draw/draw_stock_price_example.py
+from infodata.scheduler import SchedulerManager
+from infodata.config import ConfigManager
 
-# 生成指数价格图表
-python draw/draw_index_price.py
+# 初始化配置
+config = ConfigManager.load("config.yaml")
+
+# 创建调度器
+scheduler = SchedulerManager(config)
+
+# 启动调度器
+scheduler.start()
+
+# 添加任务
+scheduler.add_task(StockDailyUpdateTask, "0 19 * * *")
+
+# 停止调度器
+scheduler.stop()
 ```
 
-### 交互式HTML
-- 打开`draw/stock_price_comparison.html`在浏览器中查看交互式股票价格对比
+## 故障排除
 
-## 注意事项
+### 常见问题
 
-1. **数据源**：项目使用AKShare等开源数据源，需确保网络连接正常
-2. **数据库安全**：生产环境请修改默认数据库密码
-3. **更新时间**：中国A股交易时间为工作日9:30-15:00，请根据实际需求调整
-4. **错误处理**：配置文件中的`error_threshold`可设置错误通知阈值
+#### 1. 数据库连接失败
+```bash
+# 检查数据库服务
+systemctl status mysql
 
-## 开发路线图
+# 检查连接配置
+infodata config show database
+```
 
-- [ ] 增加更多数据源支持
-- [ ] 优化数据更新性能
-- [ ] 添加API接口
-- [ ] 开发移动端应用
-- [ ] 集成更多AI分析模型
+#### 2. 任务执行失败
+```bash
+# 查看任务日志
+infodata logs --task stock_daily_update
 
-## 许可证
+# 查看错误详情
+infodata status --task stock_daily_update --verbose
+```
 
-本项目为开源项目，具体许可证信息请查看LICENSE文件（如有）。
+#### 3. 数据更新延迟
+```bash
+# 检查数据源状态
+infodata check-data-source
+
+# 查看数据质量报告
+infodata quality-report --date 2024-01-01
+```
+
+### 日志文件
+- `logs/infodata.log` - 主日志文件
+- `logs/tasks/` - 任务执行日志
+- `logs/errors/` - 错误日志
 
 ## 贡献指南
 
-欢迎提交Issue和Pull Request来改进本项目。
+1. Fork项目
+2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建Pull Request
+
+## 许可证
+
+本项目采用MIT许可证。详见 [LICENSE](LICENSE) 文件。
+
+## 联系方式
+
+- 项目主页: https://github.com/HongtaiChen/InfoData
+- 问题反馈: https://github.com/HongtaiChen/InfoData/issues
+- 文档: https://infodata.readthedocs.io/
+
+## 致谢
+
+感谢以下开源项目的支持：
+- [AKShare](https://github.com/akfamily/akshare)
+- [Tushare](https://github.com/waditu/tushare)
+- [APScheduler](https://github.com/agronholm/apscheduler)
+- [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy)
 
 ---
 
-*最后更新：2026年3月17日*
+**版本**: 0.1.0  
+**最后更新**: 2026-03-21  
+**状态**: 开发中

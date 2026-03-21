@@ -1,0 +1,239 @@
+# InfoData 配置文件示例
+# 复制此文件为 config.yaml 并修改配置
+
+# 应用基本信息
+app_name: "InfoData"
+version: "0.1.0"
+environment: "development"  # development, testing, production
+log_level: "INFO"
+log_file: "logs/infodata.log"
+
+# 数据库配置
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    user: "root"
+    password: ""  # 通过环境变量 DB_PASSWORD 设置
+    database: "infodata"
+    pool_size: 10
+    echo: false  # 是否输出SQL日志
+  
+  # SQLite配置（开发环境使用）
+  # sqlite:
+  #   database: "infodata.db"
+  #   echo: false
+
+# 调度器配置
+scheduler:
+  timezone: "Asia/Shanghai"
+  jobstore: "sqlalchemy"  # sqlalchemy, memory
+  executor: "process"     # process, thread
+  max_instances: 10
+  coalesce: true          # 合并错过执行的任务
+  misfire_grace_time: 300 # 错过执行的宽限时间（秒）
+
+# 任务配置
+tasks:
+  # 股票日度更新任务（19:00开始，最晚22:00前完成）
+  stock_daily_update:
+    enabled: true
+    schedule: "0 19 * * *"  # 每天19:00
+    retry_count: 3
+    retry_delay: 300        # 5分钟
+    timeout: 3600           # 1小时
+    max_runtime: 10800      # 3小时，确保22:00前完成
+  
+  # 股票信息周度更新任务
+  stock_info_weekly_update:
+    enabled: true
+    schedule: "0 2 * * 1"   # 每周一2:00
+    retry_count: 2
+    retry_delay: 600        # 10分钟
+    timeout: 7200           # 2小时
+  
+  # 基金月度更新任务
+  fund_monthly_update:
+    enabled: true
+    schedule: "0 3 1 * *"   # 每月1号3:00
+    retry_count: 2
+    retry_delay: 300
+    timeout: 3600
+  
+  # 债券月度更新任务
+  bond_monthly_update:
+    enabled: true
+    schedule: "0 3 5 * *"   # 每月5号3:00
+    retry_count: 2
+    retry_delay: 300
+    timeout: 3600
+  
+  # 指数月度更新任务
+  index_monthly_update:
+    enabled: true
+    schedule: "0 3 10 * *"  # 每月10号3:00
+    retry_count: 2
+    retry_delay: 300
+    timeout: 3600
+  
+  # 历史数据同步任务（手动触发）
+  history_sync:
+    enabled: false          # 手动启用
+    schedule: "0 0 * * *"   # 每天0:00（不会自动执行）
+    retry_count: 1
+    retry_delay: 60
+    timeout: 86400          # 24小时
+
+# 数据源配置
+data_sources:
+  # AKShare配置
+  akshare:
+    enabled: true
+    timeout: 30             # 请求超时时间（秒）
+    retry_count: 3          # 重试次数
+    cache_enabled: true     # 是否启用缓存
+    cache_ttl: 3600         # 缓存有效期（秒）
+  
+  # Tushare配置
+  tushare:
+    enabled: true
+    token: ""               # 通过环境变量 TUSHARE_TOKEN 设置
+    timeout: 30
+    retry_count: 3
+    cache_enabled: true
+    cache_ttl: 3600
+
+# 监控配置
+monitoring:
+  enabled: true
+  metrics_port: 9090        # 监控指标端口
+  
+  # 告警配置
+  alert:
+    # 邮件告警
+    email:
+      enabled: false
+      smtp_server: ""
+      smtp_port: 587
+      username: ""
+      password: ""
+      from_addr: ""
+      to_addrs: []
+    
+    # Webhook告警（钉钉、飞书等）
+    webhook:
+      enabled: false
+      url: ""               # 通过环境变量 ALERT_WEBHOOK_URL 设置
+      timeout: 10
+      retry_count: 3
+    
+    # 告警阈值
+    thresholds:
+      task_failure_rate: 0.1      # 任务失败率阈值（10%）
+      data_accuracy: 0.9999       # 数据准确性阈值（99.99%）
+      update_delay: 10800         # 更新延迟阈值（3小时）
+      system_cpu: 0.8             # CPU使用率阈值（80%）
+      system_memory: 0.8          # 内存使用率阈值（80%）
+      disk_usage: 0.9             # 磁盘使用率阈值（90%）
+  
+  # 数据质量监控
+  data_quality:
+    check_interval: 3600          # 检查间隔（秒）
+    accuracy_threshold: 0.9999    # 准确性阈值（99.99%）
+    completeness_threshold: 0.99  # 完整性阈值（99%）
+    timeliness_threshold: 10800   # 及时性阈值（3小时）
+
+# 性能配置
+performance:
+  # 数据库性能
+  database:
+    batch_size: 1000              # 批量插入大小
+    commit_interval: 100          # 提交间隔
+    connection_timeout: 30        # 连接超时（秒）
+  
+  # 缓存配置
+  cache:
+    enabled: true
+    backend: "memory"             # memory, redis
+    ttl: 3600                     # 缓存有效期（秒）
+    
+    # Redis配置（如果使用redis后端）
+    redis:
+      host: "localhost"
+      port: 6379
+      password: ""
+      db: 0
+  
+  # 并发控制
+  concurrency:
+    max_workers: 5                # 最大工作线程数
+    task_queue_size: 100          # 任务队列大小
+
+# 节假日配置
+holidays:
+  # 中国节假日（自动从网络获取）
+  china:
+    enabled: true
+    auto_update: true
+    update_interval: 86400        # 更新间隔（秒）
+  
+  # 节假日数据处理策略
+  processing:
+    data_reconciliation: true     # 数据对账检验
+    low_frequency_update: true    # 低频数据更新
+    skip_major_tasks: false       # 是否跳过主要任务
+
+# 备份配置
+backup:
+  enabled: true
+  schedule: "0 2 * * *"           # 每天2:00
+  retention_days: 30              # 保留天数
+  compression: true               # 是否压缩
+  
+  # 备份目标
+  targets:
+    - type: "local"               # local, s3, ftp
+      path: "./backups"
+    
+    # - type: "s3"
+    #   bucket: "infodata-backups"
+    #   region: "us-east-1"
+    #   access_key: ""
+    #   secret_key: ""
+
+# 安全配置
+security:
+  # 敏感信息加密
+  encryption:
+    enabled: true
+    algorithm: "AES-256-GCM"
+    key_rotation_days: 30
+  
+  # API访问控制
+  api:
+    rate_limit: 100               # 每分钟请求数限制
+    require_auth: false           # 是否需要认证
+    
+    # JWT配置（如果需要认证）
+    jwt:
+      secret_key: ""
+      algorithm: "HS256"
+      expire_minutes: 60
+  
+  # 审计日志
+  audit:
+    enabled: true
+    log_file: "logs/audit.log"
+    retention_days: 90
+
+# 开发配置（仅development环境生效）
+development:
+  debug: true
+  reload: true                    # 代码热重载
+  test_data: true                 # 使用测试数据
+  
+  # 测试数据配置
+  test_data_config:
+    stock_count: 100              # 测试股票数量
+    date_range: 30                # 测试数据日期范围（天）
+    generate_missing: true        # 生成缺失数据
