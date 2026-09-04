@@ -101,33 +101,38 @@ function formatVol(v?: number): string {
   return String(v)
 }
 
+async function fetchBars(): Promise<KLineData[]> {
+  const resp: any = await api.get('/market/kline', {
+    params: { code: props.code, limit: props.limit ?? 250, is_concept: props.isConcept ?? false },
+  })
+  return (resp.items || []).map((it: any) => {
+    const pct = it.change_pct != null ? Number(it.change_pct) : null
+    return {
+      timestamp: dayjs(it.trade_date).valueOf(),
+      open: Number(it.open),
+      high: Number(it.high),
+      low: Number(it.low),
+      close: Number(it.close),
+      volume: Number(it.volume),
+      changePct: pct != null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '',
+    }
+  })
+}
+
 async function loadKline() {
   if (!props.code || loadingFlag) return
   loadingFlag = true
   loadingMsg.value = '加载中...'
   try {
-    const resp: any = await api.get('/market/kline', {
-      params: { code: props.code, limit: props.limit ?? 250, is_concept: props.isConcept ?? false },
-    })
-    const list: KLineData[] = (resp.items || []).map((it: any) => {
-      const pct = it.change_pct != null ? Number(it.change_pct) : null
-      return {
-        timestamp: dayjs(it.trade_date).valueOf(),
-        open: Number(it.open),
-        high: Number(it.high),
-        low: Number(it.low),
-        close: Number(it.close),
-        volume: Number(it.volume),
-        changePct: pct != null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '',
-      }
-    })
-    if (!chart) return
-    if (list.length === 0) {
-      loadingMsg.value = '暂无K线数据'
-      chart.applyNewData([])
+    const list = await fetchBars()
+    if (!chart) {
+      // 已被 watch 销毁，跳过渲染
       return
     }
-    chart.applyNewData(list)
+    if (list.length === 0) {
+      loadingMsg.value = '暂无K线数据'
+      return
+    }
     const last = list[list.length - 1]
     latest.value = {
       trade_date: dayjs(last.timestamp).format('YYYY-MM-DD'),
@@ -145,17 +150,36 @@ async function loadKline() {
   }
 }
 
-onMounted(() => {
+function initChart() {
   if (!containerRef.value) return
-  chart = init(containerRef.value)
   if (chart) {
-    applyTonghuashunStyle(chart)
-    // 主图 MA + 副图 VOL/MACD（同花顺经典布局）
-    chart.createIndicator('MA', false, { id: 'candle_pane' })
-    chart.createIndicator('VOL')
-    chart.createIndicator('MACD')
-    loadKline()
+    dispose(chart)
+    chart = null
   }
+  chart = init(containerRef.value)
+  if (!chart) return
+  applyTonghuashunStyle(chart)
+  // 主图 MA + 副图 VOL/MACD（同花顺经典布局）
+  chart.createIndicator('MA', false, { id: 'candle_pane' })
+  chart.createIndicator('VOL')
+  chart.createIndicator('MACD')
+  // klinecharts >=9.x 使用 DataLoader（替代旧的 applyNewData）
+  chart.setDataLoader({
+    getBars: ({ type, callback }) => {
+      if (type !== 'init' && type !== 'backward' && type !== 'forward') return
+      fetchBars()
+        .then((list) => callback(list, false))
+        .catch((e) => {
+          loadingMsg.value = `加载失败: ${e?.message || e}`
+          console.error('[KLine]', props.code, e)
+          callback([], false)
+        })
+    },
+  })
+}
+
+onMounted(() => {
+  initChart()
 })
 
 onBeforeUnmount(() => {
@@ -168,7 +192,9 @@ onBeforeUnmount(() => {
 watch(
   () => props.code,
   () => {
-    if (chart) loadKline()
+    // 切换标的：重建 chart 触发 DataLoader.init 重新拉数
+    latest.value = null
+    initChart()
   },
 )
 </script>

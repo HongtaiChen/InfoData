@@ -99,8 +99,12 @@ onMounted(loadList)
 
 <template>
   <div>
-    <NAlert type="warning" :show-icon="false" closable style="margin-bottom: 12px">
-      资讯采集任务尚未接入（news 表暂无数据），配置好财联社/东财采集后此处自动展示。
+    <NAlert :type="total === 0 ? 'warning' : 'info'" :show-icon="false" closable style="margin-bottom: 12px">
+      {{
+        total === 0
+          ? '资讯列表为空，正在等待首次自动采集（每 30 分钟拉取 财联社 + 东财 双源）。'
+          : '资讯列表每 30 分钟自动滚动入库（财联社 + 东财 双源），可按来源筛选或按标题搜索。'
+      }}
     </NAlert>
 
     <NGrid :cols="3" :x-gap="12">

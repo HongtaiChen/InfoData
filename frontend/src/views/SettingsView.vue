@@ -26,18 +26,21 @@ async function loadDbStats() {
 const dataSources = [
   { source: '东方财富', scope: '股票日线/资讯/概念行情', status: '正常（偶发风控）', type: 'info' as const },
   { source: '腾讯', scope: '股票日线（主力备用源）', status: '稳定', type: 'success' as const },
-  { source: '新浪', scope: '股票日线备用', status: '稳定', type: 'success' as const },
+  { source: '新浪', scope: '股票日线备用 / 交易日历', status: '稳定', type: 'success' as const },
   { source: 'Tushare', scope: '股票日线保底（需 token）', status: '未配置', type: 'default' as const },
-  { source: '同花顺', scope: '概念板块/股息/日历', status: '存量数据', type: 'info' as const },
-  { source: '财联社', scope: '资讯（待接入）', status: '待开发', type: 'warning' as const },
+  { source: '同花顺', scope: '概念指数行情 + 成分股映射（成分股映射源受限待补）', status: '行情已接入', type: 'success' as const },
+  { source: '财联社', scope: '财联社电报（与东财双源轮询）', status: '已接入', type: 'success' as const },
 ]
 
 const taskOverview = [
-  { name: 'stock_daily_incr', desc: '股票日线增量采集（东财→腾讯→新浪→Tushare 四级降级）', schedule: '手动/定时' },
-  { name: 'news_cls', desc: '财联社快讯采集（待开发）', schedule: '定时' },
-  { name: 'news_em', desc: '东方财富资讯采集（待开发）', schedule: '定时' },
-  { name: 'concept_daily', desc: '同花顺概念行情采集（待开发）', schedule: '每日' },
-  { name: 'calendar_event', desc: '财经日历事件采集（待开发）', schedule: '每日' },
+  { name: 'stock_daily_incr', desc: '股票日线增量采集（东财→腾讯→新浪→Tushare 四级降级）', schedule: '工作日 19:00', statusType: 'success' as const },
+  { name: 'news_fetch', desc: '资讯采集：财联社 + 东财 双源去重', schedule: '每 30 分钟', statusType: 'success' as const },
+  { name: 'concept_market_sync', desc: '同花顺概念板块行情增量同步（375 概念，85265 行历史已回补）', schedule: '工作日 20:00', statusType: 'success' as const },
+  { name: 'market_current_sync', desc: '行情快照聚合（最新交易日 OHLC + YTD）', schedule: '工作日 18:30', statusType: 'success' as const },
+  { name: 'trade_calendar_sync', desc: '交易日历补齐（含 year/month/day 冗余列回填）', schedule: '周日 02:30', statusType: 'success' as const },
+  { name: 'ai_concept_analysis', desc: '日历事件 AI 概念分析（豆包，无 Key 时降级占位）', schedule: '手动/触发', statusType: 'info' as const },
+  { name: 'finance_calendar_sync', desc: '投资日历事件（原 JY 源失效，待替代源）', schedule: '源失效', statusType: 'warning' as const },
+  { name: 'ths_stock_concepts_sync', desc: '同花顺概念成分股映射（东财风控停摆，源恢复后补）', schedule: '源受限', statusType: 'warning' as const },
 ]
 
 onMounted(loadDbStats)
@@ -46,7 +49,7 @@ onMounted(loadDbStats)
 <template>
   <div>
     <NAlert type="info" :show-icon="true" closable style="margin-bottom: 12px">
-      InfoData 数据分析平台 · 本栏目展示系统状态与数据源配置，具体运维操作（启停任务、修改调度）将在后续版本开放。
+      InfoData 数据分析平台 · 本栏目展示系统状态与数据源配置；运维操作（启停任务 / 修改 cron / 立即执行）已迁移到「作业监控」栏目。
     </NAlert>
 
     <NSpace vertical :size="12">
@@ -69,10 +72,10 @@ onMounted(loadDbStats)
             <span>沪深 A 股 ~5400 只，更新至 2026-09-01</span>
           </NDescriptionsItem>
           <NDescriptionsItem label="概念板块">
-            <span>同花顺概念指数 + 成分股</span>
+            <span>同花顺 398 个概念指数（K线最新 2026-09-02） · 成分股映射待源恢复</span>
           </NDescriptionsItem>
           <NDescriptionsItem label="资讯">
-            <span style="color: #d03050">待接入采集任务</span>
+            <span>东财 + 财联社 双源 · 346 条（滚动入库，每 30 分钟）</span>
           </NDescriptionsItem>
         </NDescriptions>
       </NCard>
@@ -111,7 +114,7 @@ onMounted(loadDbStats)
             <tr v-for="t in taskOverview" :key="t.name">
               <td style="font-weight: 600; font-family: monospace">{{ t.name }}</td>
               <td style="color: #666">{{ t.desc }}</td>
-              <td><NTag size="small" :bordered="false" :type="t.schedule === '待开发' ? 'warning' : 'info'">{{ t.schedule }}</NTag></td>
+              <td><NTag size="small" :bordered="false" :type="t.statusType">{{ t.schedule }}</NTag></td>
             </tr>
           </tbody>
         </NTable>
