@@ -1,0 +1,26 @@
+# ---- 密钥与环境 ----
+.env
+.env.*
+!.env.example
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- 日志与缓存 ----
+*.log
+logs/
+.cache/
+
+# ---- 测试产物 ----
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ---- 编辑器 ----
+.vscode/
+.idea/
+.DS_Store

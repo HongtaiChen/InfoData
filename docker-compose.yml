@@ -1,0 +1,101 @@
+# ============================================================
+# InfoData 容器化编排（P5）
+#
+# 两种运行模式：
+#
+# 模式 A：直连宿主机 MySQL（默认，开发期推荐）
+#   docker compose up -d --build
+#   - 只启动 backend + frontend，MySQL 继续用本机 3306
+#   - .env 配置 INFO_DATA_DB_HOST=host.docker.internal
+#
+# 模式 B：全部容器化（含 MySQL 8.0，生产推荐）
+#   docker compose --profile docker-mysql up -d --build
+#   - 启动 mysql + backend + frontend 三服务
+#   - 首次需先迁移数据（见 scripts/migrate-local-to-docker.md）
+#
+# 访问：
+#   前端 http://127.0.0.1:8080
+#   后端 http://127.0.0.1:18000/api/health
+#   MySQL（容器版）127.0.0.1:3307
+# ============================================================
+
+name: infodata
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: infodata-mysql
+    restart: unless-stopped
+    profiles: ["docker-mysql"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: adata
+      MYSQL_USER: infodata
+      MYSQL_PASSWORD: ${INFO_DATA_DB_PASSWORD:-infodata123}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-time-zone=+08:00
+      - --max-connections=500
+    ports:
+      - "3307:3306"   # 本机 3306 已有本地 MySQL，容器映射 3307
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: infodata-backend
+    restart: unless-stopped
+    # 模式 A（默认）连宿主机 MySQL；模式 B 由 .env 覆盖为 mysql 容器地址
+    environment:
+      INFO_DATA_DB_HOST: ${INFO_DATA_DB_HOST:-host.docker.internal}
+      INFO_DATA_DB_PORT: ${INFO_DATA_DB_PORT:-3306}
+      INFO_DATA_DB_USER: ${INFO_DATA_DB_USER:-root}
+      INFO_DATA_DB_PASSWORD: ${INFO_DATA_DB_PASSWORD:-root}
+      INFO_DATA_DB_NAME: ${INFO_DATA_DB_NAME:-adata}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      ARK_API_KEY: ${ARK_API_KEY:-}
+      ARK_MODEL_ID: ${ARK_MODEL_ID:-}
+      NO_PROXY: "*"
+      TZ: Asia/Shanghai
+    ports:
+      - "18000:8000"  # 本机 8000 留给 dev server，容器映射 18000
+    depends_on:
+      mysql:
+        condition: service_healthy
+        required: false   # 模式 A 无 mysql 服务也不阻塞
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: infodata-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mysql_data:
+    name: infodata-mysql-data

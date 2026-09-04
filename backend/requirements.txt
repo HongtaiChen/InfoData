@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pymysql>=1.1
+pandas>=2.0
+akshare>=1.14
+APScheduler>=3.10,<4
+# tushare 可选（备源，需 TUSHARE_TOKEN 环境变量）
+# tushare>=1.4

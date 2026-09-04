@@ -1,0 +1,16 @@
+# 依赖目录（构建阶段用 npm ci 重新安装）
+node_modules/
+
+# 构建产物（构建阶段生成）
+dist/
+
+# 环境与密钥
+.env
+.env.*
+
+# 日志
+*.log
+
+# Git
+.git/
+.gitignore
