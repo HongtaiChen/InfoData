@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
 import {
   NCard, NDataTable, NTag, NSelect, NStatistic, NGrid, NGi, NSpace, NButton,
   NSwitch, NModal, NForm, NFormItem, NInput, NPopconfirm, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
+import { CronExpressionParser } from 'cron-parser'
+import dayjs from 'dayjs'
 import api from '../api'
 
 const message = useMessage()
@@ -66,11 +68,51 @@ const editingTask = ref<any>(null)
 const editCron = ref('')
 const editEnabled = ref(true)
 
+// cron 实时预览（接下来 5 次运行时间）
+const weekCn = ['日', '一', '二', '三', '四', '五', '六']
+const cronPreview = ref<{ mode: 'idle' | 'manual' | 'invalid' | 'ok'; times: string[]; error?: string }>({
+  mode: 'idle',
+  times: [],
+})
+let previewTimer: any = null
+
+function recomputePreview(expr: string) {
+  if (previewTimer) clearTimeout(previewTimer)
+  previewTimer = setTimeout(() => {
+    const v = (expr || '').trim()
+    if (!v || v === '手动') {
+      cronPreview.value = { mode: 'manual', times: [] }
+      return
+    }
+    try {
+      const interval = CronExpressionParser.parse(v)
+      const times: string[] = []
+      for (let i = 0; i < 5; i++) {
+        const d = interval.next().toDate()
+        const dt = dayjs(d)
+        times.push(
+          `${dt.format('YYYY-MM-DD')} 周${weekCn[dt.day()]} ${dt.format('HH:mm')}`,
+        )
+      }
+      cronPreview.value = { mode: 'ok', times }
+    } catch (e: any) {
+      cronPreview.value = {
+        mode: 'invalid',
+        times: [],
+        error: `cron 格式无效：${e?.message || e}`,
+      }
+    }
+  }, 300)
+}
+
+watch(editCron, (v) => recomputePreview(v))
+
 function openEdit(r: any) {
   editingTask.value = r
   editCron.value = r.cron && r.cron !== '手动' ? r.cron : ''
   editEnabled.value = !!r.enabled
   showEdit.value = true
+  recomputePreview(editCron.value)
 }
 
 async function saveEdit() {
@@ -376,6 +418,27 @@ onUnmounted(() => {
         </NFormItem>
         <NFormItem label="Cron">
           <NInput v-model:value="editCron" placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 1-5（工作日 19:00）" />
+          <div
+            v-if="cronPreview.mode === 'ok'"
+            style="margin-top: 10px; padding: 8px 10px; background: #f0f9f3; border-radius: 4px; font-size: 12px; color: #2a8e5c; line-height: 1.8"
+          >
+            <div style="font-weight: 500; margin-bottom: 4px">接下来 5 次实际运行：</div>
+            <div v-for="(t, i) in cronPreview.times" :key="i" style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace">
+              {{ i + 1 }}. {{ t }}
+            </div>
+          </div>
+          <div
+            v-else-if="cronPreview.mode === 'invalid'"
+            style="margin-top: 10px; padding: 6px 10px; font-size: 12px; color: #d03050; background: #fef4f4; border-radius: 4px"
+          >
+            {{ cronPreview.error }}
+          </div>
+          <div
+            v-else-if="cronPreview.mode === 'manual'"
+            style="margin-top: 8px; font-size: 12px; color: #999"
+          >
+            留空或填「手动」= 仅手动触发，不参与自动调度
+          </div>
         </NFormItem>
         <NFormItem label="格式说明">
           <div style="font-size: 12px; color: #666; line-height: 1.9">
