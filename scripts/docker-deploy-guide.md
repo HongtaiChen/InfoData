@@ -1,4 +1,4 @@
-# InfoData 容器化部署指南（P5）
+# InvestBuddy 容器化部署指南（P5）
 
 > 基于 docker-compose 编排，支持两种运行模式，覆盖开发（直连本机 MySQL）与生产（全容器化）场景。
 
@@ -19,7 +19,7 @@
 docker compose up -d --build
 
 # 3. 验证
-curl http://127.0.0.1:18000/api/health     # {"status":"ok","service":"InfoData API"}
+curl http://127.0.0.1:18000/api/health     # {"status":"ok","service":"InvestBuddy API"}
 # 浏览器访问 http://127.0.0.1:8080
 ```
 

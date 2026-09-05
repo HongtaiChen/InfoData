@@ -46,7 +46,7 @@ onMounted(loadDbStats)
 <template>
   <div>
     <NAlert type="info" :show-icon="true" closable style="margin-bottom: 12px">
-      InfoData 数据分析平台 · 本栏目展示系统状态与数据源配置；运维操作（启停任务 / 修改 cron / 立即执行）已迁移到「作业监控」栏目。
+      InvestBuddy 数据分析平台 · 本栏目展示系统状态与数据源配置；运维操作（启停任务 / 修改 cron / 立即执行）已迁移到「作业监控」栏目。
     </NAlert>
 
     <NSpace vertical :size="12">

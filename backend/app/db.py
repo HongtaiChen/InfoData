@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 数据库配置模块
+InvestBuddy 数据库配置模块
 从环境变量读取数据库连接信息（密钥不硬编码、不入库、不进 Git）
 开发期默认值对应本地 MySQL（adata 库）
 """

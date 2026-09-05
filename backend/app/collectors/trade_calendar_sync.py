@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 交易日历采集器
+InvestBuddy 交易日历采集器
 用 akshare 新浪交易日历接口补齐 trade_calendar（投资日历"休市/开市"标记依赖此表）。
 - 数据源：ak.tool_trade_date_hist_sina()（全量交易日，1990 - 次年）
 - 去重：INSERT IGNORE + 唯一键 uk_trade_date

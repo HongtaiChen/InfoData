@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 后端 API 入口
+InvestBuddy 后端 API 入口
 启动：uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 from contextlib import asynccontextmanager
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="InfoData API",
+    title="InvestBuddy API",
     description="个人金融数据平台后端：行情 / 概念 / 投资日历 / 资讯 / 分析研究 / 作业监控",
     version="0.1.0",
     lifespan=lifespan,
@@ -49,4 +49,4 @@ app.include_router(ai.router, prefix="/api/ai", tags=["AI 分析"])
 @app.get("/api/health")
 def health():
     """健康检查"""
-    return {"status": "ok", "service": "InfoData API"}
+    return {"status": "ok", "service": "InvestBuddy API"}

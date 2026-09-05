@@ -1,4 +1,4 @@
-# InfoData 前端
+# InvestBuddy 前端
 
 Vue 3 + Vite + Naive UI + TypeScript 构建的本地 A 股投研平台前端。
 
@@ -37,7 +37,7 @@ src/
 │   ├── NewsView.vue        # 资讯浏览
 │   ├── AnalysisView.vue    # 分析研究
 │   ├── JobsView.vue        # 作业监控
-│   └── SettingsView.vue    # 设置
+│   └── SettingsView.vue    # 系统设置
 ├── App.vue           # 根组件（NConfigProvider + 路由出口）
 ├── main.ts           # 入口
 └── style.css         # 全局样式（A 股涨红跌绿约定）

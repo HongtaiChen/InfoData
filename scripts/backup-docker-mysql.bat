@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  InfoData - Docker MySQL Backup (Windows)
+rem  InvestBuddy - Docker MySQL Backup (Windows)
 rem  备份 Docker MySQL 容器数据到宿主机文件
 rem
 rem  Usage: backup-docker-mysql.bat

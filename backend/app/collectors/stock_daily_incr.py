@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 股票日线增量采集器
+InvestBuddy 股票日线增量采集器
 从存量最新交易日开始，增量补齐股票日 K 线到最新交易日。
 - 数据源四级降级：东财 stock_zh_a_hist → 腾讯 stock_zh_a_hist_tx → 新浪 stock_zh_a_daily → Tushare
 - 去重：INSERT IGNORE + 唯一键 (stock_code, trade_date)

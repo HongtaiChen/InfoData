@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  InfoData - Docker one-click start (Windows)
+rem  InvestBuddy - Docker one-click start (Windows)
 rem
 rem  Usage:
 rem    docker-start.bat          - Mode A: backend+frontend, use local MySQL

@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  InfoData - Local MySQL to Docker MySQL Migration (Windows)
+rem  InvestBuddy - Local MySQL to Docker MySQL Migration (Windows)
 rem  本机 MySQL -> Docker MySQL 容器数据迁移
 rem
 rem  Prerequisites:

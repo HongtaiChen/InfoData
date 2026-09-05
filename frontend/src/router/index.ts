@@ -14,7 +14,7 @@ const router = createRouter({
         { path: 'news', name: 'news', component: () => import('@/views/NewsView.vue'), meta: { title: '资讯浏览', icon: '📰' } },
         { path: 'analysis', name: 'analysis', component: () => import('@/views/AnalysisView.vue'), meta: { title: '分析研究', icon: '🔬' } },
         { path: 'jobs', name: 'jobs', component: () => import('@/views/JobsView.vue'), meta: { title: '作业监控', icon: '⚙️' } },
-        { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { title: '设置', icon: '🔧' } },
+        { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { title: '系统设置', icon: '🔧' } },
       ],
     },
   ],

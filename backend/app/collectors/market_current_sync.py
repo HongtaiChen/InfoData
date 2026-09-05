@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 行情快照聚合采集器
+InvestBuddy 行情快照聚合采集器
 从 stock_market_daily（日线，采集器持续更新）最新交易日聚合生成 stock_market_current（行情看板快照）。
 - 纯本地 SQL 计算，无外部数据源、无风控风险
 - 解决快照表停更问题：行情看板表格永远展示"最近一个交易日的收盘快照"

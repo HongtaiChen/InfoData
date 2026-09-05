@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 采集任务统一运行入口
+InvestBuddy 采集任务统一运行入口
 - 从 task_config 读取任务配置（启停/cron/参数）
 - 每个任务执行时记录 task_runs（running -> success/failed + 写入条数）
 - 支持命令行手动触发：python -m app.tasks.run stock_daily_incr
@@ -168,7 +168,7 @@ def run_task(task_name: str) -> int:
 
 def main():
     _setup_logging()
-    parser = argparse.ArgumentParser(description="InfoData 采集任务")
+    parser = argparse.ArgumentParser(description="InvestBuddy 采集任务")
     parser.add_argument("task", nargs="?", help="任务名（如 stock_daily_incr）")
     parser.add_argument("--list", action="store_true", help="列出全部已注册任务")
     args = parser.parse_args()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 资讯采集器（财联社 cls + 东财 em 双源，news 表）
+InvestBuddy 资讯采集器（财联社 cls + 东财 em 双源，news 表）
 - 东财快讯：np-listapi.eastmoney.com/comm/web/getFastNewsList（已验证连通）
 - 财联社：走 akshare stock_info_global_cls（内部签名），失败仅告警不中断
 - 去重：按 (title, published_at) 判重（news 表无唯一键，不改表结构）

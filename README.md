@@ -1,4 +1,4 @@
-# InfoData — 个人 A 股金融数据平台
+# InvestBuddy — 个人 A 股金融数据平台
 
 > 本地部署的 A 股投研数据平台：自动采集行情 / 概念 / 投资日历 / 资讯数据到本地 MySQL，提供浏览器端查看与作业监控，支持 AI 事件-概念分析。
 
@@ -12,7 +12,7 @@
 | 📰 资讯浏览 | `/news` | 财联社 / 东财双源新闻列表 + 详情 |
 | 📊 分析研究 | `/analysis` | 股息率 / 概念排名 / 年初至今涨幅 TOP 模板 + ECharts 柱状图 |
 | ⚙️ 作业监控 | `/jobs` | 任务配置 + 运行记录（10 秒自动轮询）+ 统计卡片 |
-| 🛠 设置 | `/settings` | 系统状态 + 数据源配置 + 任务规划 |
+| 🛠 系统设置 | `/settings` | 系统状态 + 数据源配置 + 任务规划 |
 
 ## 技术栈
 
@@ -73,7 +73,7 @@ docker-start.bat full        :: 模式 B：mysql+backend+frontend 全容器化
 ## 目录结构
 
 ```
-InfoData/
+InvestBuddy/
 ├── backend/                 # FastAPI 后端
 │   ├── app/
 │   │   ├── api/             # 7 个 API 模块（market/concept/calendar/news/analysis/jobs/ai）

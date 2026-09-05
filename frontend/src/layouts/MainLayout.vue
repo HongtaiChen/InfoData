@@ -39,9 +39,9 @@ const collapsed = ref(false)
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
-      <div style="padding:16px 12px;font-weight:600;font-size:16px;color:#185FA5;border-bottom:1px solid #eee;">
-        <span v-if="!collapsed">📊 InfoData</span>
-        <span v-else>📊</span>
+      <div style="height:54px;padding:14px 12px;display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;color:#185FA5;border-bottom:1px solid #eee;box-sizing:border-box;">
+        <img src="/favicon.svg" alt="InvestBuddy" style="width:26px;height:26px;flex:none;display:block;" />
+        <span v-if="!collapsed" style="white-space:nowrap;">InvestBuddy</span>
       </div>
       <NMenu
         :value="activeKey"
@@ -56,7 +56,7 @@ const collapsed = ref(false)
       <NLayoutHeader bordered style="padding:12px 24px;height:56px;display:flex;align-items:center;justify-content:space-between">
         <NSpace align="center">
           <NText depth="2" style="font-size:18px;font-weight:600">
-            {{ route.meta?.title || 'InfoData 投研平台' }}
+            {{ route.meta?.title || 'InvestBuddy 投研平台' }}
           </NText>
         </NSpace>
         <NSpace align="center">

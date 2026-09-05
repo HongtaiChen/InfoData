@@ -1,7 +1,7 @@
 import type { GlobalThemeOverrides } from 'naive-ui'
 
 /**
- * InfoData 全站配色（蓝骨金魂 v2）
+ * InvestBuddy 全站配色（蓝骨金魂 v2）
  * 规范文档：docs/design/颜色体系设计规范.md
  * - primary / info = 深空蓝 #185FA5（hover 亮蓝 #1E6FFF）
  * - success 也映射为蓝：双保险，杜绝「绿=成功」与「绿=行情跌」同屏混淆

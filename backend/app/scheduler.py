@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 定时调度器（APScheduler）
+InvestBuddy 定时调度器（APScheduler）
 
 - 消费 task_config 表中 enabled=1 且 cron 合法（5 字段 crontab）的任务
 - 只调度 TASKS 注册表中有实现的任务（未实现任务跳过，避免空跑）

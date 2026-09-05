@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InfoData 作业记录模块
+InvestBuddy 作业记录模块
 所有采集任务统一通过 TaskRecorder 记录运行状态到 task_runs 表：
   running -> (success | failed) + 写入条数 + 错误信息
 """
