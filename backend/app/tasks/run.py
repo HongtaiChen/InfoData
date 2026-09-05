@@ -26,6 +26,8 @@ from ..collectors.index_market_sync import IndexMarketSyncCollector
 from ..collectors.bond_profit_sync import BondProfitSyncCollector
 from ..collectors.finance_calendar_sync import FinanceCalendarSyncCollector
 from ..collectors.data_quality_check import DataQualityCheckCollector
+from ..collectors.stock_status_sync import StockStatusSyncCollector
+from ..collectors.stock_company_sync import StockCompanySyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -185,6 +187,30 @@ def run_data_quality_check(params: dict) -> int:
     return result["records_written"]
 
 
+# ============ 股票档案域（2026-09-05） ============
+
+def run_stock_status_sync(params: dict) -> int:
+    """上市/退市状态同步（stock_info.list_status/delist_date，Baostock 周更全量）"""
+    collector = StockStatusSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    return result["records_written"]
+
+
+def run_stock_company_sync(params: dict) -> int:
+    """公司档案同步（stock_company_profile：巨潮官方源，差量逐只更新）"""
+    p = _task_params(params, {"max_count": 200, "refresh_days": 30})
+    collector = StockCompanySyncCollector(
+        max_count=int(p.get("max_count", 200)),
+        refresh_days=int(p.get("refresh_days", 30)),
+    )
+    result = collector.run()
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 公司档案 {result['error_count']} 只失败（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -202,6 +228,9 @@ TASKS = {
     "finance_calendar_sync": run_finance_calendar_sync,
     # 2026-09-05 数据质量体检（读 dq_rules → 写 dq_report）
     "data_quality_check": run_data_quality_check,
+    # 2026-09-05 股票档案域（Baostock 上市/退市状态 + 巨潮公司档案）
+    "stock_status_sync": run_stock_status_sync,
+    "stock_company_sync": run_stock_company_sync,
 }
 
 
