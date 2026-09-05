@@ -379,18 +379,18 @@ onUnmounted(() => {
 }
 
 .cron-preview-ok {
-  background: linear-gradient(180deg, #f0f9f3 0%, #e8f5ee 100%);
-  border: 1px solid #cce8d6;
+  background: #EFF6FF;
+  border: 1px solid #B5D4F4;
   padding: 14px 16px;
-  color: #2a8e5c;
-  box-shadow: 0 1px 2px rgba(42, 142, 92, 0.06);
+  color: #0C447C;
+  box-shadow: 0 1px 2px rgba(24, 95, 165, 0.06);
 }
 
 .cron-preview-err {
-  background: #fef4f4;
-  border: 1px solid #fbd5d5;
+  background: #fef7ec;
+  border: 1px solid #f5dfb5;
   padding: 10px 14px;
-  color: #d03050;
+  color: #a05e03;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -416,8 +416,8 @@ onUnmounted(() => {
 .cron-preview-tag {
   margin-left: auto;
   border: none !important;
-  background: rgba(42, 142, 92, 0.12) !important;
-  color: #2a8e5c !important;
+  background: rgba(24, 95, 165, 0.12) !important;
+  color: #185FA5 !important;
 }
 
 .cron-preview-list {
@@ -449,7 +449,7 @@ onUnmounted(() => {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #2a8e5c;
+  background: #185FA5;
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -463,17 +463,17 @@ onUnmounted(() => {
 }
 
 .cron-preview-week {
-  color: #6b8e7c;
+  color: #4a6f96;
   font-size: 12px;
   text-align: center;
-  background: rgba(42, 142, 92, 0.08);
+  background: rgba(24, 95, 165, 0.09);
   padding: 2px 6px;
   border-radius: 4px;
   white-space: nowrap;
 }
 
 .cron-preview-time {
-  color: #2a8e5c;
+  color: #185FA5;
   font-weight: 600;
   font-size: 15px;
   text-align: right;
@@ -599,7 +599,7 @@ onUnmounted(() => {
               <div class="cron-preview-head">
                 <span class="cron-preview-icon">📅</span>
                 <span class="cron-preview-title">接下来 5 次实际运行</span>
-                <NTag size="small" :bordered="false" type="success" class="cron-preview-tag">实时预览</NTag>
+                <NTag size="small" :bordered="false" type="info" class="cron-preview-tag">实时预览</NTag>
               </div>
               <div class="cron-preview-list">
                 <div v-for="(t, i) in cronPreview.times" :key="i" class="cron-preview-row">
