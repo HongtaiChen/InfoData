@@ -20,6 +20,7 @@ dq_rules.params（JSON）契约，按 check_type 分：
   row_count_total   {min_rows}                             总行数下限（防清空/大面积缺失）
   null_rate_slice   {date_col, col, max_pct}               最新切片空值率上限(%)
   violation_count   {date_col, where, max_count}           最新切片脏数据行数上限
+  where_count       {where, max_count}                     全表任意条件行数上限（静态/档案表）
   regex_count       {col, pattern}                         全表列值格式校验（仅小表）
   unique_index      {cols: [..], expect}                   结构体检：是否存在自然键唯一索引
 """
@@ -40,7 +41,7 @@ REPORT_KEEP_DAYS = 30
 MSG_EMPTY = "表为空，请检查采集是否从未成功"
 
 # 允许出现在 where 表达式中的函数/常量标识符（其余标识符必须属于表列白名单）
-_WHERE_FUNCS = {"ABS", "ROUND", "COALESCE", "IFNULL", "NULL", "NOT", "AND", "OR", "IN", "IS"}
+_WHERE_FUNCS = {"ABS", "ROUND", "COALESCE", "IFNULL", "NULL", "NOT", "AND", "OR", "IN", "IS", "LIKE"}
 _IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
@@ -256,6 +257,19 @@ class DataQualityCheckCollector:
         msg = f"最新日切片脏数据 {n} 行（应 ≤ {max_count}）：{where}"
         return {"status": status, "metric_value": str(n), "message": msg}
 
+    def _where_count(self, conn, rule: dict) -> dict:
+        """任意条件行数上限（适用于无日期列的静态/档案表；where 来自受控 dq_rules）"""
+        p = rule.get("params") or {}
+        where = p["where"]
+        max_count = int(p.get("max_count", 0))
+        table = rule["table_name"]
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) AS n FROM `{table}` WHERE {where}")
+            n = cur.fetchone()["n"]
+        status = "pass" if n <= max_count else "fail"
+        msg = f"违反条件 {n} 行（应 ≤ {max_count}）：{where}"
+        return {"status": status, "metric_value": str(n), "message": msg}
+
     def _regex_count(self, conn, rule: dict) -> dict:
         p = rule.get("params") or {}
         col = p["col"]
@@ -310,6 +324,7 @@ class DataQualityCheckCollector:
         "row_count_total": _row_count_total,
         "null_rate_slice": _null_rate_slice,
         "violation_count": _violation_count,
+        "where_count": _where_count,
         "regex_count": _regex_count,
         "unique_index": _unique_index,
     }

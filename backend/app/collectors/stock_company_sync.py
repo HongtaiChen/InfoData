@@ -4,16 +4,19 @@
 InvestBuddy 公司档案采集器（stock_company_sync，巨潮资讯官方源，日更差量）
 
 - 源：ak.stock_profile_cninfo(symbol) —— 证监会指定披露平台，单只返回 26 字段公司概况
-  公司全称/英文名/曾用简称/ABH股/入选指数/市场/行业/法人/注册资金/成立日期/上市日期/
+  公司全称/英文名/曾用简称/ABH股/入选指数/市场/行业/法人/注册资金/成立日期/
   官网/邮箱/电话/传真/地址/邮编/主营业务/经营范围/机构简介
-- 覆盖：沪深 A 股在市股票（stock_info.list_status='上市'；B 股、北交所、退市股巨潮无档案，跳过）
-- 策略：差量更新 —— 只处理 stock_company_profile 中缺失或超过 refresh_days 未刷新的代码；
-  max_count 限制单轮处理数（防单轮过长），跑多轮即可铺满全市场
-- 幂等：upsert（INSERT ... ON DUPLICATE KEY UPDATE）
+- 写表：stock_info（2026-09-05 与 stock_company_profile 物理合并后的宽表主表）
+  仅列级 UPDATE 档案列 + profile_updated_at=NOW()，不触碰证券列（short_name/exchange/list_date/
+  list_status/delist_date/data_source），与 stock_info_sync / stock_status_sync 互不干扰
+- 覆盖：沪深 A 股在市股票（stock_info 中 list_status='上市' 且非 B 股/北交所；退市/B/北交所巨潮无档案，跳过）
+- 策略：差量更新 —— 只处理 stock_info 中档案缺失（company_name IS NULL）或 profile_updated_at 超过
+  refresh_days 未刷新的代码；max_count 限制单轮处理数（防单轮过长），跑多轮即可铺满全市场
+- 幂等：重复执行安全；rowcount=0（代码不在 stock_info）记 error 不静默
 - 容错：单只失败记录 error 不中断（下轮自动重试）
 """
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 import pandas as pd
 import pymysql
@@ -24,7 +27,7 @@ from ..db import get_db_config
 
 logger = logging.getLogger(__name__)
 
-# 巨潮返回中文列 -> stock_company_profile 列名
+# 巨潮返回中文列 -> stock_info 档案列名
 _COL_MAP = {
     "公司名称": "company_name",
     "英文名称": "en_name",
@@ -40,7 +43,8 @@ _COL_MAP = {
     "法人代表": "legal_rep",
     "注册资金": "reg_capital",
     "成立日期": "establish_date",
-    "上市日期": "list_date",
+    # 上市日期不写入 —— stock_info.list_date 以推断口径为唯一权威（daily MIN + Baostock ipoDate），
+    # 巨潮口径对整体上市/换股公司不一致（如 600018 上港 = 2006-10-26 非证券首日），合并后弃用
     "官方网站": "website",
     "电子邮箱": "email",
     "联系电话": "phone",
@@ -81,45 +85,44 @@ class StockCompanySyncCollector:
     def run(self) -> dict:
         conn = pymysql.connect(**get_db_config().to_dict())
         try:
-            # 1. 取候选代码：档案缺失 或 超过 refresh_days 未刷新
+            # 1. 取候选代码：档案缺失（company_name IS NULL）优先，其次超过 refresh_days 未刷新
             with conn.cursor() as cur:
                 cur.execute(
-                    """SELECT s.stock_code, s.exchange, s.list_status
-                       FROM stock_info s
-                       LEFT JOIN stock_company_profile p ON s.stock_code = p.stock_code
-                       WHERE p.stock_code IS NULL
-                          OR p.update_time < DATE_SUB(NOW(), INTERVAL %s DAY)
-                       ORDER BY (p.stock_code IS NULL) DESC, s.stock_code""",
-                    (self.refresh_days,),
+                    """SELECT stock_code, exchange, list_status, company_name, profile_updated_at
+                       FROM stock_info
+                       ORDER BY (company_name IS NULL) DESC, profile_updated_at IS NULL DESC,
+                                stock_code"""
                 )
                 rows = cur.fetchall()
         finally:
             conn.close()
 
-        candidates = [
-            (c, st)
-            for c, ex, st in rows
-            if _is_eligible(c, ex, st)
-        ][: self.max_count]
+        now = datetime.now()
+        candidates: list[str] = []
+        for code, ex, st, name, p_ts in rows:
+            if not _is_eligible(code, ex, st):
+                continue
+            if name is None or p_ts is None or p_ts < now - timedelta(days=self.refresh_days):
+                candidates.append(code)
+            if len(candidates) >= self.max_count:
+                break
         if not candidates:
             logger.info("无待更新档案（全部在市沪深 A 股均有且未过期）")
             return {"records_written": 0, "error_count": 0, "errors": [], "note": "无待更新档案"}
 
-        logger.info("本轮待更新 %s 只（候选 %s 只）", len(candidates), len(rows))
+        logger.info("本轮待更新 %s 只", len(candidates))
 
         conn = pymysql.connect(**get_db_config().to_dict())
         written, errors = 0, []
         try:
             with conn.cursor() as cur:
-                upsert_cols = [c for c in _COL_MAP.values()] + ["data_source"]
-                placeholders = ", ".join(["%s"] * len(upsert_cols))  # 首列 stock_code 单独一个 %s
-                set_clause = ", ".join(f"{c}=VALUES({c})" for c in upsert_cols)
+                archive_cols = [c for c in _COL_MAP.values()]
+                set_clause = ", ".join(f"{c}=%s" for c in archive_cols)
                 sql = (
-                    f"INSERT INTO stock_company_profile (stock_code, {', '.join(upsert_cols)}) "
-                    f"VALUES (%s, {placeholders}) "
-                    f"ON DUPLICATE KEY UPDATE {set_clause}"
+                    f"UPDATE stock_info SET {set_clause}, profile_updated_at=NOW() "
+                    f"WHERE stock_code=%s"
                 )
-                for i, (code, _st) in enumerate(candidates, start=1):
+                for code in candidates:
                     try:
                         profile = self._fetch_profile(code)
                     except Exception as e:  # 单只失败不中断
@@ -128,9 +131,12 @@ class StockCompanySyncCollector:
                     if profile is None:
                         errors.append(f"{code}: 巨潮无档案返回")
                         continue
-                    values = [code] + [profile.get(c) for c in upsert_cols[:-1]] + ["AKSHARE-CNINFO"]
+                    values = [profile.get(c) for c in archive_cols] + [code]
                     cur.execute(sql, values)
-                    written += 1
+                    if cur.rowcount == 0:
+                        errors.append(f"{code}: stock_info 无此行（名单外），未写入")
+                    else:
+                        written += 1
                     if written % 50 == 0:
                         conn.commit()  # 分批提交：长跑中断最多丢一批，不整轮回滚
                         logger.info("  已写入 %s 只...", written)

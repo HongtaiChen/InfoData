@@ -89,6 +89,17 @@ RULES = [
      {"cols": ["source", "url"], "expect": "exists"}, "info", 1, "幂等保障：uk_source_url"),
     ("trade_calendar_uniq", "trade_calendar", "unique_index",
      {"cols": ["trade_date"], "expect": "exists"}, "info", 1, "幂等保障：uk_trade_date"),
+    # ---------- 股票档案/退市一致性（v1.4 stock_info 宽表合并后） ----------
+    ("stock_info_delist_mark", "stock_info", "where_count",
+     {"where": "list_status='上市' AND delist_date IS NOT NULL", "max_count": 0}, "warning", 1,
+     "退市一致性：在市股不应带退市日期"),
+    ("stock_info_delist_date", "stock_info", "where_count",
+     {"where": "list_status='退市' AND delist_date IS NULL", "max_count": 0}, "warning", 1,
+     "退市一致性：退市股应有退市日期（Baostock 覆盖 331 只）"),
+    ("stock_info_profile_cover", "stock_info", "where_count",
+     {"where": "list_status='上市' AND (stock_code LIKE '6%' OR stock_code LIKE '0%' OR stock_code LIKE '3%') AND company_name IS NULL",
+      "max_count": 0}, "warning", 1,
+     "档案覆盖：沪深在市 A 股均应已有巨潮公司档案（company_name 非空）"),
 ]
 
 

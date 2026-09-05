@@ -3,11 +3,18 @@
 """
 InvestBuddy 股票档案域初始化脚本（幂等，可重复执行）
 
-1. stock_info 增补上市状态列（若不存在）：
+v1.4（2026-09-05）：stock_company_profile 已与 stock_info 物理合并为宽表（用户决策）。
+本脚本不再创建独立档案表，改为确保 stock_info 上档案列齐全：
+1. stock_info 上市状态列（若不存在）：
    - list_status VARCHAR(10)  '上市状态（上市/退市）'
    - delist_date  DATE        '退市日期（在市为空）'
-2. 新建公司档案宽表 stock_company_profile（巨潮资讯官方源，26 字段）：
-   stock_code 主键唯一，与 stock_info 1:1；文本类档案字段 + 更新时间
+2. stock_info 档案列 25 个（巨潮官方 24 字段 + profile_updated_at 管理列）：
+   company_name/en_name/prev_names/a_short/b_code/b_short/h_code/h_short/index_members/
+   market/industry/legal_rep/reg_capital/establish_date/website/email/phone/fax/
+   reg_address/office_address/postcode/main_business/business_scope/org_intro
+   （列定义与 scripts/merge_stock_company.py 的 _ARCHIVE_COLS 为唯一权威，此处复用）
+
+历史备份：旧表 stock_company_profile_bak_20260905 保留作回滚点，确认稳定后手动 DROP。
 """
 import os
 import sys
@@ -18,8 +25,12 @@ import pymysql
 
 from app.db import get_db_config
 
+# 复用 merge 脚本的档案列权威定义（同目录 import，运行期 scripts 目录在 sys.path）
+from merge_stock_company import _ARCHIVE_COLS
+
 
 def ensure_stock_info_cols(cur) -> None:
+    """list_status / delist_date 若缺失则补（v1.3 曾由本脚本负责）"""
     cur.execute(
         """SELECT COUNT(*) FROM information_schema.columns
            WHERE table_schema=DATABASE() AND table_name='stock_info' AND column_name='list_status'"""
@@ -42,41 +53,17 @@ def ensure_stock_info_cols(cur) -> None:
         print("stock_info + delist_date")
 
 
-DDL_COMPANY = """
-CREATE TABLE IF NOT EXISTS stock_company_profile (
-  id BIGINT AUTO_INCREMENT PRIMARY KEY,
-  stock_code VARCHAR(10) NOT NULL COMMENT 'A股代码（6位）',
-  company_name VARCHAR(200) NULL COMMENT '公司全称',
-  en_name VARCHAR(300) NULL COMMENT '英文名称',
-  prev_names VARCHAR(500) NULL COMMENT '曾用简称',
-  a_short VARCHAR(50) NULL COMMENT 'A股简称',
-  b_code VARCHAR(20) NULL COMMENT 'B股代码',
-  b_short VARCHAR(50) NULL COMMENT 'B股简称',
-  h_code VARCHAR(20) NULL COMMENT 'H股代码',
-  h_short VARCHAR(50) NULL COMMENT 'H股简称',
-  index_members VARCHAR(500) NULL COMMENT '入选指数（逗号分隔）',
-  market VARCHAR(30) NULL COMMENT '所属市场（上交所/深交所等）',
-  industry VARCHAR(50) NULL COMMENT '所属行业（证监会行业分类）',
-  legal_rep VARCHAR(50) NULL COMMENT '法人代表',
-  reg_capital VARCHAR(50) NULL COMMENT '注册资金（万元）',
-  establish_date DATE NULL COMMENT '成立日期',
-  list_date DATE NULL COMMENT '上市日期（巨潮口径）',
-  website VARCHAR(200) NULL COMMENT '官方网站',
-  email VARCHAR(200) NULL COMMENT '电子邮箱',
-  phone VARCHAR(100) NULL COMMENT '联系电话',
-  fax VARCHAR(100) NULL COMMENT '传真',
-  reg_address VARCHAR(300) NULL COMMENT '注册地址',
-  office_address VARCHAR(300) NULL COMMENT '办公地址',
-  postcode VARCHAR(20) NULL COMMENT '邮政编码',
-  main_business TEXT NULL COMMENT '主营业务',
-  business_scope TEXT NULL COMMENT '经营范围',
-  org_intro TEXT NULL COMMENT '机构简介',
-  data_source VARCHAR(50) NULL COMMENT '数据来源（AKSHARE-CNINFO）',
-  update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  UNIQUE KEY uk_stock_code (stock_code),
-  KEY idx_industry (industry)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公司档案宽表（巨潮资讯官方源，逐只查询）'
-"""
+def ensure_archive_cols(cur) -> int:
+    """补齐 stock_info 档案列，返回本次新增列数"""
+    cur.execute(
+        """SELECT column_name FROM information_schema.columns
+           WHERE table_schema=DATABASE() AND table_name='stock_info'"""
+    )
+    exist = {r[0] for r in cur.fetchall()}
+    adds = [f"ADD COLUMN {c} {ddl}" for c, ddl in _ARCHIVE_COLS.items() if c not in exist]
+    if adds:
+        cur.execute("ALTER TABLE stock_info " + ", ".join(adds))
+    return len(adds)
 
 
 def main() -> None:
@@ -84,21 +71,15 @@ def main() -> None:
     try:
         with conn.cursor() as cur:
             ensure_stock_info_cols(cur)
-            cur.execute(DDL_COMPANY)
-            # 存量库幂等补 data_source 列（旧版建表后新增）
-            cur.execute(
-                """SELECT COUNT(*) FROM information_schema.columns
-                   WHERE table_schema=DATABASE() AND table_name='stock_company_profile' AND column_name='data_source'"""
-            )
-            if cur.fetchone()[0] == 0:
-                cur.execute(
-                    "ALTER TABLE stock_company_profile ADD COLUMN data_source VARCHAR(50) NULL "
-                    "COMMENT '数据来源（AKSHARE-CNINFO）' AFTER org_intro"
-                )
+            added = ensure_archive_cols(cur)
+            if added:
+                print(f"stock_info +{added} 档案列")
+            else:
+                print(f"stock_info 档案列齐全（{len(_ARCHIVE_COLS)} 列）")
         conn.commit()
     finally:
         conn.close()
-    print("stock_company_profile ready")
+    print("stock_info 宽表就绪（旧独立表 stock_company_profile 已并入，勿再建）")
 
 
 if __name__ == "__main__":

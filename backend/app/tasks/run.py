@@ -199,7 +199,7 @@ def run_stock_status_sync(params: dict) -> int:
 
 
 def run_stock_company_sync(params: dict) -> int:
-    """公司档案同步（stock_company_profile：巨潮官方源，差量逐只更新）"""
+    """公司档案同步（stock_info 宽表档案列：巨潮官方源，差量逐只 UPDATE，列级不触碰证券列）"""
     p = _task_params(params, {"max_count": 200, "refresh_days": 30})
     collector = StockCompanySyncCollector(
         max_count=int(p.get("max_count", 200)),
