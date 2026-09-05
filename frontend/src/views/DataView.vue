@@ -313,14 +313,24 @@ onMounted(loadTables)
             v-for="t in filteredTables"
             :key="t.name"
             :title="t.comment || t.name"
-            style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;"
+            style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;"
             :style="current === t.name
               ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
               : 'color:#333;'"
             @click="selectTable(t.name)"
           >
-            <span style="font-family:Consolas,Menlo,monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</span>
-            <span style="font-size:11px;flex-shrink:0;" :style="current === t.name ? 'color:#7BA7D4;' : 'color:#b0b0b0;'">{{ fmtWan(t.rows_estimate) }}</span>
+            <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;overflow:hidden;">
+              <span style="font-family:Consolas,Menlo,monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</span>
+              <span
+                v-if="t.comment"
+                style="font-size:11px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                :style="current === t.name ? 'color:#7BA7D4;font-weight:400;' : 'color:#999;font-weight:400;'"
+              >{{ t.comment }}</span>
+            </div>
+            <span
+              style="font-size:11px;flex-shrink:0;align-self:flex-start;margin-top:1px;"
+              :style="current === t.name ? 'color:#7BA7D4;' : 'color:#b0b0b0;'"
+            >{{ fmtWan(t.rows_estimate) }}</span>
           </div>
         </NSpin>
       </div>
