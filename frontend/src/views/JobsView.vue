@@ -352,6 +352,15 @@ onUnmounted(() => {
 
 <style scoped>
 /* ------------------ cron 实时预览区样式 ------------------ */
+.cron-form-stack {
+  display: block;
+  width: 100%;
+}
+
+.cron-form-stack > .n-input {
+  width: 100%;
+}
+
 .cron-preview-taskname {
   line-height: 32px;
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
@@ -418,9 +427,10 @@ onUnmounted(() => {
 
 .cron-preview-row {
   display: grid;
-  grid-template-columns: 28px 110px 50px 1fr;
+  grid-template-columns: 32px minmax(0, 1fr) 64px 80px;
   align-items: center;
-  padding: 6px 10px;
+  column-gap: 12px;
+  padding: 8px 14px;
   background: rgba(255, 255, 255, 0.6);
   border-radius: 6px;
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
@@ -448,6 +458,7 @@ onUnmounted(() => {
   color: #1f2937;
   font-weight: 600;
   font-size: 13px;
+  min-width: 0;
 }
 
 .cron-preview-week {
@@ -457,15 +468,16 @@ onUnmounted(() => {
   background: rgba(42, 142, 92, 0.08);
   padding: 2px 6px;
   border-radius: 4px;
-  justify-self: start;
+  white-space: nowrap;
 }
 
 .cron-preview-time {
   color: #2a8e5c;
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 15px;
   text-align: right;
-  padding-right: 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .cron-preview-hint {
@@ -556,7 +568,7 @@ onUnmounted(() => {
 
     <!-- 编辑调度弹窗 -->
     <NModal v-model:show="showEdit" preset="card" title="编辑任务调度" style="width: 680px">
-      <NForm label-placement="left" label-width="80" v-if="editingTask">
+      <NForm label-placement="top" v-if="editingTask">
         <NFormItem label="任务名">
           <span class="cron-preview-taskname">{{ editingTask.task_name }}</span>
         </NFormItem>
@@ -564,33 +576,40 @@ onUnmounted(() => {
           <NSwitch v-model:value="editEnabled" />
           <span v-if="!editEnabled" style="margin-left: 10px; color: #999; font-size: 12px">停用后仅保留配置，不参与自动调度</span>
         </NFormItem>
-        <NFormItem label="Cron">
-          <NInput v-model:value="editCron" placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 1-5（工作日 19:00）" size="large" />
-          <!-- 预览：有效 -->
-          <div v-if="cronPreview.mode === 'ok'" class="cron-preview-box cron-preview-ok">
-            <div class="cron-preview-head">
-              <span class="cron-preview-icon">📅</span>
-              <span class="cron-preview-title">接下来 5 次实际运行</span>
-              <NTag size="small" :bordered="false" type="success" class="cron-preview-tag">实时预览</NTag>
-            </div>
-            <div class="cron-preview-list">
-              <div v-for="(t, i) in cronPreview.times" :key="i" class="cron-preview-row">
-                <span class="cron-preview-idx">{{ i + 1 }}</span>
-                <span class="cron-preview-date">{{ t.date }}</span>
-                <span class="cron-preview-week">周{{ t.week }}</span>
-                <span class="cron-preview-time">{{ t.time }}</span>
+        <NFormItem label="Cron 表达式">
+          <div class="cron-form-stack">
+            <NInput
+              v-model:value="editCron"
+              placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 1-5（工作日 19:00）"
+              size="large"
+              clearable
+            />
+            <!-- 预览：有效 -->
+            <div v-if="cronPreview.mode === 'ok'" class="cron-preview-box cron-preview-ok">
+              <div class="cron-preview-head">
+                <span class="cron-preview-icon">📅</span>
+                <span class="cron-preview-title">接下来 5 次实际运行</span>
+                <NTag size="small" :bordered="false" type="success" class="cron-preview-tag">实时预览</NTag>
+              </div>
+              <div class="cron-preview-list">
+                <div v-for="(t, i) in cronPreview.times" :key="i" class="cron-preview-row">
+                  <span class="cron-preview-idx">{{ i + 1 }}</span>
+                  <span class="cron-preview-date">{{ t.date }}</span>
+                  <span class="cron-preview-week">周{{ t.week }}</span>
+                  <span class="cron-preview-time">{{ t.time }}</span>
+                </div>
               </div>
             </div>
-          </div>
-          <!-- 预览：格式错误 -->
-          <div v-else-if="cronPreview.mode === 'invalid'" class="cron-preview-box cron-preview-err">
-            <span class="cron-preview-icon">⚠️</span>
-            <span>{{ cronPreview.error }}</span>
-          </div>
-          <!-- 预览：手动 -->
-          <div v-else-if="cronPreview.mode === 'manual'" class="cron-preview-hint">
-            <span class="cron-preview-icon">💡</span>
-            留空或填「手动」= 仅手动触发，不参与自动调度
+            <!-- 预览：格式错误 -->
+            <div v-else-if="cronPreview.mode === 'invalid'" class="cron-preview-box cron-preview-err">
+              <span class="cron-preview-icon">⚠️</span>
+              <span>{{ cronPreview.error }}</span>
+            </div>
+            <!-- 预览：手动 -->
+            <div v-else-if="cronPreview.mode === 'manual'" class="cron-preview-hint">
+              <span class="cron-preview-icon">💡</span>
+              留空或填「手动」= 仅手动触发，不参与自动调度
+            </div>
           </div>
         </NFormItem>
         <NFormItem label="格式说明">
