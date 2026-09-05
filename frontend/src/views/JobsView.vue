@@ -70,7 +70,8 @@ const editEnabled = ref(true)
 
 // cron 实时预览（接下来 5 次运行时间）
 const weekCn = ['日', '一', '二', '三', '四', '五', '六']
-const cronPreview = ref<{ mode: 'idle' | 'manual' | 'invalid' | 'ok'; times: string[]; error?: string }>({
+type CronPreviewTime = { date: string; week: string; time: string }
+const cronPreview = ref<{ mode: 'idle' | 'manual' | 'invalid' | 'ok'; times: CronPreviewTime[]; error?: string }>({
   mode: 'idle',
   times: [],
 })
@@ -86,13 +87,15 @@ function recomputePreview(expr: string) {
     }
     try {
       const interval = CronExpressionParser.parse(v)
-      const times: string[] = []
+      const times: CronPreviewTime[] = []
       for (let i = 0; i < 5; i++) {
         const d = interval.next().toDate()
         const dt = dayjs(d)
-        times.push(
-          `${dt.format('YYYY-MM-DD')} 周${weekCn[dt.day()]} ${dt.format('HH:mm')}`,
-        )
+        times.push({
+          date: dt.format('YYYY-MM-DD'),
+          week: weekCn[dt.day()],
+          time: dt.format('HH:mm'),
+        })
       }
       cronPreview.value = { mode: 'ok', times }
     } catch (e: any) {
@@ -347,7 +350,152 @@ onUnmounted(() => {
 })
 </script>
 
-<template>
+<style scoped>
+/* ------------------ cron 实时预览区样式 ------------------ */
+.cron-preview-taskname {
+  line-height: 32px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.cron-preview-box {
+  margin-top: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cron-preview-ok {
+  background: linear-gradient(180deg, #f0f9f3 0%, #e8f5ee 100%);
+  border: 1px solid #cce8d6;
+  padding: 14px 16px;
+  color: #2a8e5c;
+  box-shadow: 0 1px 2px rgba(42, 142, 92, 0.06);
+}
+
+.cron-preview-err {
+  background: #fef4f4;
+  border: 1px solid #fbd5d5;
+  padding: 10px 14px;
+  color: #d03050;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cron-preview-icon {
+  font-size: 16px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.cron-preview-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.cron-preview-title {
+  flex: 1;
+}
+
+.cron-preview-tag {
+  margin-left: auto;
+  border: none !important;
+  background: rgba(42, 142, 92, 0.12) !important;
+  color: #2a8e5c !important;
+}
+
+.cron-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cron-preview-row {
+  display: grid;
+  grid-template-columns: 28px 110px 50px 1fr;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  transition: background 0.15s;
+}
+
+.cron-preview-row:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.cron-preview-idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2a8e5c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cron-preview-date {
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.cron-preview-week {
+  color: #6b8e7c;
+  font-size: 12px;
+  text-align: center;
+  background: rgba(42, 142, 92, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  justify-self: start;
+}
+
+.cron-preview-time {
+  color: #2a8e5c;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: right;
+  padding-right: 8px;
+}
+
+.cron-preview-hint {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #f6f8fa;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.cron-preview-fmt {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.9;
+  background: #f6f8fa;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border-left: 3px solid #d1d5db;
+}
+
+.cron-preview-fmt code {
+  background: #e5e7eb;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #1f2937;
+}
+</style><template>
   <div>
     <!-- 统计卡片 -->
     <NGrid :cols="4" :x-gap="12" style="margin-bottom: 12px">
@@ -407,41 +555,46 @@ onUnmounted(() => {
     </NCard>
 
     <!-- 编辑调度弹窗 -->
-    <NModal v-model:show="showEdit" preset="card" title="编辑任务调度" style="width: 560px">
-      <NForm label-placement="left" label-width="90" v-if="editingTask">
+    <NModal v-model:show="showEdit" preset="card" title="编辑任务调度" style="width: 680px">
+      <NForm label-placement="left" label-width="80" v-if="editingTask">
         <NFormItem label="任务名">
-          <span style="line-height: 32px">{{ editingTask.task_name }}</span>
+          <span class="cron-preview-taskname">{{ editingTask.task_name }}</span>
         </NFormItem>
         <NFormItem label="启用">
           <NSwitch v-model:value="editEnabled" />
           <span v-if="!editEnabled" style="margin-left: 10px; color: #999; font-size: 12px">停用后仅保留配置，不参与自动调度</span>
         </NFormItem>
         <NFormItem label="Cron">
-          <NInput v-model:value="editCron" placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 1-5（工作日 19:00）" />
-          <div
-            v-if="cronPreview.mode === 'ok'"
-            style="margin-top: 10px; padding: 8px 10px; background: #f0f9f3; border-radius: 4px; font-size: 12px; color: #2a8e5c; line-height: 1.8"
-          >
-            <div style="font-weight: 500; margin-bottom: 4px">接下来 5 次实际运行：</div>
-            <div v-for="(t, i) in cronPreview.times" :key="i" style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace">
-              {{ i + 1 }}. {{ t }}
+          <NInput v-model:value="editCron" placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 1-5（工作日 19:00）" size="large" />
+          <!-- 预览：有效 -->
+          <div v-if="cronPreview.mode === 'ok'" class="cron-preview-box cron-preview-ok">
+            <div class="cron-preview-head">
+              <span class="cron-preview-icon">📅</span>
+              <span class="cron-preview-title">接下来 5 次实际运行</span>
+              <NTag size="small" :bordered="false" type="success" class="cron-preview-tag">实时预览</NTag>
+            </div>
+            <div class="cron-preview-list">
+              <div v-for="(t, i) in cronPreview.times" :key="i" class="cron-preview-row">
+                <span class="cron-preview-idx">{{ i + 1 }}</span>
+                <span class="cron-preview-date">{{ t.date }}</span>
+                <span class="cron-preview-week">周{{ t.week }}</span>
+                <span class="cron-preview-time">{{ t.time }}</span>
+              </div>
             </div>
           </div>
-          <div
-            v-else-if="cronPreview.mode === 'invalid'"
-            style="margin-top: 10px; padding: 6px 10px; font-size: 12px; color: #d03050; background: #fef4f4; border-radius: 4px"
-          >
-            {{ cronPreview.error }}
+          <!-- 预览：格式错误 -->
+          <div v-else-if="cronPreview.mode === 'invalid'" class="cron-preview-box cron-preview-err">
+            <span class="cron-preview-icon">⚠️</span>
+            <span>{{ cronPreview.error }}</span>
           </div>
-          <div
-            v-else-if="cronPreview.mode === 'manual'"
-            style="margin-top: 8px; font-size: 12px; color: #999"
-          >
+          <!-- 预览：手动 -->
+          <div v-else-if="cronPreview.mode === 'manual'" class="cron-preview-hint">
+            <span class="cron-preview-icon">💡</span>
             留空或填「手动」= 仅手动触发，不参与自动调度
           </div>
         </NFormItem>
         <NFormItem label="格式说明">
-          <div style="font-size: 12px; color: #666; line-height: 1.9">
+          <div class="cron-preview-fmt">
             <b>5 段 crontab：分 时 日 月 周</b><br />
             分 0-59 · 时 0-23 · 日 1-31 · 月 1-12 · 周 0-6（0=周日，1-5=周一至周五）<br />
             常用：<code>*</code> 每、<code>*/30</code> 每 30、<code>1-5</code> 区间、<code>0 19 * * 1-5</code> 工作日 19:00<br />
