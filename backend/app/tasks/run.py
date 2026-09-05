@@ -19,6 +19,12 @@ from ..collectors.market_current_sync import MarketCurrentSyncCollector
 from ..collectors.trade_calendar_sync import TradeCalendarSyncCollector
 from ..collectors.news_fetch import NewsFetchCollector
 from ..collectors.concept_market_sync import ConceptMarketSyncCollector
+from ..collectors.stock_info_sync import StockInfoSyncCollector
+from ..collectors.concept_sync import ConceptSyncCollector
+from ..collectors.fund_info_sync import FundInfoSyncCollector
+from ..collectors.index_market_sync import IndexMarketSyncCollector
+from ..collectors.bond_profit_sync import BondProfitSyncCollector
+from ..collectors.finance_calendar_sync import FinanceCalendarSyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -111,6 +117,62 @@ def run_ai_concept_analysis(params: dict) -> int:
     return analyzed
 
 
+# ============ 补齐 6 个“有配置无实现”的数据同步作业（2026-09-05） ============
+
+def run_stock_info_sync(params: dict) -> int:
+    """股票基础资料同步（stock_info / stock_info_ex，周更全市场名单）"""
+    collector = StockInfoSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    return result["records_written"]
+
+
+def run_concept_sync(params: dict) -> int:
+    """概念成分同步（ths_stock_concepts：同花顺主源 → 新浪降级）"""
+    collector = ConceptSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 概念成分 {result['error_count']} 个失败（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+def run_fund_info_sync(params: dict) -> int:
+    """基金基础信息同步（fund_info，东财基金列表全量重建）"""
+    collector = FundInfoSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    return result["records_written"]
+
+
+def run_index_market_sync(params: dict) -> int:
+    """指数日线同步（dc_index_market：东财主源 → 腾讯降级）"""
+    collector = IndexMarketSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 指数 {result['error_count']} 个失败（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+def run_bond_profit_sync(params: dict) -> int:
+    """中美国债收益率同步（bond_profit_daily 增量）"""
+    collector = BondProfitSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    return result["records_written"]
+
+
+def run_finance_calendar_sync(params: dict) -> int:
+    """财经日历同步（finance_calendar：东财 RPT_CPH_FECALENDAR，替换失效 JY 源）"""
+    collector = FinanceCalendarSyncCollector()
+    result = collector.run()
+    if result["error_count"] > 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -119,6 +181,13 @@ TASKS = {
     "trade_calendar_sync": run_trade_calendar_sync,
     "news_fetch": run_news_fetch,
     "concept_market_sync": run_concept_market_sync,
+    # 2026-09-05 补齐的 6 个作业（原“有配置无实现”，调度器此前静默跳过）
+    "stock_info_sync": run_stock_info_sync,
+    "concept_sync": run_concept_sync,
+    "fund_info_sync": run_fund_info_sync,
+    "index_market_sync": run_index_market_sync,
+    "bond_profit_sync": run_bond_profit_sync,
+    "finance_calendar_sync": run_finance_calendar_sync,
 }
 
 
