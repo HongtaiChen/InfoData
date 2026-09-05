@@ -37,7 +37,7 @@ src/
 │   ├── NewsView.vue        # 资讯浏览
 │   ├── AnalysisView.vue    # 分析研究
 │   ├── JobsView.vue        # 作业监控
-│   ├── DataView.vue        # 数据浏览（DBeaver 式只读表浏览器）
+│   ├── DataView.vue        # 数据中心（DBeaver 式只读表浏览器）
 │   └── SettingsView.vue    # 系统设置
 ├── App.vue           # 根组件（NConfigProvider + 路由出口）
 ├── main.ts           # 入口

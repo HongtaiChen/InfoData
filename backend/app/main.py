@@ -44,7 +44,7 @@ app.include_router(news.router, prefix="/api/news", tags=["资讯"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["分析研究"])
 app.include_router(jobs.router, prefix="/api/jobs", tags=["作业监控"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI 分析"])
-app.include_router(db_browser.router, prefix="/api/db", tags=["数据浏览"])
+app.include_router(db_browser.router, prefix="/api/db", tags=["数据中心"])
 app.include_router(quality.router, prefix="/api/dq", tags=["数据质量"])
 
 
