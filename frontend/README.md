@@ -30,13 +30,14 @@ src/
 ├── api/              # axios 封装
 ├── layouts/          # 主布局（侧边栏 + 顶栏）
 ├── router/           # 路由（七栏目）
-├── views/            # 七个栏目页面
+├── views/            # 八个栏目页面
 │   ├── MarketView.vue      # 行情看板
 │   ├── ConceptView.vue     # 概念板块
 │   ├── CalendarView.vue    # 投资日历
 │   ├── NewsView.vue        # 资讯浏览
 │   ├── AnalysisView.vue    # 分析研究
 │   ├── JobsView.vue        # 作业监控
+│   ├── DataView.vue        # 数据浏览（DBeaver 式只读表浏览器）
 │   └── SettingsView.vue    # 系统设置
 ├── App.vue           # 根组件（NConfigProvider + 路由出口）
 ├── main.ts           # 入口
