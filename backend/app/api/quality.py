@@ -169,3 +169,58 @@ def dq_trigger():
     if not result["started"]:
         raise HTTPException(409, result["reason"])
     return {"ok": True, "message": result["reason"]}
+
+
+@router.get("/table-status")
+def dq_table_status():
+    """最新一轮按表聚合状态（供数据中心表清单叠加质量标记）"""
+    latest = _latest_run()
+    if latest is None:
+        return {"run_at": None, "items": []}
+    agg = query_all(
+        """
+        SELECT table_name,
+               MAX(FIELD(status,'pass','warning','fail','error')) AS worst_n,
+               SUM(status='pass')     AS pass_c,
+               SUM(status='warning')  AS warning_c,
+               SUM(status='fail')     AS fail_c,
+               SUM(status='error')    AS error_c,
+               COUNT(*)               AS total_c
+        FROM dq_report WHERE run_at = %s
+        GROUP BY table_name
+        ORDER BY worst_n DESC, table_name
+        """,
+        (latest,),
+    )
+    issues = query_all(
+        """
+        SELECT table_name, rule_name, severity, status, metric_value, message
+        FROM dq_report
+        WHERE run_at = %s AND status <> 'pass'
+        ORDER BY table_name,
+                 FIELD(status, 'error', 'fail', 'warning'),
+                 FIELD(severity, 'critical', 'warning', 'info')
+        """,
+        (latest,),
+    )
+    issues_by_table: dict[str, list] = {}
+    for r in issues:
+        issues_by_table.setdefault(r["table_name"], []).append(r)
+    items = []
+    for r in agg:
+        table = r["table_name"]
+        items.append(
+            {
+                "table_name": table,
+                "worst": _STATUS_ORDER[(r["worst_n"] or 1) - 1],
+                "counts": {
+                    "pass": r["pass_c"],
+                    "warning": r["warning_c"],
+                    "fail": r["fail_c"],
+                    "error": r["error_c"],
+                    "total": r["total_c"],
+                },
+                "issues": issues_by_table.get(table, []),
+            }
+        )
+    return {"run_at": latest, "items": items}

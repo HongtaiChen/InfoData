@@ -5,6 +5,7 @@ import {
   type SelectOption,
 } from 'naive-ui'
 import api from '../api'
+import { useRouter } from 'vue-router'
 
 interface TableItem {
   name: string
@@ -31,6 +32,23 @@ interface FilterCond {
   col: string
   op: string
   val: string
+}
+interface DqIssue {
+  rule_name: string
+  severity: string
+  status: string
+  metric_value: string | null
+  message: string | null
+}
+interface DqTableStatus {
+  table_name: string
+  worst: 'pass' | 'warning' | 'fail' | 'error'
+  counts: { pass: number; warning: number; fail: number; error: number; total: number }
+  issues: DqIssue[]
+}
+interface DqTableResp {
+  run_at: string | null
+  items: DqTableStatus[]
 }
 
 const tables = ref<TableItem[]>([])
@@ -59,6 +77,10 @@ const fCol = ref('')
 const fOp = ref('eq')
 const fVal = ref('')
 const filters = ref<FilterCond[]>([])
+
+const router = useRouter()
+const dqRunAt = ref<string | null>(null)
+const dqStatus = ref<Map<string, DqTableStatus>>(new Map())
 
 const NUM_TYPES = ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'float', 'double', 'numeric']
 const DATE_TYPES = ['date', 'datetime', 'timestamp', 'time']
@@ -142,6 +164,19 @@ async function loadTables() {
     /* 全局拦截器已提示 */
   } finally {
     loadingTables.value = false
+  }
+  loadDqStatus()
+}
+
+async function loadDqStatus() {
+  try {
+    const resp = (await api.get('/dq/table-status')) as unknown as DqTableResp
+    dqRunAt.value = resp.run_at
+    const m = new Map<string, DqTableStatus>()
+    ;(resp.items || []).forEach((it) => m.set(it.table_name, it))
+    dqStatus.value = m
+  } catch {
+    /* 质量标记不可用不阻塞表浏览 */
   }
 }
 
@@ -290,6 +325,59 @@ const totalText = computed(() => {
   return `${fmtWan(n)} 行${meta.value.is_estimate ? '（估算）' : ''}`
 })
 
+// ---------- 数据质量标记 ----------
+
+const DOT_COLORS: Record<string, string> = {
+  pass: '#18A058',
+  warning: '#d48806',
+  fail: '#d03050',
+  error: '#d03050',
+  none: '#d0d0d0',
+}
+const WORST_LABEL: Record<string, string> = {
+  pass: '质量通过',
+  warning: '有提醒',
+  fail: '质量异常',
+  error: '质量异常',
+}
+const currentDq = computed<DqTableStatus | null>(() => dqStatus.value.get(current.value) || null)
+
+function dqDotColor(name: string): string {
+  const s = dqStatus.value.get(name)
+  return s ? DOT_COLORS[s.worst] : DOT_COLORS.none
+}
+
+function dqRowTitle(t: TableItem): string {
+  const base = t.comment ? `${t.name} · ${t.comment}` : t.name
+  if (!dqRunAt.value) return base
+  const s = dqStatus.value.get(t.name)
+  if (!s) return `${base}\n未纳入自动体检（可到数据质量栏目补充规则）`
+  const c = s.counts
+  const bad = c.fail + c.error
+  return `${base}\n数据质量：${WORST_LABEL[s.worst]} · 通过 ${c.pass} / 异常 ${bad} / 提醒 ${c.warning}（共 ${c.total} 条规则）\n体检时间 ${fmtDqTime(dqRunAt.value)}`
+}
+
+function fmtDqTime(s: string | null): string {
+  return s ? s.replace('T', ' ').slice(0, 16) : ''
+}
+
+function dqTagType(worst: string): 'default' | 'success' | 'warning' | 'error' {
+  if (worst === 'pass') return 'success'
+  if (worst === 'warning') return 'warning'
+  return 'error'
+}
+
+function dqIssueStatusLabel(status: string): string {
+  if (status === 'error') return '错误'
+  if (status === 'fail') return '异常'
+  return '提醒'
+}
+
+function dqIssueColor(status: string): string {
+  if (status === 'error' || status === 'fail') return '#d03050'
+  return '#d48806'
+}
+
 onMounted(loadTables)
 </script>
 
@@ -312,13 +400,18 @@ onMounted(loadTables)
           <div
             v-for="t in filteredTables"
             :key="t.name"
-            :title="t.comment || t.name"
+            :title="dqRowTitle(t)"
             style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;"
             :style="current === t.name
               ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
               : 'color:#333;'"
             @click="selectTable(t.name)"
           >
+            <span
+              v-if="dqRunAt"
+              style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;"
+              :style="{ background: dqDotColor(t.name) }"
+            ></span>
             <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;overflow:hidden;">
               <span style="font-family:Consolas,Menlo,monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</span>
               <span
@@ -359,6 +452,41 @@ onMounted(loadTables)
             @update:value="(v: number) => { pageSize = v; loadRows(false) }"
           />
         </span>
+      </div>
+
+      <!-- 数据质量摘要 -->
+      <div v-if="dqRunAt" style="padding:8px 14px;border-bottom:1px solid #f0f0f0;background:#FAFBFC;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:12px;font-weight:500;color:#444;">数据质量</span>
+          <span style="font-size:11px;color:#aaa;">体检 {{ fmtDqTime(dqRunAt) }}</span>
+          <NTag v-if="currentDq" size="tiny" :bordered="false" :type="dqTagType(currentDq.worst)">
+            {{ WORST_LABEL[currentDq.worst] }}
+          </NTag>
+          <NTag v-else size="tiny" :bordered="false" type="default">未纳入体检</NTag>
+          <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+            <NButton size="tiny" quaternary @click="loadDqStatus()">刷新状态</NButton>
+            <NButton size="tiny" type="primary" secondary @click="router.push('/quality')">查看质量报告</NButton>
+          </span>
+        </div>
+        <div v-if="currentDq" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
+          <div v-if="currentDq.issues.length === 0" style="font-size:12px;color:#18A058;">
+            共 {{ currentDq.counts.total }} 条规则全部通过
+          </div>
+          <div
+            v-for="iss in currentDq.issues"
+            :key="iss.rule_name"
+            :title="iss.message || ''"
+            style="display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;min-width:0;"
+          >
+            <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;" :style="{ background: dqIssueColor(iss.status) }"></span>
+            <span style="font-family:Consolas,Menlo,monospace;color:#333;flex-shrink:0;">{{ iss.rule_name }}</span>
+            <span style="color:#888;flex-shrink:0;">{{ dqIssueStatusLabel(iss.status) }} · {{ iss.severity }}</span>
+            <span style="color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{{ iss.message }}</span>
+          </div>
+        </div>
+        <div v-else style="margin-top:6px;font-size:12px;color:#999;">
+          静态/历史表未纳入自动体检，可在数据质量栏目「规则配置」中补充该表规则
+        </div>
       </div>
 
       <!-- 过滤器 -->
