@@ -2,7 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
 import {
   NCard, NDataTable, NTag, NSelect, NStatistic, NGrid, NGi, NSpace, NButton,
-  NSwitch, NModal, NForm, NFormItem, NInput, NPopconfirm, useMessage,
+  NSwitch, NModal, NForm, NFormItem, NInput, NPopconfirm, NDescriptions,
+  NDescriptionsItem, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { CronExpressionParser } from 'cron-parser'
@@ -490,24 +491,31 @@ onUnmounted(() => {
 }
 
 .cron-preview-fmt {
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.9;
   background: #f6f8fa;
-  padding: 12px 16px;
+  padding: 6px 0;
   border-radius: 6px;
   border-left: 3px solid #d1d5db;
   width: 100%;
   box-sizing: border-box;
+  font-size: 13px;
+}
+
+.cron-preview-fmt :deep(.n-descriptions .n-descriptions-item) {
+  padding: 8px 16px;
+}
+
+.cron-preview-fmt :deep(.n-descriptions .n-descriptions-item:not(:last-child)) {
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.06);
 }
 
 .cron-preview-fmt code {
   background: #e5e7eb;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 3px;
   font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: #1f2937;
+  margin: 0 2px;
 }
 </style><template>
   <div>
@@ -616,10 +624,29 @@ onUnmounted(() => {
         </NFormItem>
         <NFormItem label="格式说明">
           <div class="cron-preview-fmt">
-            <b>5 段 crontab：分 时 日 月 周</b><br />
-            分 0-59 · 时 0-23 · 日 1-31 · 月 1-12 · 周 0-6（0=周日，1-5=周一至周五）<br />
-            常用：<code>*</code> 每、<code>*/30</code> 每 30、<code>1-5</code> 区间、<code>0 19 * * 1-5</code> 工作日 19:00<br />
-            留空或填「手动」= 仅手动触发，不自动调度
+            <NDescriptions
+              :column="1"
+              size="small"
+              label-placement="left"
+              :label-style="{ width: '70px', color: '#6b7280', fontWeight: 500 }"
+              :content-style="{ color: '#1f2937' }"
+            >
+              <NDescriptionsItem label="5 段">
+                <code>分 时 日 月 周</code>
+              </NDescriptionsItem>
+              <NDescriptionsItem label="取值">
+                分 0-59 · 时 0-23 · 日 1-31 · 月 1-12 · 周 0-6（0=周日，1-5=周一至周五）
+              </NDescriptionsItem>
+              <NDescriptionsItem label="常用">
+                <code>*</code> 任意 · <code>*/n</code> 每 n · <code>a-b</code> 区间 · <code>a,b,c</code> 离散
+              </NDescriptionsItem>
+              <NDescriptionsItem label="示例">
+                <code>0 19 * * 1-5</code> = 工作日 19:00 整点
+              </NDescriptionsItem>
+              <NDescriptionsItem label="手动">
+                留空或填「手动」= 仅手动触发，不自动调度
+              </NDescriptionsItem>
+            </NDescriptions>
           </div>
         </NFormItem>
       </NForm>
