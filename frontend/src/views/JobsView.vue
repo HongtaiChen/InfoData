@@ -494,9 +494,11 @@ onUnmounted(() => {
   color: #6b7280;
   line-height: 1.9;
   background: #f6f8fa;
-  padding: 10px 12px;
+  padding: 12px 16px;
   border-radius: 6px;
   border-left: 3px solid #d1d5db;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .cron-preview-fmt code {
