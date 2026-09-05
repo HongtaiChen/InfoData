@@ -15,6 +15,7 @@ const router = createRouter({
         { path: 'analysis', name: 'analysis', component: () => import('@/views/AnalysisView.vue'), meta: { title: '分析研究', icon: '🔬' } },
         { path: 'jobs', name: 'jobs', component: () => import('@/views/JobsView.vue'), meta: { title: '作业监控', icon: '⚙️' } },
         { path: 'data', name: 'data', component: () => import('@/views/DataView.vue'), meta: { title: '数据浏览', icon: '🗄️' } },
+        { path: 'quality', name: 'quality', component: () => import('@/views/QualityView.vue'), meta: { title: '数据质量', icon: '🩺' } },
         { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue'), meta: { title: '系统设置', icon: '🔧' } },
       ],
     },
