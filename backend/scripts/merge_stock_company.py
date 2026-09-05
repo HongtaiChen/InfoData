@@ -12,7 +12,8 @@ InvestBuddy 合并脚本：stock_company_profile（巨潮档案）并入 stock_i
 口径决策：
 - list_date 不搬迁 —— stock_info 推断口径（daily MIN(trade_date) + Baostock ipoDate）覆盖更全；
   巨潮 list_date 对整体上市/换股公司口径不同（如 600018 上港 2006-10-26 为整体上市日，非证券首日 2000-07-19）
-- data_source / update_time 保留 stock_info 既有列（档案刷新追踪用新增 profile_updated_at）
+- data_source / update_time 保留 stock_info 既有列（档案刷新追踪用新增 profile_updated_at）；
+  v1.5 起 data_source 为三源构成常量（EM;BAOSTOCK;CNINFO，列 DEFAULT 维护），本脚本不写该列
 - a_short 保留为「巨潮披露简称口径」，与 short_name（东财实时名单）并存
 
 幂等：重复执行安全（逐列检查缺失再 ALTER；RENAME 目标不存在才执行）

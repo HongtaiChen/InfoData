@@ -109,6 +109,8 @@ class StockInfoSyncCollector:
                     backfilled += 1
 
                 # 4. stock_info：UPDATE 名单内 / INSERT 新
+                #    data_source 不入 INSERT —— v1.5 起为表级来源构成常量
+                #    （DEFAULT 'EM;BAOSTOCK;CNINFO'：东财名单;Baostock状态;巨潮档案三源共同维护）
                 upd, ins = [], []
                 for code, name in name_map.items():
                     ex = _exchange_of(code)
@@ -118,7 +120,7 @@ class StockInfoSyncCollector:
                     if code in exist:
                         upd.append((name, ex, ld, code))
                     else:
-                        ins.append((code, name, ex, ld, source_tag))
+                        ins.append((code, name, ex, ld))
                 cur.executemany(
                     "UPDATE stock_info SET short_name=%s, exchange=%s, list_date=%s, update_time=NOW() "
                     "WHERE stock_code=%s",
@@ -126,8 +128,8 @@ class StockInfoSyncCollector:
                 )
                 updated = cur.rowcount
                 cur.executemany(
-                    "INSERT INTO stock_info (stock_code, short_name, exchange, list_date, update_time, data_source) "
-                    "VALUES (%s, %s, %s, %s, NOW(), %s)",
+                    "INSERT INTO stock_info (stock_code, short_name, exchange, list_date, update_time) "
+                    "VALUES (%s, %s, %s, %s, NOW())",
                     ins,
                 )
                 inserted = len(ins)
