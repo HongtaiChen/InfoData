@@ -103,22 +103,6 @@ interface Constituent {
 const constituents = ref<Constituent[]>([])
 const constLoading = ref(false)
 
-async function loadConstituents() {
-  if (!currentConcept.value) return
-  constLoading.value = true
-  try {
-    const resp: any = await api.get('/concept/constituents', {
-      params: { code: currentConcept.value.index_code, page_size: 200 },
-    })
-    constituents.value = resp.items || []
-  } catch (e) {
-    console.error('[constituents]', e)
-    constituents.value = []
-  } finally {
-    constLoading.value = false
-  }
-}
-
 const constColumns: DataTableColumns<Constituent> = [
   { title: '代码', key: 'stock_code', width: 90, fixed: 'left' },
   { title: '名称', key: 'stock_name', width: 110, fixed: 'left' },
@@ -295,10 +279,10 @@ export default { components: { NGrid, NGi } }
   text-decoration: underline;
 }
 .c-up {
-  color: #e64a4a;
+  color: #EF232A;
 }
 .c-down {
-  color: #17a05e;
+  color: #14B143;
 }
 :deep(.row-active td) {
   background: #e8f1ff !important;

@@ -1,6 +1,13 @@
 import axios from 'axios'
 import { createDiscreteApi } from 'naive-ui'
 
+// 支持视图层通过 { silent: true } 跳过全局错误提示（拦截器中读取）
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    silent?: boolean
+  }
+}
+
 const { message } = createDiscreteApi(['message'])
 
 // 同一 URL 错误提示节流（5 秒内只弹一次，避免轮询等高频请求刷屏）
@@ -15,7 +22,7 @@ function toastError(url: string, text: string) {
   message.error(text, { duration: 3500 })
 }
 
-function extractErrorText(err: any, url?: string): string {
+function extractErrorText(err: any, _url?: string): string {
   if (err?.response?.data?.detail) {
     const d = err.response.data.detail
     return typeof d === 'string' ? d : JSON.stringify(d).slice(0, 120)

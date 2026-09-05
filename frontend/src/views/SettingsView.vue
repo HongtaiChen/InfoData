@@ -2,13 +2,10 @@
 import { ref, onMounted } from 'vue'
 import {
   NCard, NDescriptions, NDescriptionsItem, NTag, NAlert, NTable,
-  NTh, NTr, NTd, NSpace, NButton, useMessage,
+  NSpace,
 } from 'naive-ui'
 import api from '../api'
 
-const message = useMessage()
-
-const dbStats = ref<any>(null)
 const backendInfo = ref<any>(null)
 
 // 数据库概览（直接查 information_schema 行数估计，不扫描大表）
@@ -25,19 +22,19 @@ async function loadDbStats() {
 // 静态数据源说明（与需求文档一致）
 const dataSources = [
   { source: '东方财富', scope: '股票日线/资讯/概念行情', status: '正常（偶发风控）', type: 'info' as const },
-  { source: '腾讯', scope: '股票日线（主力备用源）', status: '稳定', type: 'success' as const },
-  { source: '新浪', scope: '股票日线备用 / 交易日历', status: '稳定', type: 'success' as const },
+  { source: '腾讯', scope: '股票日线（主力备用源）', status: '稳定', type: 'info' as const },
+  { source: '新浪', scope: '股票日线备用 / 交易日历', status: '稳定', type: 'info' as const },
   { source: 'Tushare', scope: '股票日线保底（需 token）', status: '未配置', type: 'default' as const },
-  { source: '同花顺', scope: '概念指数行情 + 成分股映射（成分股映射源受限待补）', status: '行情已接入', type: 'success' as const },
-  { source: '财联社', scope: '财联社电报（与东财双源轮询）', status: '已接入', type: 'success' as const },
+  { source: '同花顺', scope: '概念指数行情 + 成分股映射（成分股映射源受限待补）', status: '行情已接入', type: 'info' as const },
+  { source: '财联社', scope: '财联社电报（与东财双源轮询）', status: '已接入', type: 'info' as const },
 ]
 
 const taskOverview = [
-  { name: 'stock_daily_incr', desc: '股票日线增量采集（东财→腾讯→新浪→Tushare 四级降级）', schedule: '工作日 19:00', statusType: 'success' as const },
-  { name: 'news_fetch', desc: '资讯采集：财联社 + 东财 双源去重', schedule: '每 30 分钟', statusType: 'success' as const },
-  { name: 'concept_market_sync', desc: '同花顺概念板块行情增量同步（375 概念，85265 行历史已回补）', schedule: '工作日 20:00', statusType: 'success' as const },
-  { name: 'market_current_sync', desc: '行情快照聚合（最新交易日 OHLC + YTD）', schedule: '工作日 18:30', statusType: 'success' as const },
-  { name: 'trade_calendar_sync', desc: '交易日历补齐（含 year/month/day 冗余列回填）', schedule: '周日 02:30', statusType: 'success' as const },
+  { name: 'stock_daily_incr', desc: '股票日线增量采集（东财→腾讯→新浪→Tushare 四级降级）', schedule: '工作日 19:00', statusType: 'info' as const },
+  { name: 'news_fetch', desc: '资讯采集：财联社 + 东财 双源去重', schedule: '每 30 分钟', statusType: 'info' as const },
+  { name: 'concept_market_sync', desc: '同花顺概念板块行情增量同步（375 概念，85265 行历史已回补）', schedule: '工作日 20:00', statusType: 'info' as const },
+  { name: 'market_current_sync', desc: '行情快照聚合（最新交易日 OHLC + YTD）', schedule: '工作日 18:30', statusType: 'info' as const },
+  { name: 'trade_calendar_sync', desc: '交易日历补齐（含 year/month/day 冗余列回填）', schedule: '周日 02:30', statusType: 'info' as const },
   { name: 'ai_concept_analysis', desc: '日历事件 AI 概念分析（豆包，无 Key 时降级占位）', schedule: '手动/触发', statusType: 'info' as const },
   { name: 'finance_calendar_sync', desc: '投资日历事件（原 JY 源失效，待替代源）', schedule: '源失效', statusType: 'warning' as const },
   { name: 'ths_stock_concepts_sync', desc: '同花顺概念成分股映射（东财风控停摆，源恢复后补）', schedule: '源受限', statusType: 'warning' as const },
@@ -63,7 +60,7 @@ onMounted(loadDbStats)
             <span v-else style="color: #999">检测中...</span>
           </NDescriptionsItem>
           <NDescriptionsItem label="数据库">
-            <NTag type="success" size="small" :bordered="false">adata 已连接</NTag>
+            <NTag type="info" size="small" :bordered="false">adata 已连接</NTag>
           </NDescriptionsItem>
           <NDescriptionsItem label="数据规模">
             <span>24+ 张表 · 约 3700 万行</span>

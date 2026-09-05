@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { init, dispose } from 'klinecharts'
-import type { KLineChart as Chart, KLineData } from 'klinecharts'
+import type { Chart, KLineData } from 'klinecharts'
 import dayjs from 'dayjs'
 import api from '../api'
 
@@ -14,7 +14,6 @@ const props = defineProps<{
 
 const containerRef = ref<HTMLDivElement>()
 let chart: Chart | null = null
-let loadingFlag = false
 
 const loadingMsg = ref('加载中...')
 const latest = ref<any>(null)
@@ -30,7 +29,7 @@ function applyTonghuashunStyle(c: Chart) {
       horizontal: {
         line: { color: '#b8b8b8', style: 'dashed' },
         text: {
-          backgroundColor: '#e64a4a',
+          backgroundColor: '#EF232A',
           color: '#ffffff',
           borderRadius: 2,
         },
@@ -38,7 +37,7 @@ function applyTonghuashunStyle(c: Chart) {
       vertical: {
         line: { color: '#b8b8b8', style: 'dashed' },
         text: {
-          backgroundColor: '#e64a4a',
+          backgroundColor: '#EF232A',
           color: '#ffffff',
           borderRadius: 2,
         },
@@ -46,40 +45,40 @@ function applyTonghuashunStyle(c: Chart) {
     },
     candle: {
       bar: {
-        upColor: '#e64a4a',
-        downColor: '#17a05e',
+        upColor: '#EF232A',
+        downColor: '#14B143',
         noChangeColor: '#999999',
-        upBorderColor: '#e64a4a',
-        downBorderColor: '#17a05e',
-        upWickColor: '#e64a4a',
-        downWickColor: '#17a05e',
+        upBorderColor: '#EF232A',
+        downBorderColor: '#14B143',
+        upWickColor: '#EF232A',
+        downWickColor: '#14B143',
       },
       priceMark: {
-        high: { color: '#e64a4a' },
-        low: { color: '#17a05e' },
+        high: { color: '#EF232A' },
+        low: { color: '#14B143' },
         last: {
-          upColor: '#e64a4a',
-          downColor: '#17a05e',
+          upColor: '#EF232A',
+          downColor: '#14B143',
           noChangeColor: '#999999',
         },
       },
       tooltip: {
-        custom: [
-          { title: '时间：', value: (d: any) => dayjs(d.timestamp).format('YYYY-MM-DD') },
-          { title: '开盘：', value: (d: any) => d.open.toFixed(2) },
-          { title: '最高：', value: (d: any) => d.high.toFixed(2) },
-          { title: '最低：', value: (d: any) => d.low.toFixed(2) },
-          { title: '收盘：', value: (d: any) => d.close.toFixed(2) },
-          { title: '涨跌幅：', value: (d: any) => `${d.changePct ?? ''}` },
-          { title: '成交量：', value: (d: any) => formatVol(d.volume) },
-        ],
-      },
-    },
-    indicator: {
-      tooltip: {
-        custom: [
-          { title: '时间：', value: (d: any) => dayjs(d.timestamp).format('YYYY-MM-DD') },
-        ],
+        legend: {
+          // v10：OHLC 十字光标信息栏由 legend.template 回调产出（替代旧 custom）
+          template: (data: any) => {
+            const d = data.current
+            if (!d) return []
+            return [
+              { title: '时间', value: dayjs(d.timestamp).format('YYYY-MM-DD') },
+              { title: '开盘', value: d.open.toFixed(2) },
+              { title: '最高', value: d.high.toFixed(2) },
+              { title: '最低', value: d.low.toFixed(2) },
+              { title: '收盘', value: d.close.toFixed(2) },
+              { title: '涨跌幅', value: `${d.changePct ?? ''}` },
+              { title: '成交量', value: formatVol(d.volume) },
+            ]
+          },
+        },
       },
     },
     xAxis: {
@@ -119,34 +118,18 @@ async function fetchBars(): Promise<KLineData[]> {
   })
 }
 
-async function loadKline() {
-  if (!props.code || loadingFlag) return
-  loadingFlag = true
-  loadingMsg.value = '加载中...'
-  try {
-    const list = await fetchBars()
-    if (!chart) {
-      // 已被 watch 销毁，跳过渲染
-      return
-    }
-    if (list.length === 0) {
-      loadingMsg.value = '暂无K线数据'
-      return
-    }
-    const last = list[list.length - 1]
-    latest.value = {
-      trade_date: dayjs(last.timestamp).format('YYYY-MM-DD'),
-      close: last.close,
-      changePct: list.length > 1
-        ? ((last.close - list[list.length - 2].close) / list[list.length - 2].close) * 100
-        : null,
-    }
-    loadingMsg.value = ''
-  } catch (e: any) {
-    loadingMsg.value = `加载失败: ${e?.message || e}`
-    console.error('[KLine]', props.code, e)
-  } finally {
-    loadingFlag = false
+function setLatest(list: KLineData[]) {
+  if (list.length === 0) {
+    loadingMsg.value = '暂无K线数据'
+    return
+  }
+  const last = list[list.length - 1]
+  latest.value = {
+    trade_date: dayjs(last.timestamp).format('YYYY-MM-DD'),
+    close: last.close,
+    changePct: list.length > 1
+      ? ((last.close - list[list.length - 2].close) / list[list.length - 2].close) * 100
+      : null,
   }
 }
 
@@ -160,7 +143,7 @@ function initChart() {
   if (!chart) return
   applyTonghuashunStyle(chart)
   // 主图 MA + 副图 VOL/MACD（同花顺经典布局）
-  chart.createIndicator('MA', false, { id: 'candle_pane' })
+  chart.createIndicator('MA', false)
   chart.createIndicator('VOL')
   chart.createIndicator('MACD')
   // klinecharts >=9.x 使用 DataLoader（替代旧的 applyNewData）
@@ -168,7 +151,11 @@ function initChart() {
     getBars: ({ type, callback }) => {
       if (type !== 'init' && type !== 'backward' && type !== 'forward') return
       fetchBars()
-        .then((list) => callback(list, false))
+        .then((list) => {
+          setLatest(list)
+          loadingMsg.value = ''
+          callback(list, false)
+        })
         .catch((e) => {
           loadingMsg.value = `加载失败: ${e?.message || e}`
           console.error('[KLine]', props.code, e)
@@ -257,9 +244,9 @@ watch(
   font-weight: 600;
 }
 .up {
-  color: #e64a4a;
+  color: #EF232A;
 }
 .down {
-  color: #17a05e;
+  color: #14B143;
 }
 </style>

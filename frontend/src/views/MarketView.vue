@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
-import { NCard, NSpace, NSelect, NDataTable, NTag, NInput, type DataTableColumns } from 'naive-ui'
+import { NCard, NSpace, NSelect, NDataTable, NInput, type DataTableColumns } from 'naive-ui'
 import KLineChart from '../components/KLineChart.vue'
 import api from '../api'
 
@@ -219,9 +219,9 @@ onMounted(loadRows)
   text-decoration: underline;
 }
 .c-up {
-  color: #e64a4a;
+  color: #EF232A;
 }
 .c-down {
-  color: #17a05e;
+  color: #14B143;
 }
 </style>

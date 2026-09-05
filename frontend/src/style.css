@@ -9,8 +9,25 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial,
     sans-serif;
-  color: #333;
-  background: #f5f5f5;
+  color: #1f2937;
+  background: #f5f7fa;
+}
+
+:root {
+  /* 行情语义色（仅行情数字 / K 线）— 规范见 docs/design/颜色体系设计规范.md */
+  --color-up: #ef232a;
+  --color-up-bg: #fdebeb;
+  --color-down: #14b143;
+  --color-down-bg: #e6f7ee;
+  --color-flat: #909399;
+  /* 管理语义色 */
+  --color-primary: #185fa5;
+  --color-primary-hover: #1e6fff;
+  --color-gold: #c9a227;
+  --color-gold-deep: #7a6410;
+  --color-warning: #b45309;
+  --color-error: #791f1f;
+  --color-neutral: #5f5e5a;
 }
 
 #app {
@@ -22,7 +39,7 @@ a {
   text-decoration: none;
 }
 
-/* 涨（红）跌（绿）- A 股配色约定 */
-.up { color: #f56c6c; }
-.down { color: #67c23a; }
-.flat { color: #909399; }
+/* 涨（红）跌（绿）- A 股配色约定（仅行情数字 / 涨跌文本） */
+.up { color: var(--color-up); }
+.down { color: var(--color-down); }
+.flat { color: var(--color-flat); }

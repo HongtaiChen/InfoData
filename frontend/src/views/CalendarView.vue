@@ -234,7 +234,12 @@ watch([year, month], () => {
               <div style="margin-top: 6px; display: flex; align-items: center; justify-content: space-between">
                 <NSpace :size="6">
                   <NTag size="tiny" type="info" :bordered="false">{{ e.data_source || '未知' }}</NTag>
-                  <NTag v-if="aiResults[e.id]?.status === 'ai'" size="tiny" type="success" :bordered="false">AI 已分析</NTag>
+                  <NTag
+                    v-if="aiResults[e.id]?.status === 'ai'"
+                    size="tiny"
+                    :bordered="false"
+                    :color="{ color: '#FBF6E9', borderColor: '#EEDC9E', textColor: '#7A6410' }"
+                  >AI 已分析</NTag>
                   <NTag v-else-if="aiResults[e.id]?.status === 'placeholder'" size="tiny" type="warning" :bordered="false">占位结果</NTag>
                 </NSpace>
                 <NSpace :size="8">
@@ -324,7 +329,7 @@ export default { components: { NGrid, NGi } }
   border-bottom: 1px solid #eceff3;
 }
 .cal-weekend {
-  color: #e64a4a;
+  color: #b45309;
 }
 .cal-body {
   display: grid;
@@ -432,7 +437,7 @@ export default { components: { NGrid, NGi } }
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #e64a4a;
+  color: #791f1f;
 }
 .ai-concept {
   background: #f7f9fc;

@@ -50,9 +50,19 @@ const columns: DataTableColumns<NewsRow> = [
     title: '来源',
     key: 'source',
     width: 100,
-    render: (r) => h(NTag, { size: 'small', type: r.source === 'cls' ? 'error' : 'info', bordered: false }, () =>
-      r.source === 'cls' ? '财联社' : r.source === 'em' ? '东财' : r.source || '--',
-    ),
+    render: (r) => {
+      const brandColor =
+        r.source === 'cls'
+          ? { color: '#185FA5', textColor: '#fff' }
+          : r.source === 'em'
+            ? { color: '#0F6E56', textColor: '#fff' }
+            : undefined
+      return h(
+        NTag,
+        { size: 'small', bordered: false, color: brandColor },
+        () => (r.source === 'cls' ? '财联社' : r.source === 'em' ? '东财' : r.source || '--'),
+      )
+    },
   },
   { title: '发布时间', key: 'published_at', width: 160, render: (r) => timeRender(r.published_at) },
 ]

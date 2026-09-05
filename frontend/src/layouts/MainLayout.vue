@@ -3,7 +3,7 @@ import { computed, h, ref } from 'vue'
 import { useRoute, useRouter, RouterView } from 'vue-router'
 import {
   NLayout, NLayoutHeader, NLayoutSider, NLayoutContent,
-  NMenu, NIcon, NSpace, NText,
+  NMenu, NSpace, NText,
   type MenuOption,
 } from 'naive-ui'
 
@@ -39,7 +39,7 @@ const collapsed = ref(false)
       @collapse="collapsed = true"
       @expand="collapsed = false"
     >
-      <div style="padding:16px 12px;font-weight:600;font-size:16px;color:#18a058;border-bottom:1px solid #eee;">
+      <div style="padding:16px 12px;font-weight:600;font-size:16px;color:#185FA5;border-bottom:1px solid #eee;">
         <span v-if="!collapsed">📊 InfoData</span>
         <span v-else>📊</span>
       </div>
@@ -63,7 +63,7 @@ const collapsed = ref(false)
           <NText depth="3" style="font-size:12px">v0.5 · 沪深 A 股本地数据中心</NText>
         </NSpace>
       </NLayoutHeader>
-      <NLayoutContent style="padding:16px;background:#f5f5f5">
+      <NLayoutContent style="padding:16px;background:#F5F7FA">
         <RouterView />
       </NLayoutContent>
     </NLayout>

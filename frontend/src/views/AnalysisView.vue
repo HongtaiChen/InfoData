@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, h, computed } from 'vue'
-import { NCard, NTab, NTabs, NDataTable, NSelect, NTag, type DataTableColumns } from 'naive-ui'
+import { NCard, NTab, NTabs, NDataTable, NSelect, type DataTableColumns } from 'naive-ui'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -33,7 +33,7 @@ async function loadDividend() {
 }
 
 const divColumns: DataTableColumns<any> = [
-  { title: '排名', key: 'idx', width: 60, render: (r, i) => i + 1 },
+  { title: '排名', key: 'idx', width: 60, render: (_, i) => i + 1 },
   { title: '代码', key: 'stock_code', width: 90 },
   { title: '名称', key: 'stock_name', width: 110 },
   { title: '报告期', key: 'report_period', width: 110 },
@@ -66,7 +66,7 @@ async function loadConceptRank() {
 }
 
 const conceptColumns: DataTableColumns<any> = [
-  { title: '排名', key: 'idx', width: 60, render: (r, i) => i + 1 },
+  { title: '排名', key: 'idx', width: 60, render: (_, i) => i + 1 },
   { title: '概念名称', key: 'concept_name', width: 140 },
   { title: '区间涨跌幅', key: 'change_pct', width: 110, render: (r) => pctRender(r.change_pct) },
   { title: '最新指数', key: 'close', width: 100, render: (r) => (r.close == null ? '--' : Number(r.close).toFixed(2)) },
@@ -91,7 +91,7 @@ async function loadYtd() {
 }
 
 const ytdColumns: DataTableColumns<any> = [
-  { title: '排名', key: 'idx', width: 60, render: (r, i) => i + 1 },
+  { title: '排名', key: 'idx', width: 60, render: (_, i) => i + 1 },
   { title: '代码', key: 'stock_code', width: 90 },
   { title: '名称', key: 'stock_name', width: 110 },
   { title: '年初至今涨幅', key: 'ytd_change_pct', width: 120, render: (r) => pctRender(r.ytd_change_pct) },
@@ -107,7 +107,7 @@ const chartData = computed(() => {
       title: '股息率 TOP 15',
       names: top.map((r) => r.stock_name),
       values: top.map((r) => (r.pre_tax_dividend_ratio == null ? 0 : Number(r.pre_tax_dividend_ratio))),
-      color: '#1e6fff',
+      color: '#185FA5',
       suffix: '%',
     }
   }
@@ -117,7 +117,7 @@ const chartData = computed(() => {
       title: `概念 ${period.value === 1 ? '今日' : `${period.value}日`}涨幅 TOP 15`,
       names: top.map((r) => r.concept_name),
       values: top.map((r) => Number(r.change_pct ?? 0)),
-      color: '#e64a4a',
+      color: '#EF232A',
       suffix: '%',
     }
   }
@@ -126,7 +126,7 @@ const chartData = computed(() => {
     title: `YTD ${ytdOrderLabel.value} 15`,
     names: top.map((r) => r.stock_name),
     values: top.map((r) => Number(r.ytd_change_pct ?? 0)),
-    color: ytdOrder.value === 'desc' ? '#e64a4a' : '#17a05e',
+    color: ytdOrder.value === 'desc' ? '#EF232A' : '#14B143',
     suffix: '%',
   }
 })
@@ -228,9 +228,9 @@ onMounted(() => loadDividend())
           <NSpace vertical :size="12">
             <NCard size="small" title="年初至今涨幅排行" :bordered="false">
               <template #header-extra>
-                <NTag :type="ytdOrder === 'desc' ? 'error' : 'success'" size="small" style="cursor: pointer" @click="ytdOrder = ytdOrder === 'desc' ? 'asc' : 'desc'; loadYtd()">
-                  点击切换：{{ ytdOrderLabel }}
-                </NTag>
+                <span class="rank-switch" style="cursor: pointer" @click="ytdOrder = ytdOrder === 'desc' ? 'asc' : 'desc'; loadYtd()">
+                  点击切换：<span :class="ytdOrder === 'desc' ? 'c-up' : 'c-down'">{{ ytdOrderLabel }}</span>
+                </span>
               </template>
               <NDataTable
                 :columns="ytdColumns"
@@ -253,10 +253,24 @@ onMounted(() => loadDividend())
 </template>
 
 <style scoped>
+.rank-switch {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f5f7fa;
+  padding: 2px 10px;
+  border-radius: 4px;
+  user-select: none;
+  transition: background 0.15s;
+}
+.rank-switch:hover {
+  background: #e6f1fb;
+}
 .c-up {
-  color: #e64a4a;
+  color: var(--color-up, #ef232a);
+  font-weight: 600;
 }
 .c-down {
-  color: #17a05e;
+  color: var(--color-down, #14b143);
+  font-weight: 600;
 }
 </style>

@@ -43,7 +43,7 @@ async function loadTasks() {
 async function toggleEnabled(r: any, val: boolean) {
   if (!r.implemented) return
   try {
-    const resp: any = await api.put(`/jobs/tasks/${r.task_name}`, { enabled: val })
+    await api.put(`/jobs/tasks/${r.task_name}`, { enabled: val })
     message.success(val ? `已启用 ${r.task_name}（自动调度）` : `已停用 ${r.task_name}（仅手动触发）`)
     loadTasks()
   } catch (e: any) {
@@ -123,7 +123,7 @@ async function saveEdit() {
   if (!editingTask.value) return
   editSaving.value = true
   try {
-    const resp: any = await api.put(`/jobs/tasks/${editingTask.value.task_name}`, {
+    await api.put(`/jobs/tasks/${editingTask.value.task_name}`, {
       enabled: editEnabled.value,
       cron: editCron.value.trim() || '手动',
     })
@@ -230,8 +230,8 @@ const statusFilter = ref('')
 const runsLoading = ref(false)
 
 const statusTag = (s: string) => {
-  const map: Record<string, { type: 'success' | 'error' | 'info' | 'default' | 'warning'; text: string }> = {
-    success: { type: 'success', text: '成功' },
+  const map: Record<string, { type: 'info' | 'error' | 'default' | 'warning'; text: string }> = {
+    success: { type: 'info', text: '成功' },
     failed: { type: 'error', text: '失败' },
     running: { type: 'info', text: '运行中' },
     partial: { type: 'warning', text: '部分成功' },
@@ -530,21 +530,21 @@ onUnmounted(() => {
       </NGi>
       <NGi>
         <NCard size="small" hoverable>
-          <NStatistic label="累计成功" :value="totalOk" style="--n-value-text-color: #18a058">
+          <NStatistic label="累计成功" :value="totalOk" style="--n-value-text-color: #185FA5">
             <template #suffix>次</template>
           </NStatistic>
         </NCard>
       </NGi>
       <NGi>
         <NCard size="small" hoverable>
-          <NStatistic label="累计失败" :value="totalFail" style="--n-value-text-color: #d03050">
+          <NStatistic label="累计失败" :value="totalFail" style="--n-value-text-color: #791F1F">
             <template #suffix>次</template>
           </NStatistic>
         </NCard>
       </NGi>
       <NGi>
         <NCard size="small" hoverable>
-          <NStatistic label="运行中" :value="totalRunning" style="--n-value-text-color: #2080f0">
+          <NStatistic label="运行中" :value="totalRunning" style="--n-value-text-color: #185FA5">
             <template #suffix>个</template>
           </NStatistic>
         </NCard>
@@ -557,7 +557,7 @@ onUnmounted(() => {
         <NSpace align="center" justify="space-between" style="width: 100%">
           <NSpace align="center">
             <span>任务配置（task_config）</span>
-            <NTag v-if="schedulerRunning" size="small" type="success" :bordered="false">
+            <NTag v-if="schedulerRunning" size="small" type="info" :bordered="false">
               🕒 调度器运行中 · {{ scheduledCount }} 个定时任务
             </NTag>
             <NTag v-else size="small" type="error" :bordered="false">⚠️ 调度器未运行</NTag>
