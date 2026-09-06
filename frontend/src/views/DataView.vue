@@ -480,6 +480,19 @@ const flowChainReady = computed<boolean>(() => {
 const flowMainJob = computed<FlowJob | null>(() =>
   flowOf.value && flowOf.value.jobs.length === 1 ? flowOf.value.jobs[0] : null,
 )
+// 多 writer 整链：同一张表由多个任务写入时，每个齐备（血缘列 + 步骤模板）的 job 渲染为一条独立车道
+const flowMultiLaneJobs = computed<FlowJob[]>(() =>
+  (flowOf.value?.jobs || []).filter((j) => (j.lineage?.cols?.length || 0) > 0 && (j.run_steps?.length || 0) > 0),
+)
+const flowMultiLaneReady = computed<boolean>(() =>
+  !!flowOf.value && flowOf.value.jobs.length > 1 && flowMultiLaneJobs.value.length > 0,
+)
+// 多 writer 表中未达整链要素的 job（无列级血缘或步骤模板）单独兜底列出
+const flowPlainJobs = computed<FlowJob[]>(() => {
+  if (!flowOf.value || flowOf.value.jobs.length <= 1) return []
+  const laneNames = new Set(flowMultiLaneJobs.value.map((j) => j.task_name))
+  return flowOf.value.jobs.filter((j) => !laneNames.has(j.task_name))
+})
 // 直采列（随行源写入）与推算列（derived，清洗口径标注）
 function flowDirectCols(j: FlowJob): string[] {
   return (j.lineage?.cols || []).filter((c) => !(j.lineage?.derived || []).includes(c))
@@ -1038,6 +1051,157 @@ onMounted(loadTables)
                 <span><span style="color:#C9A227;">*</span> 本地加工/推算</span>
                 <span><span style="color:#185FA5;">主源</span> / <span style="color:#C9A227;">备源</span></span>
                 <span style="margin-left:auto;">整链图例</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 整链拓扑 · 多 writer：同一张表多条数据流，每 job 一条车道（源 → 步骤链 → 字段落点） -->
+          <div v-else-if="flowMultiLaneReady" style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-size:11px;color:#888;">多链路写入整链 · {{ flowMultiLaneJobs.length }} 条数据流纵向并列（各车道独立展示 源 → 步骤链 → 字段落点）</span>
+              <span style="margin-left:auto;font-size:10.5px;color:#a0a6ad;">下方其余维护任务见末尾清单</span>
+            </div>
+
+            <div
+              v-for="(j, idx) in flowMultiLaneJobs"
+              :key="j.task_name"
+              style="display:flex;gap:10px;align-items:stretch;flex-wrap:nowrap;border:1px solid #eceff4;border-left:3px solid transparent;border-radius:10px;padding:10px;background:#fff;"
+              :style="{ borderLeftColor: laneColor(idx) }"
+            >
+              <!-- 左：该 job 的数据源 -->
+              <div style="flex:0 0 150px;display:flex;flex-direction:column;gap:5px;">
+                <div style="font-size:11px;color:#888;margin-bottom:2px;">
+                  数据源
+                  <span style="color:#c3c9d0;margin-left:3px;">{{ idx + 1 }}/{{ flowMultiLaneJobs.length }}</span>
+                </div>
+                <div
+                  :title="'该任务专属数据源（多 writer 表，各任务各写各的列）'"
+                  style="border-radius:8px;padding:8px 9px;font-size:12px;line-height:1.4;"
+                  :style="{ border: '1.5px solid ' + laneColor(idx), background: laneColor(idx) + '10', color: '#333' }"
+                >
+                  <div :style="{ fontWeight: 500, color: '#0C447C' }">{{ j.lineage?.source || flowSources[0] || '—' }}</div>
+                  <div :style="{ fontSize: '10.5px', opacity: 0.72 }">写入 {{ j.lineage?.cols.length }} 列</div>
+                </div>
+                <div style="margin-top:auto;font-size:10.5px;color:#a0a6ad;line-height:1.5;border-top:1px dashed #e5eaf0;padding-top:5px;">
+                  {{ j.lineage?.note || '' }}
+                </div>
+              </div>
+
+              <div style="flex:0 0 18px;display:flex;align-items:center;justify-content:center;color:#185FA5;font-size:16px;">→</div>
+
+              <!-- 中：任务盒 + 步骤链 + 最近实录 -->
+              <div style="flex:0 0 340px;display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:11px;color:#888;">维护任务 · 运行逻辑</div>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                  <span style="font-family:Consolas,Menlo,monospace;font-weight:500;color:#185FA5;font-size:13px;">{{ j.task_name }}</span>
+                  <span v-if="j.cron" style="font-size:11px;color:#555;background:#F5F8FC;border:1px solid #e0e6ed;border-radius:4px;padding:1px 6px;">{{ cronToText(j.cron) }}</span>
+                  <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
+                  <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <div
+                    v-for="s in flowStepRows(j)"
+                    :key="s.no"
+                    :title="s.params || ''"
+                    style="display:flex;align-items:center;gap:6px;border:1px solid #eef1f5;border-left:2.5px solid #B5D4F4;border-radius:6px;padding:3px 8px;background:#FAFBFC;"
+                  >
+                    <span style="font-size:10.5px;color:#aaa;font-family:Consolas,Menlo,monospace;flex-shrink:0;">{{ s.no }}</span>
+                    <span style="font-size:12px;color:#333;min-width:0;">{{ s.name }}</span>
+                    <span v-if="s.value" style="margin-left:auto;font-size:10.5px;color:#185FA5;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap;">{{ s.value }}</span>
+                    <span v-else style="margin-left:auto;font-size:10.5px;color:#c0c6cc;">—</span>
+                  </div>
+                </div>
+                <div
+                  style="border-radius:6px;background:#F5F8FC;border:1px solid #e6ebf1;padding:4px 8px;display:flex;align-items:center;gap:6px;font-size:11px;color:#555;flex-wrap:wrap;"
+                >
+                  <span style="width:6px;height:6px;border-radius:50%;display:inline-block;" :style="{ background: flowLastStatus(j).color }"></span>
+                  <b :style="{ color: flowLastStatus(j).color }">{{ flowLastStatus(j).text }}</b>
+                  <template v-if="j.last">
+                    <template v-if="j.last.status === 'success' && j.last.records_written !== null">+{{ j.last.records_written }} 条</template>
+                    <span v-if="j.last.finished_at"> · {{ fmtFlowDt(j.last.finished_at) }}</span>
+                    <span v-if="j.last.run_detail?.duration"> · {{ j.last.run_detail.duration }}</span>
+                  </template>
+                  <span v-if="j.next_run" style="margin-left:auto;color:#888;">下次 {{ fmtFlowDt(j.next_run) }}</span>
+                </div>
+                <div style="font-size:10.5px;color:#a0a6ad;line-height:1.5;">
+                  {{ j.last ? '最近运行实录 · 步骤数值取自 task_runs 快照' : '该任务尚未运行过，步骤右侧数值将在下次运行后自动填充' }}
+                </div>
+              </div>
+
+              <div style="flex:0 0 18px;display:flex;align-items:center;justify-content:center;color:#185FA5;font-size:16px;">→</div>
+
+              <!-- 右：该 job 写入的字段落点 -->
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
+                <div style="font-size:11px;color:#888;">
+                  字段落点 · {{ j.lineage?.cols.length }} 列
+                  <span style="color:#c3c9d0;margin-left:4px;">本任务写入列（悬停查看口径）</span>
+                </div>
+                <!-- A 直采 -->
+                <div>
+                  <div style="font-size:11px;color:#888;margin-bottom:3px;">
+                    A 随行源直采
+                    <span style="color:#c3c9d0;margin-left:4px;">随 {{ j.lineage?.source || '源' }} 写入</span>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:3px;">
+                    <span
+                      v-for="c in flowDirectCols(j)"
+                      :key="c"
+                      :title="(j.lineage?.col_notes || {})[c] || ''"
+                      style="font-family:Consolas,Menlo,monospace;font-size:11px;padding:2px 6px;border:1px solid #d8e2ec;border-radius:4px;color:#3a5a7a;background:#fff;"
+                    >{{ c }}</span>
+                  </div>
+                </div>
+                <!-- B 推算 -->
+                <div v-if="flowDerivedCols(j).length">
+                  <div style="font-size:11px;color:#8a6d3b;margin-bottom:3px;">
+                    B 推算列 *
+                    <span style="color:#b6a887;margin-left:4px;">源缺失时按口径本地补齐</span>
+                  </div>
+                  <div style="display:flex;flex-wrap:wrap;gap:3px;">
+                    <span
+                      v-for="c in flowDerivedCols(j)"
+                      :key="c"
+                      :title="(j.lineage?.col_notes || {})[c] || '本地加工/推断口径列'"
+                      style="font-family:Consolas,Menlo,monospace;font-size:11px;padding:2px 6px;border:1px dashed #C9A227;border-radius:4px;color:#7a5c1e;background:#FDF9EE;cursor:help;"
+                    >{{ c }}*</span>
+                  </div>
+                </div>
+                <div v-if="!flowDirectCols(j).length && !flowDerivedCols(j).length" style="color:#aaa;font-size:11px;">该任务无列级落点（仅表级维护）</div>
+              </div>
+            </div>
+
+            <!-- 多 writer 表级系统列（各车道差集，仅一次） -->
+            <div v-if="flowSystemCols.length" style="display:flex;align-items:flex-start;gap:8px;border:1px dashed #e6e0d2;border-radius:8px;padding:8px 10px;background:#FBF9F4;">
+              <span style="font-size:11px;color:#8a7b5c;font-weight:500;flex-shrink:0;">C 系统 / 本地管理列 · {{ flowSystemCols.length }}</span>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <span
+                  v-for="c in flowSystemCols"
+                  :key="c"
+                  title="该列由数据库/系统维护（自增、ON UPDATE、DEFAULT 等），无采集任务写入"
+                  style="font-family:Consolas,Menlo,monospace;font-size:11px;line-height:1;padding:2px 6px;border-radius:4px;border:1px dashed #ded8c8;color:#9a8a66;background:#fff;white-space:nowrap;"
+                >{{ c }}</span>
+              </div>
+            </div>
+
+            <!-- 多 writer 表中未达整链要素的兜底清单 -->
+            <div v-if="flowPlainJobs.length" style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:11px;color:#888;">其余维护任务（未配置列级血缘/步骤模板）</div>
+              <div
+                v-for="j in flowPlainJobs"
+                :key="j.task_name"
+                :title="(j.last && j.last.error_message) || ''"
+                style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:5px 10px;"
+              >
+                <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#185FA5;">{{ j.task_name }}</span>
+                <span style="color:#555;">{{ cronToText(j.cron) }}</span>
+                <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
+                <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
+                  <span>
+                    <b :style="{ color: flowLastStatus(j).color }">{{ flowLastStatus(j).text }}</b>
+                    <template v-if="j.last && j.last.status === 'success' && j.last.records_written !== null">+{{ j.last.records_written }} 条</template>
+                  </span>
+                  <span v-if="j.next_run">下次 {{ fmtFlowDt(j.next_run) }}</span>
+                </span>
               </div>
             </div>
           </div>
