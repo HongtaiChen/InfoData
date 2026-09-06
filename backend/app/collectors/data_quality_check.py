@@ -32,8 +32,18 @@ from datetime import datetime, timedelta
 import pymysql
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "读启用规则", "params": "dq_rules enabled=1 逐条（按表排序）"},
+    {"no": 2, "name": "规则预校验", "params": "表/列 information_schema 白名单 + where 标识符白名单（防注入）"},
+    {"no": 3, "name": "执行检查器", "params": "10 类检查器（新鲜度/切片行数/空值率/违规数/唯一索引…）；单条失败记 error 不中断"},
+    {"no": 4, "name": "写入 dq_report", "params": "每规则一行：run_at 轮次快照 + status/metric_value/message"},
+    {"no": 5, "name": "轮次保留清理", "params": "删除 run_date 早于 30 天的历史轮次"},
+]
 
 # 保留轮次窗口（天）
 REPORT_KEEP_DAYS = 30
@@ -344,7 +354,10 @@ class DataQualityCheckCollector:
                 raw = rule.get("params")
                 rule["params"] = json.loads(raw) if isinstance(raw, str) else (raw or {})
             if not rules:
-                return {"records_written": 0, "error_count": 1, "errors": ["dq_rules 无启用规则"], "note": "未配置"}
+                return with_steps(
+                    {"records_written": 0, "error_count": 1, "errors": ["dq_rules 无启用规则"], "note": "未配置"},
+                    RUN_STEPS, {1: "无启用规则，终止"},
+                )
 
             insert_sql = (
                 "INSERT INTO dq_report "
@@ -386,6 +399,16 @@ class DataQualityCheckCollector:
             conn.commit()
             logger.info(f"✅ DQ 体检完成：本轮 {written} 条规则（run_at={self.run_at:%Y-%m-%d %H:%M:%S}）")
             note = f"体检完成 run_at={self.run_at:%Y-%m-%d %H:%M:%S}"
-            return {"records_written": written, "error_count": len(errors), "errors": errors[:5], "note": note}
+            return with_steps(
+                {"records_written": written, "error_count": len(errors), "errors": errors[:5], "note": note},
+                RUN_STEPS,
+                {
+                    1: f"{len(rules)} 条启用规则",
+                    2: f"预校验 {len(rules)} 条",
+                    3: f"执行完成 · error {len(errors)} 条",
+                    4: f"写入 dq_report {written} 条",
+                    5: f"清理 ≤{REPORT_KEEP_DAYS} 天前历史",
+                },
+            )
         finally:
             conn.close()

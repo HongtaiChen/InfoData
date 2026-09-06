@@ -24,8 +24,17 @@ import pymysql
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "扫描候选代码", "params": "档案缺失（company_name IS NULL）优先 + 超 refresh_days(30) 未刷新，上限 max_count(200)"},
+    {"no": 2, "name": "资格过滤", "params": "仅在市沪深 A 股（退市/B 股/北交所巨潮无档案，跳过）"},
+    {"no": 3, "name": "逐只拉巨潮档案", "params": "ak.stock_profile_cninfo 单只 26 字段；失败记 error 不中断，下轮自动重试"},
+    {"no": 4, "name": "列级 UPDATE", "params": "仅档案列 + profile_updated_at=NOW()，不触碰证券列；每 50 只分批提交"},
+]
 
 # 巨潮返回中文列 -> stock_info 档案列名
 _COL_MAP = {
@@ -108,7 +117,10 @@ class StockCompanySyncCollector:
                 break
         if not candidates:
             logger.info("无待更新档案（全部在市沪深 A 股均有且未过期）")
-            return {"records_written": 0, "error_count": 0, "errors": [], "note": "无待更新档案"}
+            return with_steps(
+                {"records_written": 0, "error_count": 0, "errors": [], "note": "无待更新档案"},
+                RUN_STEPS, {1: f"扫描 {len(rows)} 只，全部已最新"},
+            )
 
         logger.info("本轮待更新 %s 只", len(candidates))
 
@@ -149,12 +161,21 @@ class StockCompanySyncCollector:
 
         msg = f"公司档案同步：写入/更新 {written} 只（失败 {len(errors)}）"
         logger.info("✅ %s", msg)
-        return {
-            "records_written": written,
-            "error_count": len(errors),
-            "errors": errors[:50],
-            "note": msg,
-        }
+        return with_steps(
+            {
+                "records_written": written,
+                "error_count": len(errors),
+                "errors": errors[:50],
+                "note": msg,
+            },
+            RUN_STEPS,
+            {
+                1: f"扫描 {len(rows)} 只 → 候选 {len(candidates)} 只",
+                2: f"过滤后待处理 {len(candidates)} 只",
+                3: f"拉取成功 {written} 只 · 失败 {len(errors)}",
+                4: f"UPDATE 提交 {written} 只",
+            },
+        )
 
 
 def _clean(v):

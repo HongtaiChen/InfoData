@@ -13,8 +13,17 @@ import pymysql
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "拉取中美收益率", "params": "ak.bond_zh_us_rate()（中债信息网+美债，1990~今日频）"},
+    {"no": 2, "name": "源列校验", "params": "所需 10 列缺失任一则中断（防字段漂移）"},
+    {"no": 3, "name": "增量窗口过滤", "params": "仅取本地 MAX(trade_date) 之后的日期，全空行剔除"},
+    {"no": 4, "name": "批量写入", "params": "executemany INSERT（data_source=AKSHARE）"},
+]
 
 # 源列名 → 目标列名
 _COL_MAP = {
@@ -84,7 +93,11 @@ class BondProfitSyncCollector:
 
             if not rows:
                 logger.info(f"ℹ️ 国债收益率无新增（本地已至 {max_date}）")
-                return {"records_written": 0, "error_count": 0, "errors": [], "note": "已是最新，无新增"}
+                return with_steps(
+                    {"records_written": 0, "error_count": 0, "errors": [], "note": "已是最新，无新增"},
+                    RUN_STEPS,
+                    {1: f"接口 {len(df)} 天", 2: "列齐全", 3: f"无 > {max_date} 的新行，终止"},
+                )
 
             with conn.cursor() as cur:
                 cur.executemany(
@@ -97,11 +110,20 @@ class BondProfitSyncCollector:
                 )
             conn.commit()
             logger.info(f"✅ 国债收益率增量 {len(rows)} 条（{rows[0][0]} ~ {rows[-1][0]}）")
-            return {
-                "records_written": len(rows),
-                "error_count": 0,
-                "errors": [],
-                "note": f"中美国债收益率补齐 {len(rows)} 天（{rows[0][0]}~{rows[-1][0]}）",
-            }
+            return with_steps(
+                {
+                    "records_written": len(rows),
+                    "error_count": 0,
+                    "errors": [],
+                    "note": f"中美国债收益率补齐 {len(rows)} 天（{rows[0][0]}~{rows[-1][0]}）",
+                },
+                RUN_STEPS,
+                {
+                    1: f"接口 {len(df)} 天",
+                    2: "列齐全",
+                    3: f"本地已至 {max_date}，筛出 {len(rows)} 天增量",
+                    4: f"写入 {len(rows)} 天",
+                },
+            )
         finally:
             conn.close()

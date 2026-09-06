@@ -17,8 +17,17 @@ from typing import Any
 import pymysql
 
 from ..db import get_db_config, query_all
+from ..collectors._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "选取日历事件", "params": "finance_calendar 近 days_back 天（默认 30），GROUP BY 事件去重，上限 limit"},
+    {"no": 2, "name": "逐条豆包分析", "params": "方舟 ARK_API_KEY 调用，单事件最多 MAX_CONCEPTS=5 个概念"},
+    {"no": 3, "name": "降级占位结果", "params": "无 Key / 调用失败 → placeholder 占位仍落库（来源标注区分）"},
+    {"no": 4, "name": "保存分析概念", "params": "finance_concept_analysis 清该事件旧结果后重写（relation_degree 与 TOP N 联动）"},
+]
 
 # 方舟（豆包）OpenAI 兼容端点
 ARK_API_URL = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
@@ -157,7 +166,16 @@ def batch_analyze(limit: int = 20, days_back: int = 30) -> dict:
             results[res["status"]] = results.get(res["status"], 0) + 1
         except Exception as e:
             results["errors"].append(f"{r[0]} {r[1]}: {e}")
-    return results
+    return with_steps(
+        results,
+        RUN_STEPS,
+        {
+            1: f"事件 {len(rows)} 条",
+            2: f"AI {results['ai']} 条",
+            3: f"占位 {results['placeholder']} 条",
+            4: f"失败 {len(results['errors'])} 条",
+        },
+    )
 
 
 # ---------- 内部：事件加载 / 落库 ----------

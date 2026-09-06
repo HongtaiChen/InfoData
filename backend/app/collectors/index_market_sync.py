@@ -15,8 +15,18 @@ import requests
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "构建指数清单", "params": "INDEX_MAP 13 个主流 + DB 已存指数（含增补）"},
+    {"no": 2, "name": "逐指数定增量窗口", "params": "本地 MAX(trade_date) 次日 → 今天；无记录回补 500 天"},
+    {"no": 3, "name": "双源拉取", "params": "东财 index_zh_a_hist 主源 → 腾讯 fqkline 降级（仅 OHLCV）"},
+    {"no": 4, "name": "窗口清理防重", "params": "DELETE 窗口内旧行（AKSHARE/TENCENT 残留）"},
+    {"no": 5, "name": "批量写入", "params": "INSERT dc_index_market 13 字段，data_source 实记命中源"},
+]
 
 # 指数代码 → (腾讯市场前缀, 指数名)。生产以东财 index_zh_a_hist 为准；腾讯仅作降级。
 INDEX_MAP: dict[str, tuple[str, str]] = {
@@ -175,9 +185,19 @@ class IndexMarketSyncCollector:
 
         msg = f"指数日线新增 {written} 行 / {len(notes)} 个指数更新" + (f"；失败 {errors}" if errors else "")
         logger.info(f"✅ {msg}")
-        return {
-            "records_written": written,
-            "error_count": len(errors),
-            "errors": errors,
-            "note": msg,
-        }
+        return with_steps(
+            {
+                "records_written": written,
+                "error_count": len(errors),
+                "errors": errors,
+                "note": msg,
+            },
+            RUN_STEPS,
+            {
+                1: f"清单 {len(index_map)} 个",
+                2: f"已最新/空跳过 {skipped} 个",
+                3: f"{len(notes)} 个指数拉取成功（东财优先，失败自动降级腾讯）",
+                4: "清理窗口内旧行",
+                5: f"新增 {written} 行",
+            },
+        )

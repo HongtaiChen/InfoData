@@ -15,8 +15,18 @@ import pymysql
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "取全市场名单", "params": "东财 stock_zh_a_spot_em 主源 → 本地快照降级（<3000 拒用）"},
+    {"no": 2, "name": "读存量快照", "params": "stock_info / stock_info_ex 现有代码与名称"},
+    {"no": 3, "name": "回填上市日期", "params": "MIN(stock_market_daily.trade_date)，仅新代码 + 缺 list_date（单次上限 600）"},
+    {"no": 4, "name": "名单内更新", "params": "stock_info/stock_info_ex UPDATE 名称/交易所；名单外保留（不删退市旧行）"},
+    {"no": 5, "name": "新上市补录", "params": "仅 INSERT 新代码；stock_info_ex 保留人工 is_gxlstock"},
+]
 
 
 def _exchange_of(code: str) -> str:
@@ -160,9 +170,19 @@ class StockInfoSyncCollector:
 
         msg = f"股票基础资料同步：{len(name_map)} 只在名单（新增 {inserted} / 更新 {updated}，回填 list_date {backfilled}），源={source_tag}"
         logger.info(f"✅ {msg}")
-        return {
-            "records_written": inserted + updated,
-            "error_count": 0,
-            "errors": [],
-            "note": msg,
-        }
+        return with_steps(
+            {
+                "records_written": inserted + updated,
+                "error_count": 0,
+                "errors": [],
+                "note": msg,
+            },
+            RUN_STEPS,
+            {
+                1: f"{len(name_map)} 只（源 {source_tag}）",
+                2: f"存量 stock_info {len(exist)} 只 / stock_info_ex {len(exist_ex)} 只",
+                3: f"回填 {backfilled} 只",
+                4: f"更新 {updated} 只",
+                5: f"新增 {inserted} 只",
+            },
+        )

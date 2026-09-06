@@ -25,8 +25,19 @@ import pandas as pd
 import pymysql
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger("infodata.concept_market_sync")
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "拉概念清单", "params": "同花顺 stock_board_concept_name_ths()（name + concept_code 309xxx）"},
+    {"no": 2, "name": "对齐库内映射", "params": "concept_name → index_code/库内最大日期（886 段优先继承）"},
+    {"no": 3, "name": "增量窗口判定", "params": "库内最大日次日 → 今天；新概念回补 400 天；已最新跳过"},
+    {"no": 4, "name": "并发拉取历史", "params": "4 线程 stock_board_concept_index_ths，单概念 40s 硬超时"},
+    {"no": 5, "name": "组装与推算", "params": "中文列归一（日期/OHLC/量额）；涨跌额/涨跌幅按收盘连算推算"},
+    {"no": 6, "name": "双表写入", "params": "新概念入 ths_concept_info；行情 INSERT IGNORE（唯一键 index_code+trade_date）"},
+]
 
 SOURCE = "同花顺"
 DATA_SOURCE = "ths"
@@ -231,11 +242,22 @@ class ConceptMarketSyncCollector:
             logger.info(
                 f"✅ 概念行情同步完成：写入 {written} 行（新概念 {inserted_info} 个，失败 {len(errors)} 个）"
             )
-            return {
-                "records_written": written,
-                "error_count": len(errors),
-                "errors": errors,
-                "note": f"概念数 {len(concepts)}，成功拉取 {len(results)}，新增概念 {inserted_info}",
-            }
+            return with_steps(
+                {
+                    "records_written": written,
+                    "error_count": len(errors),
+                    "errors": errors,
+                    "note": f"概念数 {len(concepts)}，成功拉取 {len(results)}，新增概念 {inserted_info}",
+                },
+                RUN_STEPS,
+                {
+                    1: f"{len(concepts)} 个概念",
+                    2: f"库内匹配 {len(db_map)} 个",
+                    3: f"待拉取 {len(tasks)} · 已最新跳过 {len(concepts) - len(tasks)}",
+                    4: f"成功 {len(results)} · 失败 {len(errors)}",
+                    5: f"组装 {len(rows_market)} 行",
+                    6: f"写入 {written} 行 · 新概念 {inserted_info} 个",
+                },
+            )
         finally:
             conn.close()

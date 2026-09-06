@@ -16,11 +16,20 @@ import pymysql
 import requests
 
 from ..db import get_db_config
+from ._common import with_steps
 
 os.environ["NO_PROXY"] = "*"
 os.environ["no_proxy"] = "*"
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "抓取东财快讯", "params": "np-listapi 分页翻取（sortEnd 游标，每源上限 max_pages 页）"},
+    {"no": 2, "name": "抓取财联社电报", "params": "akshare stock_info_global_cls（签名通道，失败仅告警不中断）"},
+    {"no": 3, "name": "双源合并判重", "params": "标题+发布时间 MD5 判重；INSERT IGNORE 兜底 (source,url)"},
+    {"no": 4, "name": "逐条入库", "params": "news 表（title/source/published_at/content/url）"},
+]
 
 EM_API = "https://np-listapi.eastmoney.com/comm/web/getFastNewsList"
 EM_HEADERS = {
@@ -143,7 +152,9 @@ class NewsFetchCollector:
     def run(self) -> dict:
         fetched: list[dict] = []
         source_errors: list[str] = []
+        src_stat: dict[str, int] = {}
         for src in self.sources:
+            before = len(fetched)
             if src == "em":
                 fetched.extend(self._fetch_em())
             elif src == "cls":
@@ -153,6 +164,7 @@ class NewsFetchCollector:
                     source_errors.append("财联社接口不可用（akshare 通道）")
             else:
                 source_errors.append(f"未知资讯源 {src}")
+            src_stat[src] = len(fetched) - before
 
         if not fetched:
             raise RuntimeError("资讯拉取为空：" + ("；".join(source_errors) or "所有源均无数据"))
@@ -171,6 +183,15 @@ class NewsFetchCollector:
             note = f"来源 {self.sources}：新增 {inserted} / 去重 {dup}"
             if source_errors:
                 note += "；" + "；".join(source_errors)
-            return {"records_written": inserted, "error_count": 0, "errors": [], "note": note}
+            return with_steps(
+                {"records_written": inserted, "error_count": 0, "errors": [], "note": note},
+                RUN_STEPS,
+                {
+                    1: f"{src_stat.get('em', 0)} 条" if "em" in self.sources else "未启用",
+                    2: f"{src_stat.get('cls', 0)} 条" if "cls" in self.sources else "未启用",
+                    3: f"合并 {len(fetched)} 条",
+                    4: f"新增 {inserted} · 去重 {dup}",
+                },
+            )
         finally:
             conn.close()

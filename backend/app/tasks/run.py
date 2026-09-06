@@ -48,6 +48,14 @@ def _take_run_detail():
     return d
 
 
+def _collector_run(collector):
+    """调用采集器并暂存其结构化结果 → task_runs.run_detail（推广整链拓扑的统一入口）"""
+    result = _collector_run(collector)
+    if isinstance(result, dict):
+        _set_run_detail(result)
+    return result
+
+
 def _setup_logging():
     logging.basicConfig(
         level=logging.INFO,
@@ -64,8 +72,7 @@ def run_stock_daily_incr(params: dict) -> int:
         include_stale=bool(params.get("include_stale", False)),
         include_bj=bool(params.get("include_bj", False)),
     )
-    result = collector.run()
-    _set_run_detail(result)  # 含 run_steps 步骤链 + 当轮实录 → task_runs.run_detail
+    result = _collector_run(collector)
     if result["error_count"] > 0 and result["records_written"] == 0:
         raise RuntimeError(f"{result['error_count']} 只股票采集失败（无任何写入）: {result['errors']}")
     if result["error_count"] > 0:
@@ -86,7 +93,7 @@ def _task_params(params: dict, defaults: dict) -> dict:
 def run_market_current_sync(params: dict) -> int:
     """行情快照聚合：stock_market_daily 最新交易日 → stock_market_current"""
     collector = MarketCurrentSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -97,7 +104,7 @@ def run_trade_calendar_sync(params: dict) -> int:
     p = _task_params(params, {})
     years = p.get("years")  # 可选: [2026, 2027]
     collector = TradeCalendarSyncCollector(years=years)
-    result = collector.run()
+    result = _collector_run(collector)
     return result["records_written"]
 
 
@@ -106,7 +113,7 @@ def run_news_fetch(params: dict) -> int:
     p = _task_params(params, {"sources": ["em"], "max_pages": 3})
     sources = p.get("sources") or ["em"]
     collector = NewsFetchCollector(sources=sources, max_pages=int(p.get("max_pages", 3)))
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -116,7 +123,7 @@ def run_concept_market_sync(params: dict) -> int:
     """同花顺概念板块行情增量同步（概念 K 线 / 概念排名数据源）"""
     p = _task_params(params, {})
     collector = ConceptMarketSyncCollector(start_date=p.get("start_date"))
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 概念行情 {result['error_count']} 个失败（其余正常）: {result['errors'][:3]}")
     return result["records_written"]
@@ -131,6 +138,7 @@ def run_ai_concept_analysis(params: dict) -> int:
     )
     # 写入条数 = ai + placeholder 解析后的概念总数（这里以 analyzed 数为近似）
     analyzed = int(result.get("ai", 0)) + int(result.get("placeholder", 0))
+    _set_run_detail(result)  # batch_analyze 结构化快照 → task_runs.run_detail
     if result.get("errors"):
         logger.warning(f"⚠️ 部分事件分析失败: {result['errors'][:3]}")
     return analyzed
@@ -141,7 +149,7 @@ def run_ai_concept_analysis(params: dict) -> int:
 def run_stock_info_sync(params: dict) -> int:
     """股票基础资料同步（stock_info / stock_info_ex，周更全市场名单）"""
     collector = StockInfoSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -150,7 +158,7 @@ def run_stock_info_sync(params: dict) -> int:
 def run_concept_sync(params: dict) -> int:
     """概念成分同步（ths_stock_concepts：同花顺主源 → 新浪降级）"""
     collector = ConceptSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 概念成分 {result['error_count']} 个失败（其余正常）: {result['errors'][:5]}")
     return result["records_written"]
@@ -159,7 +167,7 @@ def run_concept_sync(params: dict) -> int:
 def run_fund_info_sync(params: dict) -> int:
     """基金基础信息同步（fund_info，东财基金列表全量重建）"""
     collector = FundInfoSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -168,7 +176,7 @@ def run_fund_info_sync(params: dict) -> int:
 def run_index_market_sync(params: dict) -> int:
     """指数日线同步（dc_index_market：东财主源 → 腾讯降级）"""
     collector = IndexMarketSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 指数 {result['error_count']} 个失败（其余正常）: {result['errors'][:5]}")
     return result["records_written"]
@@ -177,7 +185,7 @@ def run_index_market_sync(params: dict) -> int:
 def run_bond_profit_sync(params: dict) -> int:
     """中美国债收益率同步（bond_profit_daily 增量）"""
     collector = BondProfitSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -186,7 +194,7 @@ def run_bond_profit_sync(params: dict) -> int:
 def run_finance_calendar_sync(params: dict) -> int:
     """财经日历同步（finance_calendar：东财 RPT_CPH_FECALENDAR，替换失效 JY 源）"""
     collector = FinanceCalendarSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -195,7 +203,7 @@ def run_finance_calendar_sync(params: dict) -> int:
 def run_data_quality_check(params: dict) -> int:
     """数据质量体检：读取 dq_rules 逐条执行 → 写 dq_report（每日盘后自动）"""
     collector = DataQualityCheckCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0 and result["records_written"] == 0:
         raise RuntimeError("; ".join(result["errors"]))
     if result["error_count"] > 0:
@@ -208,7 +216,7 @@ def run_data_quality_check(params: dict) -> int:
 def run_stock_status_sync(params: dict) -> int:
     """上市/退市状态同步（stock_info.list_status/delist_date，Baostock 周更全量）"""
     collector = StockStatusSyncCollector()
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -221,7 +229,7 @@ def run_stock_company_sync(params: dict) -> int:
         max_count=int(p.get("max_count", 200)),
         refresh_days=int(p.get("refresh_days", 30)),
     )
-    result = collector.run()
+    result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 公司档案 {result['error_count']} 只失败（其余正常）: {result['errors'][:5]}")
     return result["records_written"]

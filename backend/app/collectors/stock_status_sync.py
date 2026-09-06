@@ -18,8 +18,17 @@ import pymysql
 import baostock as bs
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "Baostock 全量拉取", "params": "query_stock_basic（沪深全部，含退市 300+ 只）"},
+    {"no": 2, "name": "数量护栏校验", "params": "返回 < 4000 只拒绝覆盖（防接口异常）"},
+    {"no": 3, "name": "状态全量覆盖", "params": "逐只 UPDATE stock_info.list_status（上市/退市）"},
+    {"no": 4, "name": "日期字段补充", "params": "outDate → delist_date；官方 ipoDate 仅补空 list_date（不覆盖本地推断）"},
+]
 
 _PREFIX = ("sh.", "sz.")
 
@@ -93,9 +102,18 @@ class StockStatusSyncCollector:
             f"上市/退市状态同步：覆盖 {upd_status} 只 / 写退市日期 {upd_delist} 只 / 补上市日期 {upd_listdate} 只"
         )
         logger.info("✅ %s", msg)
-        return {
-            "records_written": upd_status,
-            "error_count": 0,
-            "errors": [],
-            "note": msg,
-        }
+        return with_steps(
+            {
+                "records_written": upd_status,
+                "error_count": 0,
+                "errors": [],
+                "note": msg,
+            },
+            RUN_STEPS,
+            {
+                1: f"Baostock 返回 {len(stocks)} 只",
+                2: f"{len(stocks)} ≥ 4000 通过",
+                3: f"覆盖 {upd_status} 只",
+                4: f"退市日 {upd_delist} 只 · 补上市日 {upd_listdate} 只",
+            },
+        )

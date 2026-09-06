@@ -317,24 +317,34 @@ def tables_flow():
 
     def _collector_run_steps(task_name: str):
         """动态读取采集器模块的 RUN_STEPS 模板（代码即模板，改完即时生效）。
-        仅试点任务（stock_daily_incr 等）定义了该常量；无则返回 None 前端不展示步骤链。"""
+        任务名与采集器模块不一致的特例走 _MOD_FALLBACK；
+        无 RUN_STEPS 的任务返回 None 前端不展示步骤链。"""
         import importlib
 
-        try:
-            mod = importlib.import_module(f"app.collectors.{task_name}")
-            steps = getattr(mod, "RUN_STEPS", None)
-            if steps:
-                return [
-                    {
-                        "no": s.get("no"),
-                        "name": s.get("name"),
-                        "params": s.get("params"),
-                    }
-                    for s in steps
-                ]
-        except Exception:
-            pass
-        return None
+        # 任务名 ≠ 采集器模块名的特例（如 ai_concept_analysis 实现在 analysis/concept_ai）
+        _MOD_FALLBACK = {"ai_concept_analysis": "app.analysis.concept_ai"}
+
+        def _try_load(path: str):
+            try:
+                mod = importlib.import_module(path)
+                steps = getattr(mod, "RUN_STEPS", None)
+                if steps:
+                    return [
+                        {
+                            "no": s.get("no"),
+                            "name": s.get("name"),
+                            "params": s.get("params"),
+                        }
+                        for s in steps
+                    ]
+            except Exception:
+                pass
+            return None
+
+        steps = _try_load(f"app.collectors.{task_name}")
+        if steps is None and task_name in _MOD_FALLBACK:
+            steps = _try_load(_MOD_FALLBACK[task_name])
+        return steps
 
     for tbl, m in meta_map.items():
         wcols = m["writer_cols"]

@@ -12,8 +12,17 @@ import pymysql
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "拉取东财基金列表", "params": "ak.fund_name_em()（基金代码/简称/类型）"},
+    {"no": 2, "name": "护栏与列结构校验", "params": "源行数 < min_rows(默认 20000) 拒写；三列必须齐全"},
+    {"no": 3, "name": "全量重建", "params": "同事务 DELETE 旧表 → executemany INSERT（data_source=AKSHARE）"},
+    {"no": 4, "name": "落库核对", "params": "SELECT COUNT(*) 验证 final_n 与写入一致"},
+]
 
 
 class FundInfoSyncCollector:
@@ -61,9 +70,18 @@ class FundInfoSyncCollector:
             conn.close()
 
         logger.info(f"✅ 基金基础信息全量重建：{len(rows)} 条 → 落库 {final_n}")
-        return {
-            "records_written": len(rows),
-            "error_count": 0,
-            "errors": [],
-            "note": f"基金基础信息全量重建 {len(rows)} 条（东财基金列表）",
-        }
+        return with_steps(
+            {
+                "records_written": len(rows),
+                "error_count": 0,
+                "errors": [],
+                "note": f"基金基础信息全量重建 {len(rows)} 条（东财基金列表）",
+            },
+            RUN_STEPS,
+            {
+                1: f"接口 {len(df)} 行",
+                2: f"≥ {self.min_rows} 通过，列齐全",
+                3: f"DELETE 后写入 {len(rows)} 行",
+                4: f"落库核对 {final_n} 行",
+            },
+        )

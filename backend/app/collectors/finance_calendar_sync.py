@@ -14,8 +14,17 @@ import pymysql
 import requests
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "计算拉取窗口", "params": "[今天, 今天+days_ahead 天)，默认 60 天"},
+    {"no": 2, "name": "分页拉取东财日历", "params": "datacenter-web RPT_CPH_FECALENDAR（每页 200）"},
+    {"no": 3, "name": "字段清洗", "params": "START_DATE/FE_NAME/CONTENT → event_date/title/content"},
+    {"no": 4, "name": "幂等重建", "params": "DELETE 本窗口本源旧行（EM-CAL）→ 批量 INSERT"},
+]
 
 API = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 SOURCE_TAG = "EM-CAL"
@@ -96,12 +105,21 @@ class FinanceCalendarSyncCollector:
                 )
             conn.commit()
             logger.info(f"✅ 财经日历更新 {len(items)} 条（{start_s} 起 {self.days_ahead} 天，东财源）")
-            return {
-                "records_written": len(items),
-                "error_count": 0,
-                "errors": [],
-                "note": f"财经日历 {len(items)} 条（EM-CAL 源，窗口 {start_s}~{end_s}）",
-            }
+            return with_steps(
+                {
+                    "records_written": len(items),
+                    "error_count": 0,
+                    "errors": [],
+                    "note": f"财经日历 {len(items)} 条（EM-CAL 源，窗口 {start_s}~{end_s}）",
+                },
+                RUN_STEPS,
+                {
+                    1: f"{start_s} ~ {end_s}",
+                    2: f"共 {pages} 页",
+                    3: f"有效 {len(items)} 条",
+                    4: f"删旧后写入 {len(items)} 条",
+                },
+            )
         except Exception:
             conn.rollback()
             raise

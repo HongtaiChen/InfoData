@@ -13,11 +13,21 @@ from datetime import datetime
 import pymysql
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
 
 # 最小行数：少于该值视为异常，拒绝覆盖（防止日线表不完整时把快照清空）
 MIN_ROWS = 1000
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "读最新交易日", "params": "stock_market_daily 取 MAX(trade_date)"},
+    {"no": 2, "name": "当日幂等检查", "params": "快照今日已建（≥1000 行）则跳过"},
+    {"no": 3, "name": "聚合当日行情", "params": "LEFT JOIN stock_info 名称 + 年初至今涨幅，全市场约 5400 行"},
+    {"no": 4, "name": "行数护栏校验", "params": f"少于 {MIN_ROWS} 行拒绝覆盖（防空表）"},
+    {"no": 5, "name": "全量重建写入", "params": "TRUNCATE 后单事务批量 INSERT（22 列, data_source=daily-agg）"},
+]
 
 
 class MarketCurrentSyncCollector:
@@ -31,7 +41,10 @@ class MarketCurrentSyncCollector:
                 cur.execute("SELECT MAX(trade_date) AS d FROM stock_market_daily")
                 latest = cur.fetchone()["d"]
                 if not latest:
-                    return {"records_written": 0, "error_count": 0, "errors": [], "note": "日线表为空，跳过"}
+                    return with_steps(
+                        {"records_written": 0, "error_count": 0, "errors": [], "note": "日线表为空，跳过"},
+                        RUN_STEPS, {1: "stock_market_daily 为空，终止"},
+                    )
                 latest_date = str(latest)
 
                 # 2. 当日已有快照且今日已跑过 → 跳过（幂等保护）
@@ -39,12 +52,15 @@ class MarketCurrentSyncCollector:
                     "SELECT COUNT(*) AS n FROM stock_market_current WHERE DATE(update_time) = CURDATE()"
                 )
                 if cur.fetchone()["n"] >= MIN_ROWS:
-                    return {
-                        "records_written": 0,
-                        "error_count": 0,
-                        "errors": [],
-                        "note": f"快照今日已更新（{latest_date}），跳过",
-                    }
+                    return with_steps(
+                        {
+                            "records_written": 0,
+                            "error_count": 0,
+                            "errors": [],
+                            "note": f"快照今日已更新（{latest_date}），跳过",
+                        },
+                        RUN_STEPS, {1: f"最新交易日 {latest_date}", 2: "今日已建快照，跳过"},
+                    )
 
                 # 3. 聚合最新交易日数据
                 year = datetime.now().year
@@ -73,12 +89,15 @@ class MarketCurrentSyncCollector:
                 cur.execute(sql, [f"{year}-01-01", latest_date])
                 rows = cur.fetchall()
                 if len(rows) < MIN_ROWS:
-                    return {
-                        "records_written": 0,
-                        "error_count": 1,
-                        "errors": [f"最新交易日 {latest_date} 仅 {len(rows)} 行，小于阈值 {MIN_ROWS}，拒绝覆盖"],
-                        "note": "数据异常保护",
-                    }
+                    return with_steps(
+                        {
+                            "records_written": 0,
+                            "error_count": 1,
+                            "errors": [f"最新交易日 {latest_date} 仅 {len(rows)} 行，小于阈值 {MIN_ROWS}，拒绝覆盖"],
+                            "note": "数据异常保护",
+                        },
+                        RUN_STEPS, {1: f"最新交易日 {latest_date}", 3: f"聚合仅 {len(rows)} 行", 4: f"< {MIN_ROWS}，拒绝覆盖"},
+                    )
 
                 # 4. TRUNCATE + 批量重建
                 now = datetime.now()
@@ -105,11 +124,21 @@ class MarketCurrentSyncCollector:
                 cur.executemany(insert_sql, params)
                 conn.commit()
                 logger.info(f"✅ 快照重建完成：{len(rows)} 行 @ {latest_date}")
-                return {
-                    "records_written": len(rows),
-                    "error_count": 0,
-                    "errors": [],
-                    "note": f"快照已更新至 {latest_date}（{year} 年 ytd 已计算）",
-                }
+                return with_steps(
+                    {
+                        "records_written": len(rows),
+                        "error_count": 0,
+                        "errors": [],
+                        "note": f"快照已更新至 {latest_date}（{year} 年 ytd 已计算）",
+                    },
+                    RUN_STEPS,
+                    {
+                        1: f"最新交易日 {latest_date}",
+                        2: "今日未建，继续重建",
+                        3: f"聚合 {len(rows)} 行（含 {year} ytd）",
+                        4: f"{len(rows)} ≥ {MIN_ROWS} 通过",
+                        5: f"TRUNCATE 后写入 {len(rows)} 行",
+                    },
+                )
         finally:
             conn.close()

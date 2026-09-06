@@ -14,8 +14,16 @@ import pymysql
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "拉取全量交易日", "params": "ak.tool_trade_date_hist_sina()（1990 ~ 次年）"},
+    {"no": 2, "name": "目标年份过滤", "params": "默认只保留当年 + 次年，避免历史噪音"},
+    {"no": 3, "name": "逐日去重入库", "params": "INSERT IGNORE（唯一键 trade_date），计数 新增/已存在"},
+]
 
 
 class TradeCalendarSyncCollector:
@@ -56,11 +64,19 @@ class TradeCalendarSyncCollector:
                         skipped += 1
                 conn.commit()
             logger.info(f"✅ 交易日历更新：新增 {inserted} 条（已存在 {skipped}），目标年份 {self.years}")
-            return {
-                "records_written": inserted,
-                "error_count": 0,
-                "errors": [],
-                "note": f"交易日历补齐至 {self.years}（新增 {inserted} / 已存在 {skipped}）",
-            }
+            return with_steps(
+                {
+                    "records_written": inserted,
+                    "error_count": 0,
+                    "errors": [],
+                    "note": f"交易日历补齐至 {self.years}（新增 {inserted} / 已存在 {skipped}）",
+                },
+                RUN_STEPS,
+                {
+                    1: f"接口返回 {len(df)} 行",
+                    2: f"目标年份 {self.years}",
+                    3: f"新增 {inserted} · 已存在 {skipped}",
+                },
+            )
         finally:
             conn.close()

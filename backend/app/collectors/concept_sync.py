@@ -19,6 +19,7 @@ import requests
 import akshare as ak
 
 from ..db import get_db_config
+from ._common import with_steps
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,15 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 THS_HOME = "https://q.10jqka.com.cn/"
 THS_AJAX = "https://q.10jqka.com.cn/gn/detail/field/199112/order/desc/page/{page}/ajax/1/code/{code}"
 THS_DETAIL = "https://q.10jqka.com.cn/gn/detail/code/{code}/"
+
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
+RUN_STEPS = [
+    {"no": 1, "name": "读概念清单", "params": "ths_concept_info（886xxx/309xxx，按概念名排序）"},
+    {"no": 2, "name": "同花顺通道", "params": "q.10jqka 成分页分页解析（UA + session cookie 预热）"},
+    {"no": 3, "name": "新浪降级通道", "params": "按概念名匹配新浪 gn_ 板块；仅同花顺失败时启用"},
+    {"no": 4, "name": "小事务重建", "params": "逐概念 DELETE 旧成分（ths/sina/ADATA）→ INSERT 新成分"},
+    {"no": 5, "name": "命中统计", "params": "同花顺/新浪命中数 + 失败清单（失败概念保留库内旧数据）"},
+]
 
 
 def _th_session() -> requests.Session:
@@ -187,9 +197,19 @@ class ConceptSyncCollector:
                f"（同花顺 {ths_n} / 新浪 {sina_n}）"
                + (f"，失败 {fail}: {failed_codes[:5]}" if failed_codes else ""))
         logger.info(f"✅ {msg}")
-        return {
-            "records_written": ok,
-            "error_count": fail,
-            "errors": failed_codes[:20],
-            "note": msg,
-        }
+        return with_steps(
+            {
+                "records_written": ok,
+                "error_count": fail,
+                "errors": failed_codes[:20],
+                "note": msg,
+            },
+            RUN_STEPS,
+            {
+                1: f"{len(concepts)} 个概念",
+                2: f"同花顺命中 {ths_n} 个",
+                3: f"新浪降级 {sina_n} 个",
+                4: f"重建 {ok} 个概念",
+                5: f"失败 {fail} 个（保留旧数据）",
+            },
+        )
