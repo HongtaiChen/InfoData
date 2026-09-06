@@ -131,8 +131,9 @@ const dqModalLoading = ref(false)
 const dqModalRows = ref<DqReportItem[]>([])
 const dqModalFocusRule = ref('')
 
-// 数据流明细弹窗（数据即 flowMap 中已加载的数据，无需再请求）
+// 数据流明细弹窗（点击时重拉 flowMap，保证展示的是最新作业状态）
 const flowModalOpen = ref(false)
+const flowModalLoading = ref(false)
 
 const NUM_TYPES = ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'float', 'double', 'numeric']
 const DATE_TYPES = ['date', 'datetime', 'timestamp', 'time']
@@ -493,31 +494,44 @@ async function openDqModal(focusRule = '') {
   dqModalFocusRule.value = focusRule
   dqModalOpen.value = true
   dqModalLoading.value = true
-  try {
-    const resp = (await api.get('/dq/report', {
-      params: { table: current.value },
-    })) as unknown as DqReportResp
-    dqModalRunAt.value = resp.run_at
-    // 异常排前 → 全部按 status 排序（pass 在底）+ rule_name 升序
-    const order: Record<string, number> = { error: 0, fail: 1, warning: 2, pass: 3 }
-    dqModalRows.value = [...(resp.items || [])].sort((a, b) => {
-      const oa = order[a.status] ?? 9
-      const ob = order[b.status] ?? 9
-      if (oa !== ob) return oa - ob
-      return a.rule_name.localeCompare(b.rule_name)
-    })
-  } catch {
-    dqModalRows.value = []
-  } finally {
-    dqModalLoading.value = false
-    // 若指定了定位规则，弹窗渲染后 scrollIntoView
-    if (focusRule) {
-      requestAnimationFrame(() => {
-        const el = document.getElementById(`dq-row-${focusRule}`)
-        el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+
+  // 并行重拉：1) 该表规则明细 2) 全表聚合状态（让信息栏 chip 数字也与弹窗同步）
+  const fetchReport = api
+    .get('/dq/report', { params: { table: current.value } })
+    .then((resp) => {
+      const r = resp as unknown as DqReportResp
+      dqModalRunAt.value = r.run_at
+      const order: Record<string, number> = { error: 0, fail: 1, warning: 2, pass: 3 }
+      dqModalRows.value = [...(r.items || [])].sort((a, b) => {
+        const oa = order[a.status] ?? 9
+        const ob = order[b.status] ?? 9
+        if (oa !== ob) return oa - ob
+        return a.rule_name.localeCompare(b.rule_name)
       })
-    }
+    })
+    .catch(() => {
+      dqModalRows.value = []
+    })
+
+  await Promise.all([loadDqStatus(), fetchReport])
+  dqModalLoading.value = false
+
+  // 若指定了定位规则，弹窗渲染后 scrollIntoView
+  if (focusRule) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`dq-row-${focusRule}`)
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    })
   }
+}
+
+async function openFlowModal() {
+  if (!current.value) return
+  flowModalOpen.value = true
+  flowModalLoading.value = true
+  // 重拉 flowMap，确保 modal 内的 jobs/上次状态/下次运行是最新
+  await loadFlow()
+  flowModalLoading.value = false
 }
 
 function closeDqModal() {
@@ -630,12 +644,12 @@ onMounted(loadTables)
             <span style="font-size:11px;color:#185FA5;">弹窗查看 ▸</span>
           </div>
 
-          <!-- 数据流入口（点击弹窗） -->
+          <!-- 数据流入口（点击弹窗，弹窗内 fresh fetch 最新作业状态） -->
           <div
             v-if="flowOf"
-            title="点击查看该表数据流明细（数据源 / 清洗口径 / 维护作业）"
+            title="点击查看该表数据流明细（数据源 / 清洗口径 / 维护作业，每次打开均拉取最新）"
             style="display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid #e6e6e6;border-radius:6px;background:#fff;cursor:pointer;user-select:none;"
-            @click="flowModalOpen = true"
+            @click="openFlowModal()"
           >
             <span style="font-size:12px;font-weight:600;color:#185FA5;">数据流</span>
             <NTag v-if="flowOf.category" size="tiny" :bordered="false" type="info">{{ flowOf.category }}</NTag>
@@ -797,7 +811,8 @@ onMounted(loadTables)
         style="width:760px;max-width:92vw;"
         :title="`${flowOf?.table_name || current} · 数据流明细`"
       >
-        <div v-if="flowOf" style="display:flex;flex-direction:column;gap:10px;font-size:12.5px;">
+        <NSpin :show="flowModalLoading">
+          <div v-if="flowOf" style="display:flex;flex-direction:column;gap:10px;font-size:12.5px;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <NTag v-if="flowOf.category" size="small" :bordered="false" type="info">{{ flowOf.category }}</NTag>
             <span style="color:#555;">{{ flowOf.writers.length ? `维护任务 ${flowOf.writers.length} 个` : '无自动采集任务' }}</span>
@@ -851,6 +866,7 @@ onMounted(loadTables)
         <div v-else>
           <NEmpty description="该表暂无数据流元数据" />
         </div>
+        </NSpin>
         <template #footer>
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:11px;color:#999;">数据来源：table_meta 元数据 + task_runs 运行记录</span>
