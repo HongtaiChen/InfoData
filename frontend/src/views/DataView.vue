@@ -50,6 +50,32 @@ interface DqTableResp {
   run_at: string | null
   items: DqTableStatus[]
 }
+interface FlowLast {
+  status: string | null
+  started_at: string | null
+  finished_at: string | null
+  records_written: number | null
+  error_message: string | null
+}
+interface FlowJob {
+  task_name: string
+  cron: string | null
+  enabled: boolean | null
+  scheduled: boolean | null
+  next_run: string | null
+  running: boolean | null
+  implemented: boolean | null
+  last: FlowLast | null
+}
+interface FlowInfo {
+  table_name: string
+  category: string | null
+  source_desc: string | null
+  flow_desc: string | null
+  note: string | null
+  writers: string[]
+  jobs: FlowJob[]
+}
 
 const tables = ref<TableItem[]>([])
 const tableKeyword = ref('')
@@ -81,6 +107,8 @@ const filters = ref<FilterCond[]>([])
 const router = useRouter()
 const dqRunAt = ref<string | null>(null)
 const dqStatus = ref<Map<string, DqTableStatus>>(new Map())
+const flowMap = ref<Map<string, FlowInfo>>(new Map())
+const flowOpen = ref(true)
 
 const NUM_TYPES = ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'float', 'double', 'numeric']
 const DATE_TYPES = ['date', 'datetime', 'timestamp', 'time']
@@ -166,6 +194,7 @@ async function loadTables() {
     loadingTables.value = false
   }
   loadDqStatus()
+  loadFlow()
 }
 
 async function loadDqStatus() {
@@ -177,6 +206,18 @@ async function loadDqStatus() {
     dqStatus.value = m
   } catch {
     /* 质量标记不可用不阻塞表浏览 */
+  }
+}
+
+async function loadFlow() {
+  try {
+    const resp: any = await api.get('/db/tables/flow')
+    const items = (resp?.items || {}) as Record<string, FlowInfo>
+    const m = new Map<string, FlowInfo>()
+    Object.values(items).forEach((it) => m.set(it.table_name, it))
+    flowMap.value = m
+  } catch {
+    /* 数据流不可用不阻塞表浏览 */
   }
 }
 
@@ -342,6 +383,50 @@ const WORST_LABEL: Record<string, string> = {
 }
 const currentDq = computed<DqTableStatus | null>(() => dqStatus.value.get(current.value) || null)
 
+// ---------- 数据流（源/口径/维护任务） ----------
+const flowOf = computed<FlowInfo | null>(() => flowMap.value.get(current.value) || null)
+const flowSources = computed<string[]>(() => {
+  const s = flowOf.value?.source_desc
+  return s ? s.split(';').map((x) => x.trim()).filter(Boolean) : []
+})
+
+const DOW_CN: Record<string, string> = {
+  '0': '周日', '1': '周一', '2': '周二', '3': '周三', '4': '周四', '5': '周五', '6': '周六', '7': '周日',
+}
+
+/** 极简 5 段 cron → 中文（覆盖本平台 15 任务所用表达式） */
+function cronToText(cron: string | null): string {
+  const s = (cron || '').trim()
+  if (!s) return ''
+  if (s === '手动') return '手动触发'
+  const p = s.split(/\s+/)
+  if (p.length !== 5) return s
+  const [min, hour, dom, , dow] = p
+  if (min === '*/30' && hour === '*') return '每30分钟'
+  let when: string
+  if (dow === '1-5') when = '工作日'
+  else if (dow !== '*') when = DOW_CN[dow] || `周${dow}`
+  else if (dom !== '*') when = `每月${dom}日`
+  else when = '每天'
+  if (hour === '*') return when
+  const mm = min === '0' ? '00' : min
+  return `${when} ${hour.padStart(2, '0')}:${mm}`
+}
+
+function fmtFlowDt(s: string | null): string {
+  if (!s) return ''
+  const t = s.replace('T', ' ')
+  return `${t.slice(5, 10)} ${t.slice(11, 16)}`
+}
+
+function flowLastStatus(j: FlowJob): { text: string; color: string } {
+  const st = j.last?.status
+  if (st === 'success') return { text: '成功', color: '#18A058' }
+  if (st === 'failed') return { text: '失败', color: '#d03050' }
+  if (st === 'running') return { text: '运行中', color: '#185FA5' }
+  return { text: '从未运行', color: '#999' }
+}
+
 function dqDotColor(name: string): string {
   const s = dqStatus.value.get(name)
   return s ? DOT_COLORS[s.worst] : DOT_COLORS.none
@@ -489,6 +574,62 @@ onMounted(loadTables)
         <div v-else style="margin-top:6px;font-size:12px;color:#999;">
           静态/历史表未纳入自动体检，可在数据质量栏目「规则配置」中补充该表规则
         </div>
+      </div>
+
+      <!-- 数据流（数据源 / 清洗口径 / 维护作业调度） -->
+      <div v-if="flowOf" style="padding:8px 14px;border-bottom:1px solid #f0f0f0;">
+        <div
+          style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;"
+          @click="flowOpen = !flowOpen"
+        >
+          <span style="font-size:12px;font-weight:600;color:#185FA5;">数据流</span>
+          <NTag v-if="flowOf.category" size="tiny" :bordered="false" type="info">{{ flowOf.category }}</NTag>
+          <span style="font-size:11px;color:#999;">
+            {{ flowOf.writers.length ? `${flowOf.writers.length} 个维护任务` : '无采集任务' }}
+          </span>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:10px;">
+            <NButton size="tiny" quaternary @click.stop="router.push('/jobs')">作业监控</NButton>
+            <span style="font-size:11px;color:#bbb;">{{ flowOpen ? '收起 ▴' : '展开 ▾' }}</span>
+          </span>
+        </div>
+        <template v-if="flowOpen">
+          <div v-if="flowSources.length" style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:11px;color:#888;">数据源</span>
+            <NTag v-for="src in flowSources" :key="src" size="tiny" :bordered="false" type="info">{{ src }}</NTag>
+          </div>
+          <div v-if="flowOf.flow_desc" style="margin-top:6px;font-size:12px;line-height:1.6;color:#555;overflow-wrap:anywhere;">
+            {{ flowOf.flow_desc }}
+          </div>
+          <div v-if="flowOf.note" style="margin-top:4px;font-size:11px;color:#B45309;">备注：{{ flowOf.note }}</div>
+          <div v-if="flowOf.jobs.length" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+            <div
+              v-for="j in flowOf.jobs"
+              :key="j.task_name"
+              :title="(j.last && j.last.error_message) || ''"
+              style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:6px 10px;"
+            >
+              <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#185FA5;">{{ j.task_name }}</span>
+              <span style="color:#555;">{{ cronToText(j.cron) }}</span>
+              <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
+              <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
+              <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
+                <span>
+                  <b :style="{ color: flowLastStatus(j).color }">{{ flowLastStatus(j).text }}</b>
+                  <template v-if="j.last">
+                    <template v-if="j.last.status === 'success' && j.last.records_written !== null">
+                      +{{ j.last.records_written }} 条
+                    </template>
+                    <span v-if="j.last.finished_at"> · {{ fmtFlowDt(j.last.finished_at) }}</span>
+                  </template>
+                </span>
+                <span v-if="j.next_run">下次 {{ fmtFlowDt(j.next_run) }}</span>
+              </span>
+            </div>
+          </div>
+          <div v-else style="margin-top:8px;font-size:12px;color:#999;">
+            静态/历史表：无自动采集作业（{{ flowOf.source_desc || '人工或一次性导入' }}）
+          </div>
+        </template>
       </div>
 
       <!-- 过滤器 -->

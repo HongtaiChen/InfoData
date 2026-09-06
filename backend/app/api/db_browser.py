@@ -239,3 +239,86 @@ def table_rows(
         "has_more": has_more,
         "rows": rows[:limit],
     }
+
+
+# ---------- 表级数据流聚合（数据源/清洗口径/维护任务调度/最近运行） ----------
+
+@router.get("/tables/flow")
+def tables_flow():
+    """表级数据流聚合（一次返回全部表）：
+    table_meta(数据源/清洗口径/writers) + 每个写表任务的实时调度（cron/启用/下次运行/运行中）
+    + task_runs 最近一次运行状态与写入条数。供数据中心右侧「数据流」卡联动展示。
+    """
+    # 1. 静态元数据
+    metas = _norm(
+        query_all(
+            "SELECT table_name, category, source_desc, flow_desc, writers, note "
+            "FROM table_meta"
+        )
+    )
+    meta_map: dict[str, dict] = {}
+    for r in metas:
+        writers = r.get("writers")
+        if isinstance(writers, str):
+            try:
+                writers = json.loads(writers)
+            except json.JSONDecodeError:
+                writers = []
+        meta_map[r["table_name"]] = {
+            "table_name": r["table_name"],
+            "category": r.get("category"),
+            "source_desc": r.get("source_desc"),
+            "flow_desc": r.get("flow_desc"),
+            "note": r.get("note"),
+            "writers": writers or [],
+            "jobs": [],
+        }
+
+    # 2. 任务调度实时状态（含 next_run / running / scheduled）
+    try:
+        from ..scheduler import manager as scheduler_manager
+
+        status_items = scheduler_manager.list_status()
+        task_cfg = {x["task_name"]: x for x in status_items}
+    except Exception:
+        task_cfg = {}
+
+    # 3. 每个任务最近一次运行（task_runs 按任务取最大 id）
+    try:
+        runs = _norm(
+            query_all(
+                "SELECT task_name, status, started_at, finished_at, records_written, "
+                "       error_message, id "
+                "FROM task_runs "
+                "WHERE id IN (SELECT MAX(id) FROM task_runs GROUP BY task_name)"
+            )
+        )
+    except Exception:
+        runs = []
+    last_map = {r["task_name"]: r for r in runs}
+
+    for tbl, m in meta_map.items():
+        for w in m["writers"]:
+            cfg = task_cfg.get(w)
+            last = last_map.get(w)
+            m["jobs"].append(
+                {
+                    "task_name": w,
+                    "cron": cfg.get("cron") if cfg else None,
+                    "enabled": cfg.get("enabled") if cfg else None,
+                    "scheduled": cfg.get("scheduled") if cfg else None,
+                    "next_run": cfg.get("next_run") if cfg else None,
+                    "running": cfg.get("running") if cfg else None,
+                    "implemented": cfg.get("implemented") if cfg else None,
+                    "last": {
+                        "status": last["status"],
+                        "started_at": last["started_at"],
+                        "finished_at": last["finished_at"],
+                        "records_written": last["records_written"],
+                        "error_message": last["error_message"],
+                    }
+                    if last
+                    else None,
+                }
+            )
+    return {"items": meta_map}
