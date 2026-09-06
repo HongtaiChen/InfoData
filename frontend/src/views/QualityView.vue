@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import {
   NCard, NGrid, NGi, NStatistic, NButton, NDataTable, NTag, NSelect,
   NInput, NSpace, NEmpty, NTabs, NTabPane, NProgress, NSwitch, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 
 const message = useMessage()
+const route = useRoute()
+const router = useRouter()
 
 // ---------- 工具 ----------
 const checkTypeCn: Record<string, string> = {
@@ -87,7 +90,9 @@ const criticalFail = computed(
 // ---------- 本轮明细 ----------
 const reportItems = ref<any[]>([])
 const reportLoading = ref(false)
-const tableFilter = ref('')
+// 从 URL query 初始化（上下文穿透：从某表质量弹窗跳转时自动锁到该表）
+const initialTable = typeof route.query.table === 'string' ? route.query.table : ''
+const tableFilter = ref(initialTable)
 const statusFilter = ref('')
 const ruleSearch = ref('')
 async function loadReport() {
@@ -279,6 +284,13 @@ async function refreshAll() {
 onMounted(() => {
   loadTableComments()
   refreshAll()
+})
+
+// 双向同步：表筛选变化时同步回 URL，刷新/分享链接可恢复现场
+watch(tableFilter, (v) => {
+  const cur = typeof route.query.table === 'string' ? route.query.table : ''
+  if (v === cur) return
+  router.replace({ query: v ? { ...route.query, table: v } : (() => { const { table: _, ...rest } = route.query; return rest })() })
 })
 </script>
 

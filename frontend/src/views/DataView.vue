@@ -883,7 +883,7 @@ onMounted(loadTables)
             <span style="font-size:11px;color:#999;">
               数据来源：本地 MySQL（adata.dq_report）
             </span>
-            <NButton size="small" type="primary" secondary @click="router.push('/quality')">查看质量报告栏目 ▸</NButton>
+            <NButton size="small" type="primary" secondary @click="router.push({ path: '/quality', query: { table: current } })">查看质量报告栏目 ▸</NButton>
           </div>
         </template>
       </NModal>
