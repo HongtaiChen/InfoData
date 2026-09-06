@@ -50,7 +50,7 @@ def _take_run_detail():
 
 def _collector_run(collector):
     """调用采集器并暂存其结构化结果 → task_runs.run_detail（推广整链拓扑的统一入口）"""
-    result = _collector_run(collector)
+    result = collector.run()
     if isinstance(result, dict):
         _set_run_detail(result)
     return result
