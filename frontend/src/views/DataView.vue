@@ -57,6 +57,13 @@ interface FlowLast {
   records_written: number | null
   error_message: string | null
 }
+interface FlowLineage {
+  source: string | null
+  cols: string[]
+  derived: string[]
+  note: string | null
+  col_notes: Record<string, string>
+}
 interface FlowJob {
   task_name: string
   cron: string | null
@@ -66,6 +73,7 @@ interface FlowJob {
   running: boolean | null
   implemented: boolean | null
   last: FlowLast | null
+  lineage: FlowLineage | null
 }
 interface FlowInfo {
   table_name: string
@@ -414,6 +422,26 @@ const flowSources = computed<string[]>(() => {
   const s = flowOf.value?.source_desc
   return s ? s.split(';').map((x) => x.trim()).filter(Boolean) : []
 })
+
+// 列级血缘：是否至少一个 writer 声明了写列（有则可渲染血缘拓扑）
+const flowHasLineage = computed<boolean>(() =>
+  !!flowOf.value?.jobs.some((j) => j.lineage && j.lineage.cols.length > 0),
+)
+// 血缘车道配色（按出现顺序轮换；与源标签色一致）
+const LINEAGE_COLORS = ['#185FA5', '#5B4B8A', '#B45309', '#0F6E56', '#993C1D', '#5F5E5A']
+function laneColor(idx: number): string {
+  return LINEAGE_COLORS[idx % LINEAGE_COLORS.length]
+}
+// 未被任何采集任务写入的列（系统/本地管理列），前端由当前表列清单与血缘并集差集算出
+const flowSystemCols = computed<string[]>(() => {
+  const all = new Set(cols.value.map((c) => c.name))
+  const written = new Set<string>()
+  flowOf.value?.jobs.forEach((j) => {
+    ;(j.lineage?.cols || []).forEach((c) => written.add(c))
+  })
+  return [...all].filter((c) => !written.has(c))
+})
+const flowHover = ref<number | null>(null)
 
 const DOW_CN: Record<string, string> = {
   '0': '周日', '1': '周一', '2': '周二', '3': '周三', '4': '周四', '5': '周五', '6': '周六', '7': '周日',
@@ -831,7 +859,102 @@ onMounted(loadTables)
               {{ flowOf.flow_desc }}
             </div>
           </div>
-          <div>
+
+          <!-- 列级血缘拓扑（writer_cols 已配置时） -->
+          <div v-if="flowHasLineage">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <span style="font-size:11px;color:#888;">列级数据血缘</span>
+              <span style="font-size:11px;color:#aaa;">数据源 → 采集任务 → 写入列（悬停某车道高亮联动）</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div
+                v-for="(j, idx) in flowOf.jobs"
+                :key="j.task_name"
+                @mouseenter="flowHover = idx"
+                @mouseleave="flowHover = null"
+                style="display:flex;flex-direction:column;gap:6px;border:1px solid #eceff4;border-left:3px solid transparent;border-radius:8px;padding:8px 10px;background:#fff;transition:background .15s,opacity .15s;"
+                :style="{
+                  borderLeftColor: laneColor(idx),
+                  background: flowHover === idx ? '#F5F9FD' : '#fff',
+                  opacity: flowHover !== null && flowHover !== idx ? 0.55 : 1,
+                }"
+              >
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+                  <!-- 数据源 -->
+                  <NTag v-if="j.lineage?.source" size="small" :bordered="false" :style="{ color: laneColor(idx), background: laneColor(idx) + '14', fontWeight: 500 }">
+                    {{ j.lineage.source }}
+                  </NTag>
+                  <!-- 任务 + cron -->
+                  <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#222;font-size:12px;">{{ j.task_name }}</span>
+                  <span style="color:#777;font-size:11.5px;">{{ cronToText(j.cron) }}</span>
+                  <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
+                  <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
+                  <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
+                    <span>
+                      <b :style="{ color: flowLastStatus(j).color }">{{ flowLastStatus(j).text }}</b>
+                      <template v-if="j.last">
+                        <template v-if="j.last.status === 'success' && j.last.records_written !== null">
+                          +{{ j.last.records_written }} 条
+                        </template>
+                        <span v-if="j.last.finished_at"> · {{ fmtFlowDt(j.last.finished_at) }}</span>
+                      </template>
+                    </span>
+                    <span v-if="j.next_run">下次 {{ fmtFlowDt(j.next_run) }}</span>
+                  </span>
+                </div>
+                <!-- 写入列 chips -->
+                <div style="display:flex;align-items:flex-start;gap:4px;flex-wrap:wrap;padding-left:2px;">
+                  <template v-if="j.lineage?.cols.length">
+                    <span
+                      v-for="c in j.lineage.cols"
+                      :key="c"
+                      :title="(j.lineage?.derived || []).includes(c) ? (j.lineage?.col_notes?.[c] || '本地加工/推断口径列') : (j.lineage?.col_notes?.[c] || '')"
+                      style="font-family:Consolas,Menlo,monospace;font-size:11px;line-height:1;padding:3px 7px;border-radius:4px;border:1px solid #dfe4ea;color:#444;background:#FAFBFC;white-space:nowrap;"
+                      :style="{
+                        borderStyle: (j.lineage?.derived || []).includes(c) ? 'dashed' : 'solid',
+                        borderColor: (j.lineage?.derived || []).includes(c) ? laneColor(idx) : '#dfe4ea',
+                        color: (j.lineage?.derived || []).includes(c) ? laneColor(idx) : '#444',
+                      }"
+                    >
+                      {{ c }}<span v-if="(j.lineage?.derived || []).includes(c)">*</span>
+                    </span>
+                    <span style="font-size:11px;color:#aaa;align-self:center;">共 {{ j.lineage?.cols.length }} 列</span>
+                  </template>
+                  <span v-else style="font-size:11px;color:#bbb;">该任务列级映射未配置，仅维护表级</span>
+                </div>
+                <div v-if="j.lineage?.note" style="font-size:11px;color:#B45309;line-height:1.5;">
+                  注：{{ j.lineage.note }}
+                </div>
+              </div>
+
+              <!-- 系统/本地管理列（未写列差集） -->
+              <div
+                v-if="flowSystemCols.length"
+                @mouseenter="flowHover = -1"
+                @mouseleave="flowHover = null"
+                style="display:flex;flex-direction:column;gap:6px;border:1px dashed #e6e0d2;border-radius:8px;padding:8px 10px;background:#FBF9F4;transition:opacity .15s;"
+                :style="{ opacity: flowHover !== null && flowHover !== -1 ? 0.55 : 1 }"
+              >
+                <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+                  <span style="font-size:11.5px;color:#8a7b5c;font-weight:500;">系统 / 本地管理列</span>
+                  <span style="font-size:11px;color:#bbb;">无采集任务写入</span>
+                  <span style="margin-left:auto;font-size:11px;color:#aaa;">{{ flowSystemCols.length }} 列</span>
+                </div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                  <span
+                    v-for="c in flowSystemCols"
+                    :key="c"
+                    title="该列由数据库/系统维护（自增、ON UPDATE、DEFAULT 等），无采集任务写入"
+                    style="font-family:Consolas,Menlo,monospace;font-size:11px;line-height:1;padding:3px 7px;border-radius:4px;border:1px dashed #ded8c8;color:#9a8a66;background:#fff;white-space:nowrap;"
+                  >{{ c }}</span>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:6px;font-size:11px;color:#aaa;">* 本地加工/推断口径列（非外部源直采），悬停查看口径说明</div>
+          </div>
+
+          <!-- 降级：无列级血缘时展示任务清单（静态表/未配置） -->
+          <div v-else>
             <div style="font-size:11px;color:#888;margin-bottom:6px;">维护作业</div>
             <div v-if="flowOf.jobs.length" style="display:flex;flex-direction:column;gap:6px;">
               <div

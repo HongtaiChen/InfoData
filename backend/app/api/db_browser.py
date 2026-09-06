@@ -252,7 +252,7 @@ def tables_flow():
     # 1. 静态元数据
     metas = _norm(
         query_all(
-            "SELECT table_name, category, source_desc, flow_desc, writers, note "
+            "SELECT table_name, category, source_desc, flow_desc, writers, writer_cols, note "
             "FROM table_meta"
         )
     )
@@ -264,6 +264,12 @@ def tables_flow():
                 writers = json.loads(writers)
             except json.JSONDecodeError:
                 writers = []
+        writer_cols = r.get("writer_cols")
+        if isinstance(writer_cols, str):
+            try:
+                writer_cols = json.loads(writer_cols)
+            except json.JSONDecodeError:
+                writer_cols = None
         meta_map[r["table_name"]] = {
             "table_name": r["table_name"],
             "category": r.get("category"),
@@ -271,6 +277,7 @@ def tables_flow():
             "flow_desc": r.get("flow_desc"),
             "note": r.get("note"),
             "writers": writers or [],
+            "writer_cols": writer_cols or {},
             "jobs": [],
         }
 
@@ -298,9 +305,11 @@ def tables_flow():
     last_map = {r["task_name"]: r for r in runs}
 
     for tbl, m in meta_map.items():
+        wcols = m["writer_cols"]
         for w in m["writers"]:
             cfg = task_cfg.get(w)
             last = last_map.get(w)
+            wc = wcols.get(w) if isinstance(wcols, dict) else None
             m["jobs"].append(
                 {
                     "task_name": w,
@@ -318,6 +327,16 @@ def tables_flow():
                         "error_message": last["error_message"],
                     }
                     if last
+                    else None,
+                    # 列级血缘（writer_cols 中该任务的映射）
+                    "lineage": {
+                        "source": wc.get("source") if wc else None,
+                        "cols": (wc.get("cols") or []) if wc else [],
+                        "derived": (wc.get("derived") or []) if wc else [],
+                        "note": wc.get("note") if wc else None,
+                        "col_notes": (wc.get("col_notes") or {}) if wc else {},
+                    }
+                    if wc
                     else None,
                 }
             )
