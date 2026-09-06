@@ -1018,10 +1018,11 @@ onMounted(loadTables)
                 </div>
               </div>
               <!-- B 推算 -->
-              <div v-if="flowDerivedCols(flowMainJob).length">
-                <div style="font-size:11px;color:#8a6d3b;margin-bottom:3px;">
-                  B 推算列 *
-                  <span style="color:#b6a887;margin-left:4px;">源缺失时按口径本地补齐</span>
+              <!-- B 本地加工列（与车道源解耦：不来自外部源） -->
+              <div v-if="flowDerivedCols(flowMainJob).length" style="background:#FBF9F4;border:1.5px dashed #C9A227;border-radius:6px;padding:6px 8px;">
+                <div style="font-size:11px;color:#633806;margin-bottom:4px;font-weight:500;">
+                  B 本地加工列 *
+                  <span style="color:#8a6d3b;font-weight:400;margin-left:4px;">不来自外部源 · 基于代码规则/聚合推算（与车道源无关）</span>
                 </div>
                 <div style="display:flex;flex-wrap:wrap;gap:3px;">
                   <span
@@ -1152,10 +1153,11 @@ onMounted(loadTables)
                   </div>
                 </div>
                 <!-- B 推算 -->
-                <div v-if="flowDerivedCols(j).length">
-                  <div style="font-size:11px;color:#8a6d3b;margin-bottom:3px;">
-                    B 推算列 *
-                    <span style="color:#b6a887;margin-left:4px;">源缺失时按口径本地补齐</span>
+                <!-- B 本地加工列（与车道源解耦） -->
+                <div v-if="flowDerivedCols(j).length" style="background:#FBF9F4;border:1.5px dashed #C9A227;border-radius:6px;padding:6px 8px;">
+                  <div style="font-size:11px;color:#633806;margin-bottom:4px;font-weight:500;">
+                    B 本地加工列 *
+                    <span style="color:#8a6d3b;font-weight:400;margin-left:4px;">不来自外部源 · 基于代码规则/聚合推算（与车道源无关）</span>
                   </div>
                   <div style="display:flex;flex-wrap:wrap;gap:3px;">
                     <span
