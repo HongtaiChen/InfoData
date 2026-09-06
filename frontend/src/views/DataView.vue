@@ -437,7 +437,9 @@ onMounted(loadTables)
       <!-- 表信息栏 -->
       <div v-if="current" style="padding:10px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-family:Consolas,Menlo,monospace;font-size:15px;font-weight:600;color:#185FA5;">{{ current }}</span>
-        <NTag v-if="meta?.comment" size="small" :bordered="false" type="info" style="max-width:260px;">
+        <NTag v-if="meta?.comment" size="small" :bordered="false" type="info"
+              :title="meta.comment"
+              style="white-space:normal;line-height:1.45;align-self:flex-start;overflow-wrap:anywhere;">
           {{ meta.comment }}
         </NTag>
         <span style="font-size:12px;color:#888;">{{ totalText }}</span>
