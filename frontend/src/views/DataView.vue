@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import {
-  NButton, NEmpty, NInput, NSelect, NSpin, NTag,
+  NButton, NEmpty, NInput, NModal, NSelect, NSpin, NTable, NTag,
   type SelectOption,
 } from 'naive-ui'
 import api from '../api'
@@ -104,11 +104,35 @@ const fOp = ref('eq')
 const fVal = ref('')
 const filters = ref<FilterCond[]>([])
 
+interface DqReportItem {
+  id: number
+  rule_name: string
+  table_name: string
+  check_type: string
+  severity: string
+  status: 'pass' | 'warning' | 'fail' | 'error'
+  metric_value: string | null
+  message: string | null
+}
+interface DqReportResp {
+  run_at: string | null
+  items: DqReportItem[]
+}
 const router = useRouter()
 const dqRunAt = ref<string | null>(null)
 const dqStatus = ref<Map<string, DqTableStatus>>(new Map())
 const flowMap = ref<Map<string, FlowInfo>>(new Map())
-const flowOpen = ref(true)
+
+// 规则明细弹窗
+const dqModalOpen = ref(false)
+const dqModalTable = ref('')
+const dqModalRunAt = ref<string | null>(null)
+const dqModalLoading = ref(false)
+const dqModalRows = ref<DqReportItem[]>([])
+const dqModalFocusRule = ref('')
+
+// 数据流明细弹窗（数据即 flowMap 中已加载的数据，无需再请求）
+const flowModalOpen = ref(false)
 
 const NUM_TYPES = ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'float', 'double', 'numeric']
 const DATE_TYPES = ['date', 'datetime', 'timestamp', 'time']
@@ -463,6 +487,44 @@ function dqIssueColor(status: string): string {
   return '#d48806'
 }
 
+async function openDqModal(focusRule = '') {
+  if (!current.value) return
+  dqModalTable.value = current.value
+  dqModalFocusRule.value = focusRule
+  dqModalOpen.value = true
+  dqModalLoading.value = true
+  try {
+    const resp = (await api.get('/dq/report', {
+      params: { table: current.value },
+    })) as unknown as DqReportResp
+    dqModalRunAt.value = resp.run_at
+    // 异常排前 → 全部按 status 排序（pass 在底）+ rule_name 升序
+    const order: Record<string, number> = { error: 0, fail: 1, warning: 2, pass: 3 }
+    dqModalRows.value = [...(resp.items || [])].sort((a, b) => {
+      const oa = order[a.status] ?? 9
+      const ob = order[b.status] ?? 9
+      if (oa !== ob) return oa - ob
+      return a.rule_name.localeCompare(b.rule_name)
+    })
+  } catch {
+    dqModalRows.value = []
+  } finally {
+    dqModalLoading.value = false
+    // 若指定了定位规则，弹窗渲染后 scrollIntoView
+    if (focusRule) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`dq-row-${focusRule}`)
+        el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      })
+    }
+  }
+}
+
+function closeDqModal() {
+  dqModalOpen.value = false
+  dqModalFocusRule.value = ''
+}
+
 onMounted(loadTables)
 </script>
 
@@ -541,95 +603,54 @@ onMounted(loadTables)
         </span>
       </div>
 
-      <!-- 数据质量摘要 -->
-      <div v-if="dqRunAt" style="padding:8px 14px;border-bottom:1px solid #f0f0f0;background:#FAFBFC;">
+      <!-- 信息栏：数据质量 · 数据流（点击弹窗查看明细） -->
+      <div v-if="dqRunAt || flowOf" style="padding:6px 14px;border-bottom:1px solid #f0f0f0;background:#FAFBFC;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="font-size:12px;font-weight:500;color:#444;">数据质量</span>
-          <span style="font-size:11px;color:#aaa;">体检 {{ fmtDqTime(dqRunAt) }}</span>
-          <NTag v-if="currentDq" size="tiny" :bordered="false" :type="dqTagType(currentDq.worst)">
-            {{ WORST_LABEL[currentDq.worst] }}
-          </NTag>
-          <NTag v-else size="tiny" :bordered="false" type="default">未纳入体检</NTag>
+
+          <!-- 数据质量入口（点击弹窗） -->
+          <div
+            v-if="dqRunAt"
+            title="点击查看该表数据质量规则明细"
+            style="display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid #e6e6e6;border-radius:6px;background:#fff;cursor:pointer;user-select:none;"
+            @click="openDqModal('')"
+          >
+            <span style="font-size:12px;font-weight:600;color:#185FA5;">数据质量</span>
+            <NTag v-if="currentDq" size="tiny" :bordered="false" :type="dqTagType(currentDq.worst)">
+              {{ WORST_LABEL[currentDq.worst] }}
+            </NTag>
+            <NTag v-else size="tiny" :bordered="false" type="default">未纳入体检</NTag>
+            <span v-if="currentDq" style="font-size:11.5px;color:#888;">
+              <template v-if="currentDq.issues.length">
+                {{ currentDq.counts.fail + currentDq.counts.error }} 异常 / {{ currentDq.counts.warning }} 提醒
+              </template>
+              <template v-else>
+                {{ currentDq.counts.total }} 条规则通过
+              </template>
+            </span>
+            <span style="font-size:11px;color:#185FA5;">弹窗查看 ▸</span>
+          </div>
+
+          <!-- 数据流入口（点击弹窗） -->
+          <div
+            v-if="flowOf"
+            title="点击查看该表数据流明细（数据源 / 清洗口径 / 维护作业）"
+            style="display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid #e6e6e6;border-radius:6px;background:#fff;cursor:pointer;user-select:none;"
+            @click="flowModalOpen = true"
+          >
+            <span style="font-size:12px;font-weight:600;color:#185FA5;">数据流</span>
+            <NTag v-if="flowOf.category" size="tiny" :bordered="false" type="info">{{ flowOf.category }}</NTag>
+            <span style="font-size:11.5px;color:#888;">
+              {{ flowOf.writers.length ? `${flowOf.writers.length} 个维护任务` : '无采集任务' }}
+            </span>
+            <span v-if="flowOf.note" style="font-size:11px;color:#B45309;">[{{ flowOf.note }}]</span>
+            <span style="font-size:11px;color:#185FA5;">弹窗查看 ▸</span>
+          </div>
+
           <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
-            <NButton size="tiny" quaternary @click="loadDqStatus()">刷新状态</NButton>
+            <NButton size="tiny" quaternary @click="router.push('/jobs')">作业监控</NButton>
             <NButton size="tiny" type="primary" secondary @click="router.push('/quality')">查看质量报告</NButton>
           </span>
         </div>
-        <div v-if="currentDq" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
-          <div v-if="currentDq.issues.length === 0" style="font-size:12px;color:#18A058;">
-            共 {{ currentDq.counts.total }} 条规则全部通过
-          </div>
-          <div
-            v-for="iss in currentDq.issues"
-            :key="iss.rule_name"
-            :title="iss.message || ''"
-            style="display:flex;align-items:center;gap:6px;font-size:12px;line-height:1.4;min-width:0;"
-          >
-            <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;" :style="{ background: dqIssueColor(iss.status) }"></span>
-            <span style="font-family:Consolas,Menlo,monospace;color:#333;flex-shrink:0;">{{ iss.rule_name }}</span>
-            <span style="color:#888;flex-shrink:0;">{{ dqIssueStatusLabel(iss.status) }} · {{ iss.severity }}</span>
-            <span style="color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{{ iss.message }}</span>
-          </div>
-        </div>
-        <div v-else style="margin-top:6px;font-size:12px;color:#999;">
-          静态/历史表未纳入自动体检，可在数据质量栏目「规则配置」中补充该表规则
-        </div>
-      </div>
-
-      <!-- 数据流（数据源 / 清洗口径 / 维护作业调度） -->
-      <div v-if="flowOf" style="padding:8px 14px;border-bottom:1px solid #f0f0f0;">
-        <div
-          style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;"
-          @click="flowOpen = !flowOpen"
-        >
-          <span style="font-size:12px;font-weight:600;color:#185FA5;">数据流</span>
-          <NTag v-if="flowOf.category" size="tiny" :bordered="false" type="info">{{ flowOf.category }}</NTag>
-          <span style="font-size:11px;color:#999;">
-            {{ flowOf.writers.length ? `${flowOf.writers.length} 个维护任务` : '无采集任务' }}
-          </span>
-          <span style="margin-left:auto;display:flex;align-items:center;gap:10px;">
-            <NButton size="tiny" quaternary @click.stop="router.push('/jobs')">作业监控</NButton>
-            <span style="font-size:11px;color:#bbb;">{{ flowOpen ? '收起 ▴' : '展开 ▾' }}</span>
-          </span>
-        </div>
-        <template v-if="flowOpen">
-          <div v-if="flowSources.length" style="margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-            <span style="font-size:11px;color:#888;">数据源</span>
-            <NTag v-for="src in flowSources" :key="src" size="tiny" :bordered="false" type="info">{{ src }}</NTag>
-          </div>
-          <div v-if="flowOf.flow_desc" style="margin-top:6px;font-size:12px;line-height:1.6;color:#555;overflow-wrap:anywhere;">
-            {{ flowOf.flow_desc }}
-          </div>
-          <div v-if="flowOf.note" style="margin-top:4px;font-size:11px;color:#B45309;">备注：{{ flowOf.note }}</div>
-          <div v-if="flowOf.jobs.length" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
-            <div
-              v-for="j in flowOf.jobs"
-              :key="j.task_name"
-              :title="(j.last && j.last.error_message) || ''"
-              style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:6px 10px;"
-            >
-              <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#185FA5;">{{ j.task_name }}</span>
-              <span style="color:#555;">{{ cronToText(j.cron) }}</span>
-              <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
-              <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
-              <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
-                <span>
-                  <b :style="{ color: flowLastStatus(j).color }">{{ flowLastStatus(j).text }}</b>
-                  <template v-if="j.last">
-                    <template v-if="j.last.status === 'success' && j.last.records_written !== null">
-                      +{{ j.last.records_written }} 条
-                    </template>
-                    <span v-if="j.last.finished_at"> · {{ fmtFlowDt(j.last.finished_at) }}</span>
-                  </template>
-                </span>
-                <span v-if="j.next_run">下次 {{ fmtFlowDt(j.next_run) }}</span>
-              </span>
-            </div>
-          </div>
-          <div v-else style="margin-top:8px;font-size:12px;color:#999;">
-            静态/历史表：无自动采集作业（{{ flowOf.source_desc || '人工或一次性导入' }}）
-          </div>
-        </template>
       </div>
 
       <!-- 过滤器 -->
@@ -713,6 +734,135 @@ onMounted(loadTables)
           </table>
         </NSpin>
       </div>
+
+      <!-- 数据质量规则明细弹窗 -->
+      <NModal
+        v-model:show="dqModalOpen"
+        preset="card"
+        :bordered="false"
+        size="huge"
+        style="width:880px;max-width:92vw;"
+        :title="`${dqModalTable} · 数据质量规则（最近一次体检）`"
+        :on-after-leave="closeDqModal"
+      >
+        <div v-if="dqModalRunAt" style="font-size:12px;color:#888;margin-bottom:10px;">
+          体检时间 {{ fmtDqTime(dqModalRunAt) }} · 共 {{ dqModalRows.length }} 条规则 · 异常排前
+        </div>
+        <NSpin :show="dqModalLoading">
+          <NTable v-if="!dqModalLoading && dqModalRows.length" size="small" :bordered="false" :single-line="false" style="font-size:12px;">
+            <thead>
+              <tr>
+                <th style="width:90px;">状态</th>
+                <th style="width:200px;">规则名</th>
+                <th style="width:140px;">检查类型</th>
+                <th style="width:80px;">严重度</th>
+                <th style="width:120px;">度量值</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="r in dqModalRows"
+                :id="`dq-row-${r.rule_name}`"
+                :key="r.rule_name"
+                :style="dqModalFocusRule === r.rule_name ? 'background:#FFF7E6;' : ''"
+              >
+                <td>
+                  <span style="display:inline-flex;align-items:center;gap:6px;">
+                    <span style="width:8px;height:8px;border-radius:50%;" :style="{ background: dqIssueColor(r.status) }"></span>
+                    <span :style="{ color: dqIssueColor(r.status), fontWeight: 600 }">{{ dqIssueStatusLabel(r.status) }}</span>
+                  </span>
+                </td>
+                <td style="font-family:Consolas,Menlo,monospace;color:#185FA5;">{{ r.rule_name }}</td>
+                <td style="color:#888;">{{ r.check_type }}</td>
+                <td style="color:#666;">{{ r.severity }}</td>
+                <td style="font-family:Consolas,Menlo,monospace;color:#333;">{{ r.metric_value ?? '—' }}</td>
+                <td style="color:#444;line-height:1.5;overflow-wrap:anywhere;">{{ r.message || '—' }}</td>
+              </tr>
+            </tbody>
+          </NTable>
+          <NEmpty v-else-if="!dqModalLoading" description="该表暂无规则详情（可能未运行过体检）" />
+        </NSpin>
+        <template #footer>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:#999;">
+              数据来源：本地 MySQL（adata.dq_report）
+            </span>
+            <NButton size="small" type="primary" secondary @click="router.push('/quality')">查看质量报告栏目 ▸</NButton>
+          </div>
+        </template>
+      </NModal>
+
+      <!-- 数据流明细弹窗 -->
+      <NModal
+        v-model:show="flowModalOpen"
+        preset="card"
+        :bordered="false"
+        size="huge"
+        style="width:760px;max-width:92vw;"
+        :title="`${flowOf?.table_name || current} · 数据流明细`"
+      >
+        <div v-if="flowOf" style="display:flex;flex-direction:column;gap:10px;font-size:12.5px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <NTag v-if="flowOf.category" size="small" :bordered="false" type="info">{{ flowOf.category }}</NTag>
+            <span style="color:#555;">{{ flowOf.writers.length ? `维护任务 ${flowOf.writers.length} 个` : '无自动采集任务' }}</span>
+            <span v-if="flowOf.note" style="font-size:11px;color:#B45309;">[{{ flowOf.note }}]</span>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">数据源</div>
+            <div v-if="flowSources.length" style="display:flex;gap:6px;flex-wrap:wrap;">
+              <NTag v-for="src in flowSources" :key="src" size="small" :bordered="false" type="info">{{ src }}</NTag>
+            </div>
+            <div v-else style="color:#aaa;">—</div>
+          </div>
+          <div v-if="flowOf.flow_desc">
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">清洗口径 / 数据流</div>
+            <div style="line-height:1.7;color:#444;overflow-wrap:anywhere;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:8px 10px;">
+              {{ flowOf.flow_desc }}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:6px;">维护作业</div>
+            <div v-if="flowOf.jobs.length" style="display:flex;flex-direction:column;gap:6px;">
+              <div
+                v-for="j in flowOf.jobs"
+                :key="j.task_name"
+                :title="(j.last && j.last.error_message) || ''"
+                style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:6px 10px;"
+              >
+                <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#185FA5;">{{ j.task_name }}</span>
+                <span style="color:#555;">{{ cronToText(j.cron) }}</span>
+                <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
+                <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
+                <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
+                  <span>
+                    <b :style="{ color: flowLastStatus(j).color }">{{ flowLastStatus(j).text }}</b>
+                    <template v-if="j.last">
+                      <template v-if="j.last.status === 'success' && j.last.records_written !== null">
+                        +{{ j.last.records_written }} 条
+                      </template>
+                      <span v-if="j.last.finished_at"> · {{ fmtFlowDt(j.last.finished_at) }}</span>
+                    </template>
+                  </span>
+                  <span v-if="j.next_run">下次 {{ fmtFlowDt(j.next_run) }}</span>
+                </span>
+              </div>
+            </div>
+            <div v-else style="color:#999;line-height:1.6;">
+              静态/历史表：无自动采集作业（{{ flowOf.source_desc || '人工或一次性导入' }}）
+            </div>
+          </div>
+        </div>
+        <div v-else>
+          <NEmpty description="该表暂无数据流元数据" />
+        </div>
+        <template #footer>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:#999;">数据来源：table_meta 元数据 + task_runs 运行记录</span>
+            <NButton size="small" type="primary" secondary @click="router.push('/jobs')">查看作业监控栏目 ▸</NButton>
+          </div>
+        </template>
+      </NModal>
 
       <!-- 底部状态 -->
       <div style="padding:6px 14px;border-top:1px solid #f0f0f0;background:#FAFBFC;display:flex;justify-content:space-between;align-items:center;">
