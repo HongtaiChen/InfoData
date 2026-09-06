@@ -36,8 +36,10 @@ class TaskRecorder:
             self.run_id = cur.lastrowid
         return self.run_id
 
-    def finish(self, records_written: int = 0, error_message: str | None = None):
-        """记录任务结束（成功或失败）"""
+    def finish(self, records_written: int = 0, error_message: str | None = None, run_detail=None):
+        """记录任务结束（成功或失败）
+        run_detail: 可选 dict/str —— 结构化运行快照（步骤链+当轮实录），存入 task_runs.run_detail JSON 列
+        """
         if self.connection is None:
             return
         status = "failed" if error_message else "success"
@@ -45,8 +47,8 @@ class TaskRecorder:
         try:
             with self.connection.cursor() as cur:
                 cur.execute(
-                    "UPDATE task_runs SET status=%s, finished_at=%s, records_written=%s, error_message=%s WHERE id=%s",
-                    (status, finished_at, records_written, error_message, self.run_id),
+                    "UPDATE task_runs SET status=%s, finished_at=%s, records_written=%s, error_message=%s, run_detail=%s WHERE id=%s",
+                    (status, finished_at, records_written, error_message, run_detail, self.run_id),
                 )
                 self.connection.commit()
         finally:

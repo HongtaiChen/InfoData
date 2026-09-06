@@ -295,7 +295,7 @@ def tables_flow():
         runs = _norm(
             query_all(
                 "SELECT task_name, status, started_at, finished_at, records_written, "
-                "       error_message, id "
+                "       error_message, run_detail, id "
                 "FROM task_runs "
                 "WHERE id IN (SELECT MAX(id) FROM task_runs GROUP BY task_name)"
             )
@@ -303,6 +303,38 @@ def tables_flow():
     except Exception:
         runs = []
     last_map = {r["task_name"]: r for r in runs}
+
+    def _parse_run_detail(raw):
+        """run_detail JSON → dict（含 run_steps 步骤链 + 当轮实录）"""
+        if not raw:
+            return None
+        if isinstance(raw, dict):
+            return raw
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    def _collector_run_steps(task_name: str):
+        """动态读取采集器模块的 RUN_STEPS 模板（代码即模板，改完即时生效）。
+        仅试点任务（stock_daily_incr 等）定义了该常量；无则返回 None 前端不展示步骤链。"""
+        import importlib
+
+        try:
+            mod = importlib.import_module(f"app.collectors.{task_name}")
+            steps = getattr(mod, "RUN_STEPS", None)
+            if steps:
+                return [
+                    {
+                        "no": s.get("no"),
+                        "name": s.get("name"),
+                        "params": s.get("params"),
+                    }
+                    for s in steps
+                ]
+        except Exception:
+            pass
+        return None
 
     for tbl, m in meta_map.items():
         wcols = m["writer_cols"]
@@ -325,9 +357,12 @@ def tables_flow():
                         "finished_at": last["finished_at"],
                         "records_written": last["records_written"],
                         "error_message": last["error_message"],
+                        "run_detail": _parse_run_detail(last.get("run_detail")),
                     }
                     if last
                     else None,
+                    # 运行步骤链模板（采集器 RUN_STEPS 常量，代码即模板）
+                    "run_steps": _collector_run_steps(w),
                     # 列级血缘（writer_cols 中该任务的映射）
                     "lineage": {
                         "source": wc.get("source") if wc else None,

@@ -222,7 +222,13 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
             "source": "东财行情(四级降级)",
             "cols": ["stock_code", "trade_date", "open", "high", "low", "close", "pre_close",
                      "change_amount", "change_pct", "volume", "amount", "turnover_ratio"],
-            "note": "前复权；增量按本地最新日补齐，INSERT IGNORE 去重",
+            "derived": ["pre_close", "change_amount", "change_pct"],
+            "note": "前复权；增量按本地最新日补齐，INSERT IGNORE 去重；昨收/涨跌额/涨跌幅源缺失时按清洗口径本地推算",
+            "col_notes": {
+                "pre_close": "昨收：源提供则直采；整列缺失时按日期升序用收盘价 shift(1) 推算（首行昨收为空）",
+                "change_amount": "涨跌额：源缺时以收盘-昨收推算 round 3",
+                "change_pct": "涨跌幅：源缺时以 (收盘-昨收)/昨收×100 推算 round 4",
+            },
         },
     },
     "stock_market_current": {

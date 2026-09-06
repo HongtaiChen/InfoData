@@ -8,8 +8,10 @@ InvestBuddy 采集任务统一运行入口
 - TASKS 注册表位于文件底部（所有 run_* 函数定义之后，避免模块加载时 NameError）
 """
 import argparse
+import json
 import logging
 import sys
+import threading
 from datetime import datetime
 
 from ..db import get_db_config
@@ -32,6 +34,19 @@ from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
 
+# 线程局部：wrapper 里采集器 run() 返回的结构化快照（含 run_steps），run_task 结束时写入 task_runs.run_detail
+_tls = threading.local()
+
+
+def _set_run_detail(detail) -> None:
+    _tls.run_detail = detail
+
+
+def _take_run_detail():
+    d = getattr(_tls, "run_detail", None)
+    _tls.run_detail = None
+    return d
+
 
 def _setup_logging():
     logging.basicConfig(
@@ -50,6 +65,7 @@ def run_stock_daily_incr(params: dict) -> int:
         include_bj=bool(params.get("include_bj", False)),
     )
     result = collector.run()
+    _set_run_detail(result)  # 含 run_steps 步骤链 + 当轮实录 → task_runs.run_detail
     if result["error_count"] > 0 and result["records_written"] == 0:
         raise RuntimeError(f"{result['error_count']} 只股票采集失败（无任何写入）: {result['errors']}")
     if result["error_count"] > 0:
@@ -267,15 +283,28 @@ def run_task(task_name: str) -> int:
 
     recorder = TaskRecorder(task_name)
     recorder.start()
+    detail = None
     try:
         written = TASKS[task_name](params)
-        recorder.finish(records_written=written)
+        detail = _take_run_detail()
+        recorder.finish(records_written=written, run_detail=_dumps(detail))
         logger.info(f"✅ 任务 {task_name} 完成，写入 {written} 条")
         return written
     except Exception as e:
-        recorder.finish(records_written=0, error_message=str(e))
+        detail = _take_run_detail()
+        recorder.finish(records_written=0, error_message=str(e), run_detail=_dumps(detail))
         logger.error(f"❌ 任务 {task_name} 失败: {e}")
         raise
+
+
+def _dumps(detail) -> str | None:
+    """将运行快照序列化为 JSON 字符串（可入 MySQL json 列）；非 JSON 可序列化时降级为 None"""
+    if detail is None:
+        return None
+    try:
+        return json.dumps(detail, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        return None
 
 
 def main():

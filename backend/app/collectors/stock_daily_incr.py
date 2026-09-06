@@ -39,6 +39,19 @@ RETRY_TIMES = 2
 # 疑似退市/长期停牌判定：最后数据日期距今超过该天数则默认跳过
 STALE_DAYS = 730  # 2 年
 
+# 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）。
+# 约定：每步 {no, name, params(可选说明/关键参数)}；
+# run() 结束时把模板 + 当轮实录合并为 run_detail 写入 task_runs.run_detail，
+# 代码变更后下一轮运行即携带最新模板，无需人工维护元数据。
+RUN_STEPS = [
+    {"no": 1, "name": "读候选名单", "params": "stock_info 在市 A 股，可含北交所"},
+    {"no": 2, "name": "定位增量窗口", "params": f"回看 {DEFAULT_DAYS_BACK} 交易日（覆盖停牌/长假缺口）"},
+    {"no": 3, "name": "逐只增量判定", "params": f"最后日期 ≥ 判定线即跳过；STALE_DAYS={STALE_DAYS} 疑似退市软跳过"},
+    {"no": 4, "name": "并发抓取 × 四级降级", "params": "4 线程；东财→腾讯→新浪→Tushare，每源重试 2 次"},
+    {"no": 5, "name": "清洗归一 + 推算缺失字段", "params": "源列名归一化；昨收缺失→收盘 shift(1)，涨跌额/涨跌幅缺失→收盘-昨收推算"},
+    {"no": 6, "name": "INSERT IGNORE 去重写库", "params": "唯一键 (stock_code, trade_date)，重复自动忽略"},
+]
+
 
 def code_to_symbol(code: str) -> str:
     """6位代码 -> 带交易所前缀（sh600519 / sz000001 / bj830799）"""
@@ -389,6 +402,25 @@ class StockDailyIncrementalCollector:
                 "source_stats": source_stats,
                 "errors": self._errors[:10],
                 "error_count": len(self._errors),
+                # 运行步骤链：模板 + 当轮实录（供前端整链拓扑/运行逻辑展示）
+                "run_steps": [
+                    {
+                        "no": s["no"],
+                        "name": s["name"],
+                        "params": s.get("params"),
+                        "value": {
+                            1: f"候选 {len(stocks)} 只",
+                            2: f"判定线 {cutoff}",
+                            3: f"已最新跳过 {skipped} · 疑似退市跳过 {skipped_stale} · 北交所 {bj_count}",
+                            4: f"命中 {source_stats or '无（本轮全部失败）'}",
+                            5: f"写前清洗（列归一 + 缺失推算）",
+                            6: f"写入 {self._written} 行",
+                        }.get(s["no"]),
+                    }
+                    for s in RUN_STEPS
+                ],
+                "cutoff": cutoff,
+                "stale_cutoff": locals().get("stale_cutoff"),
             }
             logger.info(
                 f"✅ 完成: 写入 {self._written} 行, 跳过 {skipped} 只, 疑似退市跳过 {skipped_stale} 只, "
