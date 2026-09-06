@@ -645,11 +645,6 @@ onMounted(loadTables)
             <span v-if="flowOf.note" style="font-size:11px;color:#B45309;">[{{ flowOf.note }}]</span>
             <span style="font-size:11px;color:#185FA5;">弹窗查看 ▸</span>
           </div>
-
-          <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
-            <NButton size="tiny" quaternary @click="router.push('/jobs')">作业监控</NButton>
-            <NButton size="tiny" type="primary" secondary @click="router.push('/quality')">查看质量报告</NButton>
-          </span>
         </div>
       </div>
 
