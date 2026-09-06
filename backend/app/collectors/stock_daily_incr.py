@@ -144,6 +144,30 @@ class StockDailyIncrementalCollector:
             row = cur.fetchone()
             return row[0].strftime("%Y%m%d") if row and row[0] else None
 
+    def _last_trading_day(self, conn, end_date: str) -> str:
+        """最近已收盘交易日（<= end_date）。
+
+        以 trade_calendar 为准（is_trading_day=1 且 <= 当天）；日历缺失/为空时
+        用星期启发兜底（周一回退 3 天到上周五，周日回退 2 天到周五，其余回退 1 天）。
+
+        该日期是"每只股票应推进到的目标日"——用它替代"全局 MAX(trade_date)"做
+        增量判定线，否则一旦全市场齐到某天，之后每晚所有股票都会被误判为
+        "已最新"而跳过，日线永远停在原地（2026-09 数据停更根因）。
+        """
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT MAX(trade_date) FROM trade_calendar "
+                "WHERE is_trading_day = 1 AND trade_date <= %s",
+                (end_date,),
+            )
+            row = cur.fetchone()
+        if row and row[0]:
+            return row[0].strftime("%Y%m%d")
+        # 兜底：星期启发（不依赖日历表）
+        d = datetime.strptime(end_date, "%Y%m%d")
+        back = {0: 3, 6: 2}.get(d.weekday(), 1)  # 周一回看 3 天(上周五)；周日回看 2 天(周五)
+        return (d - timedelta(days=back)).strftime("%Y%m%d")
+
     def get_stock_list(self, conn, include_bj: bool = False) -> tuple[list[tuple], int]:
         """获取股票代码列表，返回 (列表, 北交所数量)。
 
@@ -331,8 +355,16 @@ class StockDailyIncrementalCollector:
                 global_last = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
                 logger.info("无存量数据，回退拉取近 1 年")
 
-            cutoff = (datetime.strptime(global_last, "%Y%m%d") - timedelta(days=self.days_back)).strftime("%Y%m%d")
-            logger.info(f"全局最新交易日: {global_last}，增量判定线(≥此日期算已最新): {cutoff}")
+            # 最近已收盘交易日（交易日历为准）：每只股票本轮应推进到的目标日。
+            # 判定线必须基于它，而不是"全局 MAX(trade_date)"——否则全市场齐到某天后，
+            # 每晚任务都会把所有股票判为已最新而跳过，日线永久停更。
+            target_day = self._last_trading_day(conn, end_date)
+            # 新股/首次拉取的起始窗口：目标日回看 days_back 天
+            cutoff = (datetime.strptime(target_day, "%Y%m%d") - timedelta(days=self.days_back)).strftime("%Y%m%d")
+            logger.info(
+                f"最近已收盘交易日: {target_day}，增量目标(≥此日期算已最新): {target_day}，"
+                f"新股回看窗口起始: {cutoff}（存量最新 {global_last}）"
+            )
 
             stocks, bj_count = self.get_stock_list(conn, include_bj=self.include_bj)
             if bj_count:
@@ -360,11 +392,12 @@ class StockDailyIncrementalCollector:
             skipped = 0
             todo = []
             for code, name, stock_last in stocks:
-                if stock_last and stock_last >= cutoff:
+                # 增量判定：该股数据是否已推进到最近已收盘交易日？是 → 跳过；否 → 补缺口
+                if stock_last and stock_last >= target_day:
                     skipped += 1
                     continue
                 todo.append((code, name, stock_last))
-            logger.info(f"实际待采集 {len(todo)} 只（已最新跳过 {skipped} 只）")
+            logger.info(f"实际待采集 {len(todo)} 只（已推进到 {target_day} 跳过 {skipped} 只）")
 
             source_stats = {}
             self._written = 0
