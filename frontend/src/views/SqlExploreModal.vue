@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, h, ref, watch, nextTick } from 'vue'
 import {
-  NButton, NInput, NModal, NSelect, NSpin, NTag,
+  NButton, NDataTable, NInput, NModal, NRadio, NRadioGroup, NSelect, NSpin, NTag,
   type SelectOption,
 } from 'naive-ui'
 import api from '../api'
 
 interface Props {
   show: boolean
-  /** 当前在数据中心选中的表，为空时只展示一个简单的 SELECT 占位 */
+  /** 当前在数据中心选中的表 */
   currentTable?: string
   /** 已知业务表清单（用于顶部下拉切换） */
   tables?: { name: string; comment?: string }[]
@@ -31,10 +31,8 @@ const DEFAULT_SQL = 'SELECT 1 AS hello'
 const LIMIT_DEFAULT = 500
 const LIMIT_MAX = 2000
 
-// 顶部下拉的表名（可选）
 const selectedTable = ref<string | null>(null)
 const sqlText = ref(DEFAULT_SQL)
-// LIMIT：用 string 存（原 NInput 不支持 type=number），转 int 时夹紧上限
 const limitInputStr = ref<string>(String(LIMIT_DEFAULT))
 const limitEffective = computed<number>(() => {
   const n = parseInt(limitInputStr.value, 10)
@@ -45,6 +43,9 @@ const running = ref(false)
 const result = ref<ExploreResp | null>(null)
 const errorMsg = ref('')
 const errorKind = ref<'safety' | 'timeout' | 'syntax' | 'other'>('other')
+
+/** 紧凑数字视图（默认 ON）：15000 → "1.50 万"；OFF 时显示原值 */
+const compactNumbers = ref(true)
 
 const tableOptions = computed<SelectOption[]>(() => {
   const base: SelectOption[] = [{ label: '（不指定表）', value: '' }]
@@ -57,10 +58,16 @@ const tableOptions = computed<SelectOption[]>(() => {
   return base
 })
 
+const NUM_TYPES = new Set([
+  'TINYINT', 'SMALLINT', 'INT', 'INT24', 'BIGINT',
+  'FLOAT', 'DOUBLE', 'DECIMAL', 'NEWDECIMAL',
+])
+function isNumericType(t: string): boolean {
+  return NUM_TYPES.has(t.toUpperCase())
+}
+
 watch(selectedTable, (v) => {
-  if (v) {
-    sqlText.value = `SELECT *\nFROM \`${v}\`\nORDER BY 1 DESC\nLIMIT 100`
-  }
+  if (v) sqlText.value = `SELECT *\nFROM \`${v}\`\nORDER BY 1 DESC\nLIMIT 100`
 })
 
 watch(() => props.show, async (v) => {
@@ -70,7 +77,6 @@ watch(() => props.show, async (v) => {
       sqlText.value = `SELECT *\nFROM \`${props.currentTable}\`\nORDER BY 1 DESC\nLIMIT 100`
     }
     errorMsg.value = ''
-    // 不再自动执行：modal 首次挂载未稳定，依赖时序易抖；让用户按 Ctrl+Enter 或点「执行」
     await nextTick()
   }
 })
@@ -136,19 +142,79 @@ const errorTitle = computed(() => {
   return '执行错误'
 })
 
-function onKey(e: KeyboardEvent) {
-  if (!props.show) return
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    e.preventDefault()
-    runSql()
-  }
-}
-
 function _eCode(msg: string): string {
-  // 从「SQL_XXX: 描述」中提取 code；无前缀返回 'ERROR'
   const m = msg.match(/^([A-Z_]+):/)
   return m ? m[1] : 'ERROR'
 }
+
+/**
+ * 单元格值渲染：null → "—" 浅灰；ISO datetime → "MM-DD HH:MM"；
+ * 数字列按紧凑或原始两种视图。
+ */
+function fmtText(v: unknown, colType: string): string {
+  if (v === null || v === undefined || v === '') return '—'
+  const s = String(v)
+  const up = colType.toUpperCase()
+  const dtMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (dtMatch && (up.includes('DATETIME') || up.includes('TIMESTAMP') || up === 'DATE')) {
+    return `${dtMatch[2]}-${dtMatch[3]} ${dtMatch[4]}:${dtMatch[5]}`
+  }
+  if (compactNumbers.value && isNumericType(colType)) {
+    const m = s.match(/^-?\d+(\.\d+)?$/)
+    if (m) {
+      const n = Number(s)
+      if (Number.isFinite(n)) return _compact(n)
+    }
+  }
+  return s
+}
+
+function fmtEmpty(v: unknown): boolean {
+  return v === null || v === undefined || v === ''
+}
+
+function _compact(n: number): string {
+  const abs = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (abs >= 1e8) return `${sign}${(abs / 1e8).toFixed(2)} 亿`
+  if (abs >= 1e4) return `${sign}${(abs / 1e4).toFixed(2)} 万`
+  if (Number.isInteger(n)) return `${sign}${abs.toString()}`
+  if (abs < 1) return `${sign}${abs.toFixed(4)}`
+  return `${sign}${abs.toFixed(2)}`
+}
+
+/** NDataTable 列定义（compactNumbers 切换时重渲染触发） */
+const tableColumns = computed(() => {
+  if (!result.value) return []
+  return result.value.columns.map((c) => {
+    const numeric = isNumericType(c.type)
+    return {
+      title: c.name,
+      key: c.name,
+      minWidth: numeric ? 90 : 120,
+      width: numeric ? 130 : undefined,
+      align: numeric ? ('right' as const) : ('left' as const),
+      ellipsis: { tooltip: true },
+      render(row: Record<string, unknown>) {
+        const text = fmtText(row[c.name], c.type)
+        const empty = fmtEmpty(row[c.name])
+        return h(
+          'span',
+          {
+            style: {
+              color: empty ? '#c8c8c8' : '#333',
+              fontVariantNumeric: numeric ? 'tabular-nums' : 'normal',
+              fontWeight: empty ? 400 : 400,
+            },
+            title: String(row[c.name] ?? ''),
+          },
+          text,
+        )
+      },
+    }
+  })
+})
+const tableData = computed(() => result.value?.rows ?? [])
 </script>
 
 <template>
@@ -156,7 +222,6 @@ function _eCode(msg: string): string {
     :show="props.show"
     preset="card"
     style="width:1100px;max-width:96vw;"
-    :style="{ height: '720px' }"
     size="huge"
     title="数据探查 · 只读"
     :on-mask-click="close"
@@ -172,8 +237,7 @@ function _eCode(msg: string): string {
       </div>
     </template>
 
-    <div style="display:flex;flex-direction:column;height:100%;" @keydown="onKey">
-
+    <div style="display:flex;flex-direction:column;">
       <!-- 风险条 -->
       <div
         style="padding:7px 12px;border-radius:6px;background:#FFF4F4;border:1px solid #F4C9C9;color:#791F1F;font-size:12px;line-height:1.55;margin-bottom:10px;"
@@ -183,7 +247,7 @@ function _eCode(msg: string): string {
         <kbd style="padding:0 4px;border:1px solid #791F1F;border-radius:3px;font-size:11px;background:#fff;margin-left:6px;">Ctrl+Enter</kbd> 执行
       </div>
 
-      <!-- 工具栏：表名切换 + LIMIT -->
+      <!-- 工具栏 -->
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
         <NSelect
           v-model:value="selectedTable"
@@ -206,6 +270,16 @@ function _eCode(msg: string): string {
         <NButton size="small" type="primary" :loading="running" @click="runSql()">执行</NButton>
         <NButton size="small" quaternary @click="clearAll()">清空</NButton>
         <NButton size="small" quaternary @click="copySql()">复制 SQL</NButton>
+        <NRadioGroup
+          :value="compactNumbers ? '1' : '0'"
+          @update:value="(v: string | number | null) => (compactNumbers = String(v) === '1')"
+          size="small"
+          name="num-format"
+          style="margin-left:4px;"
+        >
+          <NRadio value="1">紧凑</NRadio>
+          <NRadio value="0">原始</NRadio>
+        </NRadioGroup>
         <span style="margin-left:auto;font-size:11px;color:#aaa;">{{ sqlText.length }} 字符</span>
       </div>
 
@@ -214,7 +288,7 @@ function _eCode(msg: string): string {
         v-model:value="sqlText"
         type="textarea"
         placeholder="SELECT * FROM stock_info WHERE list_status = 'L' LIMIT 100"
-        :autosize="{ minRows: 5, maxRows: 12 }"
+        :autosize="{ minRows: 4, maxRows: 8 }"
         style="font-family:Consolas,Menlo,monospace;font-size:13px;margin-bottom:10px;"
       />
 
@@ -237,47 +311,29 @@ function _eCode(msg: string): string {
         :style="`padding:8px 12px;border-radius:6px;background:#FFF4F4;border:1px solid #F4C9C9;color:${errorColor};font-size:12px;line-height:1.5;margin-bottom:10px;font-family:Consolas,Menlo,monospace;word-break:break-all;`"
       >
         <strong>{{ errorTitle }}：</strong>
-        <span
-          style="display:inline-block;font-size:10px;font-weight:600;color:#fff;background:#791F1F;border-radius:3px;padding:1px 5px;margin-right:6px;font-family:Consolas,Menlo,monospace;letter-spacing:0.5px;"
-        >{{ _eCode(errorMsg) }}</span>
+        <span style="font-size:10px;background:#FFE5E5;padding:1px 5px;border-radius:3px;margin-right:6px;color:#791F1F;">{{ _eCode(errorMsg) }}</span>
         {{ errorMsg.replace(/^[A-Z_]+:\s*/, '') }}
       </div>
 
-      <!-- 结果区 -->
-      <div style="flex:1;min-height:0;border:1px solid #ececec;border-radius:6px;overflow:auto;background:#FAFBFC;">
+      <!-- 结果区：NDataTable 自带 sticky thead + scroll -->
+      <div style="border:1px solid #ececec;border-radius:6px;overflow:hidden;background:#fff;">
         <div v-if="!result && !running" style="padding:30px;text-align:center;color:#888;font-size:13px;">
           尚无结果
         </div>
         <div v-else-if="result && result.rows.length === 0" style="padding:30px;text-align:center;color:#888;font-size:13px;">
           ✓ 查询成功，0 行结果
         </div>
-        <table v-else-if="result" style="width:100%;border-collapse:collapse;font-size:12.5px;font-family:Consolas,Menlo,monospace;">
-          <thead style="position:sticky;top:0;background:#fff;z-index:1;">
-            <tr>
-              <th
-                v-for="c in result.columns"
-                :key="c.name"
-                :title="`类型: ${c.type}`"
-                style="padding:6px 10px;border-bottom:2px solid #185FA5;text-align:left;color:#185FA5;font-weight:600;white-space:nowrap;"
-              >
-                {{ c.name }}
-                <span style="display:block;font-size:10px;color:#aaa;font-weight:400;">{{ c.type }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, i) in result.rows" :key="i" :style="`background:${i % 2 ? '#fff' : '#F7F9FC'};`">
-              <td
-                v-for="c in result.columns"
-                :key="c.name"
-                style="padding:5px 10px;border-bottom:1px solid #f0f0f0;color:#333;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                :title="String(row[c.name] ?? '')"
-              >
-                {{ row[c.name] === null || row[c.name] === undefined ? '—' : String(row[c.name]) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <NDataTable
+          v-else-if="result"
+          :columns="tableColumns"
+          :data="tableData"
+          :bordered="false"
+          :single-line="false"
+          size="small"
+          :max-height="420"
+          :virtual-scroll="true"
+          style="font-family:Consolas,Menlo,monospace;font-size:12.5px;"
+        />
       </div>
     </div>
   </NModal>

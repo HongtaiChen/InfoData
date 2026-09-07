@@ -195,10 +195,21 @@ def explore(req: SqlExploreReq) -> dict[str, Any]:
 
 
 def _mysql_type_label(t: Any) -> str:
-    """cursor.description[1] 是 pymysql.constants.FIELD_TYPE.* 整数；映射成短名"""
+    """cursor.description[1] 是 pymysql.constants.FIELD_TYPE.* 整数；映射成 SQL 公认名
+
+    驱动层名（VAR_STRING/NEWDECIMAL/LONGLONG 等）不利于前端展示，
+    标准化为 VARCHAR/DECIMAL/BIGINT 等。
+    """
+    _TYPE_MAP = {
+        1: 'TINYINT', 2: 'SMALLINT', 3: 'INT', 4: 'FLOAT', 5: 'DOUBLE',
+        6: 'NULL', 7: 'TIMESTAMP', 8: 'BIGINT', 9: 'INT24',
+        10: 'DATE', 11: 'TIME', 12: 'DATETIME', 13: 'YEAR',
+        15: 'VARCHAR', 16: 'BIT',
+        245: 'JSON', 246: 'DECIMAL', 247: 'ENUM', 248: 'SET',
+        249: 'TINYBLOB', 250: 'MEDIUMBLOB', 251: 'LONGBLOB',
+        252: 'BLOB', 253: 'VARCHAR', 254: 'CHAR', 255: 'GEOMETRY',
+    }
     try:
-        from pymysql.constants import FIELD_TYPE as FT
-        inv = {v: k for k, v in vars(FT).items() if not k.startswith("_") and isinstance(v, int)}
-        return inv.get(int(t), str(t))
-    except Exception:
+        return _TYPE_MAP.get(int(t), str(t))
+    except (TypeError, ValueError):
         return str(t)
