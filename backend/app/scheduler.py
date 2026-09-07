@@ -12,6 +12,7 @@ InvestBuddy 定时调度器（APScheduler）
 import logging
 import threading
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -19,6 +20,10 @@ from apscheduler.triggers.cron import CronTrigger
 from .db import query_all
 
 logger = logging.getLogger("infodata.scheduler")
+
+# 业务时区：A 股与 cron 均按上海时间，DB 时间戳亦为本地(=上海)写入，
+# 补偿判定显式锁定该时区，避免依赖系统默认时区
+TZ = ZoneInfo("Asia/Shanghai")
 
 # 手动 cron 标识（task_config 中 cron='手动' 表示不自动调度）
 MANUAL_MARK = "手动"
@@ -57,6 +62,11 @@ class SchedulerManager:
         self._scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
         self._scheduler.start()
         self.sync_from_db()
+        # 启动补偿：电脑关机/睡眠期间错过的 cron 班次，开机后自动补跑
+        try:
+            self.catchup_missed()
+        except Exception:
+            logger.exception("启动补偿执行异常")
         logger.info("🕒 调度器已启动")
 
     def shutdown(self):
@@ -165,6 +175,97 @@ class SchedulerManager:
         t = threading.Thread(target=self._run_scheduled, args=(task_name,), daemon=True)
         t.start()
         return {"started": True, "reason": "已提交执行，请到运行记录查看进度"}
+
+    # ---------- 启动补偿（关机/睡眠错过班次） ----------
+
+    # 触发间隔低于该值的高频任务（如 news_fetch */30）不参与补偿，等下次 cron 即可
+    CATCHUP_MIN_INTERVAL = timedelta(hours=2)
+    # cron 触发点回看窗口（覆盖每日/每周/每月任务）
+    CATCHUP_LOOKBACK_DAYS = 45
+
+    def _recent_fire_times(self, trigger, now: datetime, lookback_days: int | None = None) -> list:
+        """正向迭代 cron 触发点，返回 (now - lookback, now] 窗口内的触发序列（升序）"""
+        lookback_days = lookback_days or self.CATCHUP_LOOKBACK_DAYS
+        t0 = now - timedelta(days=lookback_days)
+        fires: list = []
+        prev, cur = None, t0
+        while True:
+            nxt = trigger.get_next_fire_time(prev, cur)
+            if nxt is None or nxt > now:
+                break
+            fires.append(nxt)
+            prev, cur = nxt, nxt + timedelta(seconds=1)
+        return fires
+
+    @staticmethod
+    def _last_success_at(task_name: str) -> datetime | None:
+        """该任务最近一次 success 的 finished_at（无则 None）"""
+        from .db import _connect  # noqa: PLC0415
+
+        conn = _connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT MAX(finished_at) FROM task_runs WHERE task_name=%s AND status='success'",
+                    (task_name,),
+                )
+                row = cur.fetchone()
+                return row[0] if row and row[0] else None
+        finally:
+            conn.close()
+
+    def catchup_missed(self) -> dict:
+        """启动补偿：cron 最近应触发点已过去、且晚于上次成功时间 → 该班次遗漏，补跑一次。
+
+        判定天然防重复/防堆积：
+        - 只补「最近一个未覆盖的触发点」，多天关机也只补一次（不会逐天堆积）
+        - 周末/长假：非当日触发点的任务（如交易日任务）的最近触发点若已被覆盖则跳过
+        - 高频任务（触发间隔 < CATCHUP_MIN_INTERVAL）不参与
+        - 执行走 _execute（带同任务 running 保护），与 cron 并发也安全
+        """
+        if self._scheduler is None or not self._scheduler.running:
+            return {"checked": 0, "todo": []}
+        now = datetime.now(TZ)  # 上海时区，与 CronTrigger(Asia/Shanghai) 及 DB 时间一致
+        now_naive = now.replace(tzinfo=None)
+        jobs = self._scheduler.get_jobs()
+        todo: list[dict] = []
+        for job in jobs:
+            name = job.id
+            try:
+                fires = self._recent_fire_times(job.trigger, now)
+            except Exception:
+                continue
+            if not fires:
+                continue
+            last = fires[-1]  # 最近一次应触发点
+            interval = (last - fires[-2]) if len(fires) >= 2 else timedelta(days=999)
+            if interval < self.CATCHUP_MIN_INTERVAL:
+                continue  # 高频任务跳过
+            last_naive = last.astimezone(TZ).replace(tzinfo=None)
+            if last_naive > now_naive:
+                continue  # 应触发点在未来，还没到点
+            last_ok = self._last_success_at(name)
+            if last_ok is not None and last_ok >= last_naive:
+                continue  # 该班次已有 success 覆盖
+            todo.append({"task": name, "missed_at": last_naive.strftime("%Y-%m-%d %H:%M")})
+        if not todo:
+            logger.info(f"启动补偿：检查 {len(jobs)} 个任务，无遗漏班次")
+            return {"checked": len(jobs), "todo": []}
+        todo.sort(key=lambda x: x["missed_at"])
+        logger.info(
+            f"启动补偿：发现 {len(todo)} 个遗漏班次 → {[t['task'] for t in todo]}，已排队补跑"
+        )
+        threading.Thread(target=self._run_catchup, args=(todo,), daemon=True).start()
+        return {"checked": len(jobs), "todo": todo}
+
+    def _run_catchup(self, todo: list[dict]):
+        """后台串行补跑（按遗漏时刻升序），单任务 running 保护自动防重"""
+        for it in todo:
+            try:
+                self._execute(it["task"])
+                logger.info(f"启动补偿完成: {it['task']}（遗漏 {it['missed_at']}）")
+            except Exception as e:
+                logger.exception(f"启动补偿失败: {it['task']}: {e}")
 
     # ---------- 状态查询 ----------
 
