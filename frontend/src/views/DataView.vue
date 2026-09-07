@@ -6,6 +6,7 @@ import {
 } from 'naive-ui'
 import api from '../api'
 import { useRouter } from 'vue-router'
+import SqlExploreModal from './SqlExploreModal.vue'
 
 interface TableItem {
   name: string
@@ -106,6 +107,9 @@ interface FlowInfo {
 const tables = ref<TableItem[]>([])
 const tableKeyword = ref('')
 const current = ref('')
+
+// 数据探查（SQL EXPLORER）弹窗状态
+const showSql = ref(false)
 
 const cols = ref<ColMeta[]>([])
 const rows = ref<Record<string, unknown>[]>([])
@@ -693,6 +697,7 @@ onMounted(loadTables)
         <span v-if="meta?.update_time" style="font-size:12px;color:#bbb;">更新 {{ meta.update_time.replace('T', ' ').slice(0, 19) }}</span>
         <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
           <NButton size="tiny" quaternary @click="reload()">刷新</NButton>
+          <NButton size="tiny" type="primary" ghost @click="showSql = true">数据探查</NButton>
           <NSelect
             :value="pageSize"
             :options="[{ label: '50 行/页', value: 50 }, { label: '100 行/页', value: 100 }, { label: '200 行/页', value: 200 }]"
@@ -1354,6 +1359,15 @@ onMounted(loadTables)
       </div>
     </div>
   </div>
+
+  <!-- 数据探查（SQL 弹窗）：只读、15s 超时、强制 LIMIT -->
+  <SqlExploreModal
+    v-if="tables.length || showSql"
+    :show="showSql"
+    :current-table="current"
+    :tables="tables.map(t => ({ name: t.name, comment: t.comment }))"
+    @update:show="(v: boolean) => (showSql = v)"
+  />
 </template>
 
 <style scoped>
