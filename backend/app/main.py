@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer
+from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer, prefs
 from .scheduler import manager as scheduler_manager
 
 
@@ -47,6 +47,7 @@ app.include_router(ai.router, prefix="/api/ai", tags=["AI 分析"])
 app.include_router(db_browser.router, prefix="/api/db", tags=["数据中心"])
 app.include_router(quality.router, prefix="/api/dq", tags=["数据质量"])
 app.include_router(sql_explorer.router, prefix="/api/sql", tags=["数据探查"])
+app.include_router(prefs.router, prefix="/api/prefs", tags=["偏好设置"])
 
 
 @app.get("/api/health")

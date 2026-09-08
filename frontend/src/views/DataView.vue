@@ -7,6 +7,7 @@ import {
 import api from '../api'
 import { useRouter } from 'vue-router'
 import SqlExploreModal from './SqlExploreModal.vue'
+import SortPrefsModal from './SortPrefsModal.vue'
 
 interface TableItem {
   name: string
@@ -127,6 +128,118 @@ const pageSize = ref(50)
 const offset = ref(0)
 const hasMore = ref(false)
 const sort = ref<{ col: string; dir: 'asc' | 'desc' } | null>(null)
+
+// ---------- 排序偏好（服务端持久化 + localStorage 镜像） ----------
+type SortPref = { col: string; dir: 'asc' | 'desc' }
+const sortPrefs = ref<Record<string, SortPref>>({})
+const sortPrefsReady = ref(false)
+const showSortPrefs = ref(false)
+const SORT_PREFS_KEY = 'investbuddy.tableSortPrefs'
+
+function sortPrefsLS(): Record<string, SortPref> {
+  try {
+    const raw = localStorage.getItem(SORT_PREFS_KEY)
+    return raw ? (JSON.parse(raw) as Record<string, SortPref>) : {}
+  } catch {
+    return {}
+  }
+}
+function saveSortPrefsLS(map: Record<string, SortPref>) {
+  try {
+    localStorage.setItem(SORT_PREFS_KEY, JSON.stringify(map))
+  } catch {
+    /* 存储不可用则忽略，不阻塞主流程 */
+  }
+}
+
+async function loadSortPrefs() {
+  // 先以本地镜像兜底（后端未起/首屏快），再拉服务端全量覆盖
+  sortPrefs.value = sortPrefsLS()
+  sortPrefsReady.value = true
+  try {
+    const resp: any = await api.get('/prefs/table-sorts', { silent: true })
+    const items = (resp?.items || {}) as Record<string, SortPref>
+    sortPrefs.value = items
+    saveSortPrefsLS(items)
+  } catch {
+    /* 服务端不可达：保持镜像值，保证离线也能体验记住的排序 */
+  }
+}
+
+/** 排序偏好服务端 API：单表 upsert / 单表删 / 全清 */
+function apiPutSortPref(table: string, p: SortPref) {
+  try {
+    void api.put(`/prefs/table-sorts/${encodeURIComponent(table)}`, p, { silent: true })
+  } catch {
+    /* 静默 */
+  }
+}
+function apiDeleteSortPref(table: string) {
+  try {
+    void api.delete(`/prefs/table-sorts/${encodeURIComponent(table)}`, { silent: true })
+  } catch {
+    /* 静默 */
+  }
+}
+function apiClearSortPrefs() {
+  try {
+    void api.delete('/prefs/table-sorts', { silent: true })
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 当前表排序三态切换后：user 明确排序则 upsert，否则删除该表偏好 */
+function persistCurrentSort() {
+  if (!current.value) return
+  if (sort.value && sort.value.col) {
+    const p = { col: sort.value.col, dir: sort.value.dir }
+    sortPrefs.value = { ...sortPrefs.value, [current.value]: p }
+    saveSortPrefsLS(sortPrefs.value)
+    apiPutSortPref(current.value, p)
+  } else {
+    const next = { ...sortPrefs.value }
+    delete next[current.value]
+    sortPrefs.value = next
+    saveSortPrefsLS(next)
+    apiDeleteSortPref(current.value)
+  }
+}
+
+/** 管理弹窗单条重置 */
+function resetSortPref(table: string) {
+  const next = { ...sortPrefs.value }
+  delete next[table]
+  sortPrefs.value = next
+  saveSortPrefsLS(next)
+  apiDeleteSortPref(table)
+  // 若当前正看这张表且在用它的已存排序 → 清掉当前排序回到自然序
+  if (current.value === table && sort.value) {
+    sort.value = null
+    loadRows(false)
+  }
+}
+
+/** 管理弹窗全部清空 */
+function clearSortPrefs() {
+  sortPrefs.value = {}
+  saveSortPrefsLS({})
+  apiClearSortPrefs()
+  if (sort.value) {
+    sort.value = null
+    loadRows(false)
+  }
+}
+
+/** 打开表后应用该表已记住的排序（列须仍存在，否则自然序） */
+function applySortPref(name: string) {
+  const p = sortPrefs.value[name]
+  if (p && cols.value.some((c) => c.name === p.col)) {
+    sort.value = { col: p.col, dir: p.dir }
+  } else {
+    sort.value = null
+  }
+}
 
 // 过滤器草稿 + 已生效条件
 const fCol = ref('')
@@ -332,7 +445,10 @@ function selectTable(name: string) {
   sort.value = null
   filters.value = []
   loadMeta(name)
-  loadColumns(name).then(() => loadRows(false))
+  loadColumns(name).then(() => {
+    applySortPref(name)
+    loadRows(false)
+  })
 }
 
 function reload() {
@@ -353,6 +469,7 @@ function sortCol(name: string) {
   } else {
     sort.value = null
   }
+  persistCurrentSort()
   loadRows(false)
 }
 
@@ -629,7 +746,11 @@ function closeDqModal() {
   dqModalFocusRule.value = ''
 }
 
-onMounted(loadTables)
+onMounted(async () => {
+  // 先就绪排序偏好（服务端 → 镜像兜底），再选默认表应用已记住排序
+  await loadSortPrefs()
+  loadTables()
+})
 </script>
 
 <template>
@@ -698,6 +819,18 @@ onMounted(loadTables)
         <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
           <NButton size="tiny" quaternary @click="reload()">刷新</NButton>
           <NButton size="tiny" type="primary" ghost @click="showSql = true">数据探查</NButton>
+          <NButton
+            size="tiny"
+            :type="sortPrefs[current] ? 'primary' : 'default'"
+            :secondary="!!sortPrefs[current]"
+            quaternary
+            :title="sortPrefs[current]
+              ? `已记住默认排序：${sortPrefs[current].col} ${sortPrefs[current].dir === 'asc' ? '升序' : '降序'}（点列头可改）`
+              : '查看 / 管理各表记住的默认排序（存服务端）'"
+            @click="showSortPrefs = true"
+          >
+            排序偏好{{ sortPrefs[current] ? ' ✓' : '' }}
+          </NButton>
           <NSelect
             :value="pageSize"
             :options="[{ label: '50 行/页', value: 50 }, { label: '100 行/页', value: 100 }, { label: '200 行/页', value: 200 }]"
@@ -1367,6 +1500,16 @@ onMounted(loadTables)
     :current-table="current"
     :tables="tables.map(t => ({ name: t.name, comment: t.comment }))"
     @update:show="(v: boolean) => (showSql = v)"
+  />
+
+  <!-- 排序偏好（服务端持久化管理弹窗） -->
+  <SortPrefsModal
+    :show="showSortPrefs"
+    :prefs="sortPrefs"
+    :tables="tables.map(t => ({ name: t.name, comment: t.comment }))"
+    @update:show="(v: boolean) => (showSortPrefs = v)"
+    @reset="resetSortPref"
+    @clear-all="clearSortPrefs"
   />
 </template>
 
