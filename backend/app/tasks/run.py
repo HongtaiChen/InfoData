@@ -30,6 +30,7 @@ from ..collectors.finance_calendar_sync import FinanceCalendarSyncCollector
 from ..collectors.data_quality_check import DataQualityCheckCollector
 from ..collectors.stock_status_sync import StockStatusSyncCollector
 from ..collectors.stock_company_sync import StockCompanySyncCollector
+from ..collectors.daily_recon import DailyReconCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -201,13 +202,164 @@ def run_finance_calendar_sync(params: dict) -> int:
 
 
 def run_data_quality_check(params: dict) -> int:
-    """数据质量体检：读取 dq_rules 逐条执行 → 写 dq_report（每日盘后自动）"""
-    collector = DataQualityCheckCollector()
+    """数据质量体检：读取 dq_rules 逐条执行 → 写 dq_report（每日盘后自动）
+
+    params.groups 可选：["daily"]（默认任务配置）/ ["weekly"] / 省略=全部规则。
+    daily 组为最新切片类（秒级），weekly 组为全史窗口扫描类（分钟级，独立任务）。
+    """
+    groups = (params or {}).get("groups")
+    if isinstance(groups, str):
+        groups = [groups]
+    collector = DataQualityCheckCollector(groups=groups)
     result = _collector_run(collector)
     if result["error_count"] > 0 and result["records_written"] == 0:
         raise RuntimeError("; ".join(result["errors"]))
     if result["error_count"] > 0:
         logger.warning(f"⚠️ DQ {result['error_count']} 条规则执行异常（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+def run_data_quality_check_weekly(params: dict) -> int:
+    """数据质量体检 · 全史窗口组（每周一 21:30 独立任务）
+
+    含 gap_scan（全史缺口，~196s）/ source_handoff（跨源衔接，~41s）/
+    OHLC 自洽 / 涨跌幅衔接 / 近端覆盖率，实测合计 4~7 分钟，不与每日轮混跑。
+    """
+    collector = DataQualityCheckCollector(groups=["weekly"])
+    result = _collector_run(collector)
+    if result["error_count"] > 0 and result["records_written"] == 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ DQ(weekly) {result['error_count']} 条规则执行异常: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+# ============ L3 修复闭环：日线定向回补（2026-09-10） ============
+
+def _gap_ranges_from_dq(p: dict) -> list[tuple]:
+    """从 dq_gap_detail 读 open 缺口 → 回补区间 [(code, start, end)]
+
+    同一票的多个缺口合并为「最早 prev_date ~ 最晚 next_date」一个区间
+    （中间已有数据由 INSERT IGNORE 自动去重，避免逐段多次请求）。
+    """
+    import pymysql
+    from ..db import get_db_config
+
+    conn = pymysql.connect(**get_db_config().to_dict())
+    try:
+        sql = ("SELECT stock_code, MIN(prev_date) AS s, MAX(next_date) AS e "
+               "FROM dq_gap_detail WHERE status='open'")
+        args: list = []
+        if p.get("risk") == "high":
+            sql += " AND risk='high'"
+        sql += " GROUP BY stock_code ORDER BY stock_code"
+        max_codes = int(p.get("max_codes", 0))
+        if max_codes > 0:
+            sql += " LIMIT %s"
+            args.append(max_codes)
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            return [(r[0], r[1].strftime("%Y%m%d"), r[2].strftime("%Y%m%d")) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def run_daily_backfill(params: dict) -> int:
+    """日线定向回补（L3 修复闭环）
+
+    params:
+      source   : "dq_gap"（默认，读 dq_gap_detail 中 status='open' 的疑似缺口）
+                 | "ranges"（显式区间）
+      ranges   : [["600519","20010827","20011231"], ...]（source=ranges 时必填）
+      risk     : "all"（默认）| "high"（只补 ≥365 天高危缺口）
+      max_codes: 0（0=不限；调试可用小值）
+      adjust   : "qfq"（默认，与主表口径一致）
+    回补成功后将该票缺口明细置 status='fixed'；n=0 的保持 open 待人工判定
+    （可能是停牌/退市等合理缺失，应人工置 ignored）。
+    """
+    from datetime import datetime as _dt
+    import pymysql
+    from ..db import get_db_config
+
+    p = _task_params(params, {"source": "dq_gap", "risk": "all", "max_codes": 0, "adjust": "qfq"})
+    source = p.get("source", "dq_gap")
+    if source == "ranges":
+        ranges = [tuple(x) for x in (p.get("ranges") or [])]
+    else:
+        ranges = _gap_ranges_from_dq(p)
+    if not ranges:
+        logger.info("定向回补：无待补区间（dq_gap_detail 无 open 缺口，或未提供 ranges）")
+        return 0
+
+    collector = StockDailyIncrementalCollector(
+        adjust=p.get("adjust", "qfq"),
+        max_stocks=int(p.get("max_codes", 0)),
+        backfill_ranges=ranges,
+    )
+    result = _collector_run(collector)
+    ok_ranges = result.get("ok_ranges") or []
+    if ok_ranges:
+        # 按「区间」而非「股票」粒度标记 fixed：只标记本次真正补到数据的缺口段，
+        # 避免同票其它未回补缺口（如长期停牌段）被误标（2026-09-10 实测发现并修正）。
+        def _d(v) -> str:
+            s = str(v)
+            return f"{s[:4]}-{s[4:6]}-{s[6:8]}" if len(s) == 8 else s
+
+        conn = pymysql.connect(**get_db_config().to_dict())
+        try:
+            with conn.cursor() as cur:
+                for code, s, e in ok_ranges:
+                    cur.execute(
+                        "UPDATE dq_gap_detail SET status='fixed', "
+                        "note=CONCAT(COALESCE(note,''), %s) "
+                        "WHERE status='open' AND stock_code=%s AND prev_date >= %s AND next_date <= %s",
+                        (f"[{_dt.now():%Y-%m-%d} 回补]", code, _d(s), _d(e)),
+                    )
+            conn.commit()
+            logger.info(f"dq_gap_detail 置 fixed：{len(ok_ranges)} 个区间")
+        finally:
+            conn.close()
+    if result["error_count"] > 0 and result["records_written"] == 0:
+        raise RuntimeError("; ".join(result["errors"]))
+    return result["records_written"]
+
+
+# ============ L2 外部对账（2026-09-10） ============
+
+def run_daily_recon_window(params: dict) -> int:
+    """L2 外部对账 · 滚动窗口（腾讯源，独立血缘）
+
+    params: days(默认5) / max_stocks(0=全市场) / tolerance_pct(0.5) / adjust(qfq)
+    """
+    p = _task_params(params, {"days": 5, "max_stocks": 0, "tolerance_pct": 0.5, "adjust": "qfq"})
+    collector = DailyReconCollector(
+        mode="window",
+        days=int(p.get("days", 5)),
+        max_stocks=int(p.get("max_stocks", 0)),
+        tolerance_pct=float(p.get("tolerance_pct", 0.5)),
+        adjust=p.get("adjust", "qfq"),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 窗口对账 {result['error_count']} 只失败（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_daily_recon_sample(params: dict) -> int:
+    """L2 外部对账 · 全史抽样（东财源，查入库丢行/截断）
+
+    params: sample_size(50) / seed(42) / adjust(qfq)
+    """
+    p = _task_params(params, {"sample_size": 50, "seed": 42, "adjust": "qfq"})
+    collector = DailyReconCollector(
+        mode="sample",
+        sample_size=int(p.get("sample_size", 50)),
+        seed=int(p.get("seed", 42)),
+        adjust=p.get("adjust", "qfq"),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 抽样对账 {result['error_count']} 只失败: {result['errors'][:3]}")
     return result["records_written"]
 
 
@@ -252,6 +404,13 @@ TASKS = {
     "finance_calendar_sync": run_finance_calendar_sync,
     # 2026-09-05 数据质量体检（读 dq_rules → 写 dq_report）
     "data_quality_check": run_data_quality_check,
+    # 2026-09-10 数据质量体检 · 全史窗口组（weekly 规则，每周一 21:30）
+    "data_quality_check_weekly": run_data_quality_check_weekly,
+    # 2026-09-10 L3 修复闭环：日线定向回补（按需/手动触发）
+    "daily_backfill": run_daily_backfill,
+    # 2026-09-10 L2 外部对账（腾讯滚动窗口 + 东财全史抽样）
+    "daily_recon_window": run_daily_recon_window,
+    "daily_recon_sample": run_daily_recon_sample,
     # 2026-09-05 股票档案域（Baostock 上市/退市状态 + 巨潮公司档案）
     "stock_status_sync": run_stock_status_sync,
     "stock_company_sync": run_stock_company_sync,

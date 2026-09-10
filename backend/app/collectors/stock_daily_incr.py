@@ -123,12 +123,16 @@ class StockDailyIncrementalCollector:
     """股票日线增量采集器"""
 
     def __init__(self, days_back: int = DEFAULT_DAYS_BACK, adjust: str = "qfq", max_stocks: int = 0,
-                 include_stale: bool = False, include_bj: bool = False):
+                 include_stale: bool = False, include_bj: bool = False,
+                 backfill_ranges: list | None = None):
         self.days_back = days_back
         self.adjust = adjust
         self.max_stocks = max_stocks  # 0 = 不限（全量）
         self.include_stale = include_stale  # True = 也采集疑似退市/长期停牌股
         self.include_bj = include_bj  # True = 也采集北交所（当前数据源不支持，默认跳过）
+        # 定向回补（L3 修复闭环）：[(code, start_yyyymmdd, end_yyyymmdd), ...]
+        # 提供时只按显式区间回补，绕过增量定位、500 天截断与陈旧软跳过
+        self.backfill_ranges = backfill_ranges or []
         self.db = get_db_config().to_dict()
         self._written = 0
         self._errors: list[str] = []
@@ -341,8 +345,103 @@ class StockDailyIncrementalCollector:
         finally:
             conn.close()
 
+    def _process_one_explicit(self, code: str, name: str, start: str, end: str) -> tuple:
+        """显式区间回补（L3 修复闭环）：不做增量定位、不做 500 天截断、不做陈旧跳过"""
+        conn = self._connect()
+        try:
+            df, src = self.fetch_with_retry(code, start, end)
+            n = self.insert_rows(conn, code, df, src)
+            time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
+            return (code, name, n, src, None)
+        except Exception as e:
+            return (code, name, 0, None, f"{code} {name}: {e}")
+        finally:
+            conn.close()
+
+    def _run_backfill(self) -> dict:
+        """按 backfill_ranges 定向回补（L3）：缺口清单 → 单票区间拉取 → INSERT IGNORE 补行
+
+        口径提示：回补沿用 self.adjust（默认 qfq）与主表一致；但「当前时点前复权」
+        与历史回灌时点基准可能存在微差，回补后应由 weekly 的 source_handoff 等规则复检，
+        必要时对该票做全史重灌。
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        start_ts = datetime.now()
+        names: dict[str, str] = {}
+        conn = self._connect()
+        try:
+            codes = sorted({r[0] for r in self.backfill_ranges})
+            if codes:
+                fmt = ",".join(["%s"] * len(codes))
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"SELECT stock_code, short_name FROM stock_info WHERE stock_code IN ({fmt})",
+                        codes,
+                    )
+                    names = {r[0]: r[1] for r in cur.fetchall()}
+        finally:
+            conn.close()
+
+        todo = [(c, names.get(c, ""), s, e) for c, s, e in self.backfill_ranges]
+        if self.max_stocks > 0:
+            todo = todo[: self.max_stocks]
+        logger.info(f"🔧 定向回补 {len(todo)} 个区间（涉及 {len({t[0] for t in todo})} 只股票）")
+
+        source_stats: dict = {}
+        ok_codes: list[str] = []
+        ok_ranges: list[tuple] = []  # 成功补到数据的区间（供 L3 精确标记 fixed）
+        self._written = 0
+        self._errors = []
+        done = 0
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = {
+                ex.submit(self._process_one_explicit, code, name, s, e): (code, s, e)
+                for code, name, s, e in todo
+            }
+            for fut in as_completed(futures):
+                fcode, fstart, fend = futures[fut]
+                code, name, n, src, err = fut.result()
+                done += 1
+                if err:
+                    self._errors.append(err)
+                    logger.warning(f"❌ 回补失败 {err}")
+                else:
+                    self._written += n
+                    source_stats[src] = source_stats.get(src, 0) + 1
+                    if n > 0:
+                        ok_codes.append(code)
+                        ok_ranges.append((fcode, fstart, fend))
+                    logger.info(f"✅ 回补 {code} {name} 写入 {n} 行（源 {src}）")
+                if done % 200 == 0:
+                    logger.info(f"进度 {done}/{len(todo)}，已写 {self._written} 行")
+
+        duration = datetime.now() - start_ts
+        result = {
+            "task_name": "daily_backfill",
+            "status": "success" if not self._errors else "partial",
+            "records_written": self._written,
+            "duration": str(duration),
+            "ranges": len(todo),
+            "codes": len({t[0] for t in todo}),
+            "source_stats": source_stats,
+            "ok_codes": sorted(set(ok_codes)),
+            "ok_ranges": ok_ranges,
+            "errors": self._errors[:10],
+            "error_count": len(self._errors),
+        }
+        logger.info(
+            f"✅ 定向回补完成：{len(todo)} 区间，写入 {self._written} 行，失败 {len(self._errors)}，耗时 {duration}"
+        )
+        return result
+
     def run(self) -> dict:
-        """执行增量采集，返回统计信息（并发采集，默认 4 线程）"""
+        """执行增量采集，返回统计信息（并发采集，默认 4 线程）
+
+        提供 backfill_ranges 时走定向回补分支（L3 修复闭环），否则走常规增量。
+        """
+        if self.backfill_ranges:
+            return self._run_backfill()
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         start_ts = datetime.now()

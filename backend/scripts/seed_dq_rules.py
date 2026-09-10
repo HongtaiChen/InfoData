@@ -3,8 +3,22 @@
 """
 InvestBuddy 数据质量规则种子（幂等，可重复执行）
 用法：python scripts/seed_dq_rules.py
-- 不存在则插入，存在则更新 params/severity/description/enabled
-- 规则阈值基于 2026-09-05 全库盘点校准（见 docs/design/数据体系设计规范.md §5）
+- 不存在则插入，存在则更新 params/severity/description/enabled/rule_group
+- 规则阈值基于 2026-09-05 全库盘点 + 2026-09-10 日线全史实测校准
+  （见 docs/design/数据体系设计规范.md §5 与 docs/design/日线质量体检与对账体系设计规范.md）
+
+规则分组（dq_rules.rule_group）：
+- daily ：每日盘后 20:30 跑（最新切片类，秒级）
+- weekly：每周一 21:30 独立任务跑（全史窗口扫描类，实测合计 4~7 分钟）
+
+weekly 组设计说明（2026-09-10 实测结论）：
+- daily_gap_scan        全史疑似缺口（LAG 窗口，18M 行 ~196s）→ 明细入 dq_gap_detail
+- daily_ohlc_consistent 全史 OHLC 自洽（实测 0 违反，守护型）
+- daily_change_link     涨跌幅与前收衔接（实测 0 违反；pre_close 当前仅 6.6% 行有值，待回填后全覆盖）
+- daily_coverage_recent 近 250 日每票行数下限（实测 0 异常）
+- daily_source_handoff  跨源衔接偏差（实测 2,532 行，AKSHARE→TENCENT 基准微差，真实问题）
+- 已废弃：daily_amount_cross（量额勾稽）—— 实测 47% 行违反，根因是 volume/amount 为真实值
+  而 OHLC 为前复权值，两者不同口径，勾稽数学退化。不可实现，故不写入规则。
 """
 import json
 import sys
@@ -102,23 +116,58 @@ RULES = [
      "档案覆盖：沪深在市 A 股均应已有巨潮公司档案（company_name 非空）"),
 ]
 
+# weekly 组：全史窗口扫描类（每周一 21:30 独立任务，见文件头说明）
+WEEKLY_RULES = [
+    ("daily_gap_scan", "stock_market_daily", "gap_scan",
+     {"date_col": "trade_date", "gap_days": 45, "high_days": 365}, "warning", 1,
+     "全史疑似缺口：同票相邻记录间隔 >45 自然日（≥365 天高危单独计数）；明细入 dq_gap_detail 供 L3 修复"),
+    ("daily_ohlc_consistent", "stock_market_daily", "where_count",
+     {"where": "close>0 AND high>0 AND low>0 "
+               "AND (high < LEAST(open,close) OR low > GREATEST(open,close) OR volume<0)",
+      "max_count": 0}, "warning", 1,
+     "全史 OHLC 自洽：high≥max(o,c) 且 low≤min(o,c) 且 volume≥0（前置 >0 规避前复权负价区）"),
+    ("daily_change_link", "stock_market_daily", "where_count",
+     {"where": "pre_close>0 AND close>0 AND change_pct IS NOT NULL "
+               "AND ABS((close-pre_close)/pre_close*100 - change_pct) > 0.02",
+      "max_count": 0}, "warning", 1,
+     "涨跌幅与收盘/昨收推导值偏差 ≤0.02pp（当前仅覆盖有 pre_close 的行，回填后全覆盖）"),
+    ("daily_coverage_recent", "stock_market_daily", "per_key_coverage",
+     {"date_col": "trade_date", "key_col": "stock_code",
+      "window_days": 250, "min_rows": 100, "min_listed_days": 365,
+      "ref_table": "stock_info", "ref_key": "stock_code",
+      "ref_status_col": "list_status", "ref_status_val": "上市",
+      "ref_date_col": "list_date", "exclude_prefixes": ["4", "8", "920"]},
+     "warning", 1,
+     "近 250 日每票行数下限（在市且上市满 1 年，排除北交所；抓均匀稀疏型缺失）"),
+    ("daily_source_handoff", "stock_market_daily", "source_handoff",
+     {"date_col": "trade_date", "source_col": "data_source",
+      "since": "2025-09-01", "max_pct": 0.5}, "warning", 1,
+     "跨源衔接一致性：相邻行 data_source 变化处 pre_close 与上一笔 close 偏差 >0.5%（复权基准微差）"),
+]
+
 
 def main():
     conn = pymysql.connect(**get_db_config().to_dict())
     try:
+        all_rules = [(r, "daily") for r in RULES] + [(r, "weekly") for r in WEEKLY_RULES]
         with conn.cursor() as cur:
-            for name, table, ctype, params, severity, enabled, desc in RULES:
+            for (name, table, ctype, params, severity, enabled, desc), group in all_rules:
                 cur.execute(
-                    """INSERT INTO dq_rules (rule_name, table_name, check_type, params, severity, enabled, description)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    """INSERT INTO dq_rules
+                       (rule_name, table_name, check_type, rule_group, params, severity, enabled, description)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                        ON DUPLICATE KEY UPDATE table_name=VALUES(table_name), check_type=VALUES(check_type),
-                       params=VALUES(params), severity=VALUES(severity), enabled=VALUES(enabled), description=VALUES(description)""",
-                    (name, table, ctype, json.dumps(params, ensure_ascii=False), severity, enabled, desc),
+                       rule_group=VALUES(rule_group), params=VALUES(params), severity=VALUES(severity),
+                       enabled=VALUES(enabled), description=VALUES(description)""",
+                    (name, table, ctype, group, json.dumps(params, ensure_ascii=False), severity, enabled, desc),
                 )
         conn.commit()
         with conn.cursor() as cur:
+            cur.execute("SELECT rule_group, COUNT(*) FROM dq_rules GROUP BY rule_group")
+            dist = cur.fetchall()
             cur.execute("SELECT COUNT(*) FROM dq_rules")
-            print(f"seed 完成，dq_rules 共 {cur.fetchone()[0]} 条规则")
+            total = cur.fetchone()[0]
+        print(f"seed 完成，dq_rules 共 {total} 条规则，分组分布: {dist}")
     finally:
         conn.close()
 
