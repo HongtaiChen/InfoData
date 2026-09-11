@@ -417,6 +417,18 @@ function toggleCategory(gk: string, ck: string) {
   expandedCategories.value = s
 }
 
+// 表行样式：无二级分类头的单分类组（质量/系统/备份）缩进浅一级，视觉上与组名对齐
+function rowStyle(colCount: number, name: string): string {
+  const indent = colCount === 1 ? 26 : 38
+  const base = `display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin:0 6px;padding:6px 6px 6px ${indent}px;border-radius:6px;cursor:pointer;font-size:13px;`
+  return (
+    base +
+    (current.value === name
+      ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
+      : 'color:#333;')
+  )
+}
+
 // 搜索时：强制展开所有组和分类，便于看到结果
 const _kw = computed(() => tableKeyword.value.trim())
 watch(_kw, (kw) => {
@@ -913,26 +925,23 @@ onMounted(async () => {
             :key="g.key"
             style="margin-bottom:4px;"
           >
-            <!-- 一级组头 -->
+            <!-- 一级组头（2026-09-11：全部组统一可折叠，含质量/系统/备份三个单分类组） -->
             <div
               :data-testid="`grp-${g.key}`"
-              :style="g.categories.length > 1
-                ? 'display:flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer;user-select:none;font-size:12.5px;font-weight:600;color:#1a1a1a;'
-                : 'display:flex;align-items:center;gap:6px;padding:7px 12px;user-select:none;font-size:12.5px;font-weight:600;color:#1a1a1a;'"
-              @click="g.categories.length > 1 ? toggleGroup(g.key) : undefined"
+              class="grp-head"
+              style="display:flex;align-items:center;gap:6px;margin:0 6px;padding:7px 6px;cursor:pointer;user-select:none;border-radius:6px;font-size:12.5px;font-weight:600;color:#1a1a1a;"
+              @click="toggleGroup(g.key)"
             >
               <span
-                v-if="g.categories.length > 1"
                 style="font-size:10px;color:#999;width:10px;display:inline-block;transition:transform 0.15s;"
                 :style="expandedGroups.has(g.key) ? 'transform:rotate(90deg);' : ''"
               >▶</span>
-              <span v-else style="width:10px;display:inline-block;"></span>
               <span style="font-size:13px;">{{ g.icon }}</span>
               <span style="flex:1;">{{ g.title }}</span>
               <span style="font-size:11px;color:#999;font-weight:400;">{{ g.total }}</span>
             </div>
             <!-- 二级分类与表 -->
-            <div v-show="g.categories.length === 1 || expandedGroups.has(g.key)" style="padding:0 0 4px 0;">
+            <div v-show="expandedGroups.has(g.key)" style="padding:0 0 4px 0;">
               <div
                 v-for="c in g.categories"
                 :key="`${g.key}::${c.key}`"
@@ -941,7 +950,8 @@ onMounted(async () => {
                 <div
                   v-if="g.categories.length > 1 || c.key === '__未分类__'"
                   :data-testid="`cat-${g.key}-${c.key}`"
-                  style="display:flex;align-items:center;gap:4px;padding:4px 12px 4px 26px;cursor:pointer;user-select:none;font-size:11.5px;color:#5F5E5A;"
+                  class="cat-head"
+                  style="display:flex;align-items:center;gap:4px;margin:0 6px;padding:4px 6px 4px 20px;border-radius:6px;cursor:pointer;user-select:none;font-size:11.5px;color:#5F5E5A;"
                   @click="toggleCategory(g.key, c.key)"
                 >
                   <span style="font-size:9px;width:9px;display:inline-block;transition:transform 0.15s;color:#bbb;"
@@ -955,11 +965,9 @@ onMounted(async () => {
                   v-for="t in c.tables"
                   :key="t.name"
                   :data-testid="`tbl-${t.name}`"
+                  class="tbl-row"
                   :title="dqRowTitle(t)"
-                  style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 10px 6px 38px;border-radius:6px;cursor:pointer;font-size:13px;"
-                  :style="current === t.name
-                    ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
-                    : 'color:#333;'"
+                  :style="rowStyle(g.categories.length, t.name)"
                   @click="selectTable(t.name)"
                 >
                   <span
@@ -1705,5 +1713,13 @@ onMounted(async () => {
 }
 .c-date {
   color: #185FA5;
+}
+/* 左侧表清单：组头/分类头/表行 hover 反馈，折叠交互可发现 */
+.grp-head:hover,
+.cat-head:hover {
+  background: #f2f6fb;
+}
+.tbl-row:hover {
+  background: #f7f9fc;
 }
 </style>
