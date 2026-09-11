@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   NButton, NEmpty, NInput, NModal, NSelect, NSpin, NTable, NTag,
   type SelectOption,
@@ -289,6 +289,145 @@ const filteredTables = computed(() => {
     (t) => t.name.toLowerCase().includes(kw) || t.comment.toLowerCase().includes(kw),
   )
 })
+
+// ---------- 左侧表分组：4 大组 × 17 细分类 二级折叠（2026-09-10 改造） ----------
+// 一级大组：业务数据 / 质量与体检 / 系统与配置 / 备份归档
+// 二级保留 table_meta 中已有 17 个细分类（行情/资料/质量/...）
+// 备份归档 = 表名匹配 _bak_ 后缀（独立于 category）
+const GROUPS: { key: string; title: string; icon: string; categories: string[] }[] = [
+  {
+    key: 'biz',
+    title: '业务数据',
+    icon: '📊',
+    categories: ['行情', '资料', '概念', '日历', '基金', '资金', '财务', '债券', '指数', 'AI', '商品', '资讯', '行业', '调研', '基本面'],
+  },
+  {
+    key: 'dq',
+    title: '质量与体检',
+    icon: '🛡️',
+    categories: ['质量'],
+  },
+  {
+    key: 'sys',
+    title: '系统与配置',
+    icon: '⚙️',
+    categories: ['系统'],
+  },
+  {
+    key: 'bak',
+    title: '备份归档',
+    icon: '📦',
+    categories: ['__bak__'], // 哨兵：表名含 _bak_ 兜底归入
+  },
+]
+
+function categoryOf(name: string): string | null {
+  return flowMap.value.get(name)?.category ?? null
+}
+function isBackupTable(name: string): boolean {
+  return /_bak_/i.test(name)
+}
+function groupKeyOf(name: string): string {
+  if (isBackupTable(name)) return 'bak'
+  const cat = categoryOf(name)
+  for (const g of GROUPS) {
+    if (cat && g.categories.includes(cat)) return g.key
+  }
+  return 'biz' // 未入库 table_meta 的表兜底归入业务数据
+}
+function categoryKeyOf(name: string): string {
+  if (isBackupTable(name)) return '__bak__'
+  return categoryOf(name) || '__未分类__'
+}
+
+interface CategoryBucket {
+  key: string
+  name: string
+  tables: TableItem[]
+}
+interface GroupBucket {
+  key: string
+  title: string
+  icon: string
+  total: number
+  categories: CategoryBucket[]
+}
+
+const groupedTables = computed<GroupBucket[]>(() => {
+  // filteredTables 已经按搜索词过滤；此处按 group -> category 聚合
+  const list = filteredTables.value
+  const out: GroupBucket[] = GROUPS.map((g) => ({
+    key: g.key, title: g.title, icon: g.icon, total: 0, categories: [],
+  }))
+  const groupMap = new Map(out.map((g) => [g.key, g]))
+  const catMapByGroup = new Map<string, Map<string, CategoryBucket>>()
+  out.forEach((g) => catMapByGroup.set(g.key, new Map()))
+  // 固定二级分类顺序：按 GROUPS 声明顺序，未分类/备份哨兵放末尾（去重：__bak__ 同时是
+  // 声明值与哨兵值，不去重会重复计入导致「单分类组」被误判为多分类 → 错误显示折叠箭头）
+  const orderFor = (g: typeof GROUPS[number]) =>
+    Array.from(new Set([...g.categories, '__未分类__', '__bak__']))
+  list.forEach((t) => {
+    const gk = groupKeyOf(t.name)
+    const ck = categoryKeyOf(t.name)
+    const gBucket = groupMap.get(gk)!
+    gBucket.total += 1
+    let catMap = catMapByGroup.get(gk)!
+    if (!catMap.has(ck)) {
+      const label = ck === '__未分类__' ? '未分类' : ck === '__bak__' ? '备份表' : ck
+      catMap.set(ck, { key: ck, name: label, tables: [] })
+    }
+    catMap.get(ck)!.tables.push(t)
+  })
+  out.forEach((g, i) => {
+    const declared = orderFor(GROUPS[i])
+    const m = catMapByGroup.get(g.key)!
+    g.categories = declared
+      .filter((k) => m.has(k))
+      .map((k) => m.get(k)!)
+      // 同分类内：按表名字母序
+      .map((c) => ({ ...c, tables: [...c.tables].sort((a, b) => a.name.localeCompare(b.name)) }))
+  })
+  // 过滤掉空组（搜索时可能所有组都空）
+  return out.filter((g) => g.total > 0)
+})
+
+// 默认展开：所有一级组 + 当前选中表所属二级分类；二级默认折叠
+const expandedGroups = ref<Set<string>>(new Set(['biz', 'dq', 'sys', 'bak']))
+const expandedCategories = ref<Set<string>>(new Set())
+
+function ensureCurrentExpanded() {
+  if (!current.value) return
+  const gk = groupKeyOf(current.value)
+  const ck = categoryKeyOf(current.value)
+  expandedGroups.value = new Set([...expandedGroups.value, gk])
+  expandedCategories.value = new Set([...expandedCategories.value, `${gk}::${ck}`])
+}
+
+watch(current, ensureCurrentExpanded, { immediate: false })
+
+function toggleGroup(k: string) {
+  const s = new Set(expandedGroups.value)
+  s.has(k) ? s.delete(k) : s.add(k)
+  expandedGroups.value = s
+}
+function toggleCategory(gk: string, ck: string) {
+  const key = `${gk}::${ck}`
+  const s = new Set(expandedCategories.value)
+  s.has(key) ? s.delete(key) : s.add(key)
+  expandedCategories.value = s
+}
+
+// 搜索时：强制展开所有组和分类，便于看到结果
+const _kw = computed(() => tableKeyword.value.trim())
+watch(_kw, (kw) => {
+  if (kw) {
+    expandedGroups.value = new Set(GROUPS.map((g) => g.key))
+    expandedCategories.value = new Set(
+      groupedTables.value.flatMap((g) => g.categories.map((c) => `${g.key}::${c.key}`)),
+    )
+  }
+})
+
 
 const colOptions = computed<SelectOption[]>(() =>
   cols.value.map((c) => ({
@@ -764,38 +903,85 @@ onMounted(async () => {
         </div>
         <NInput v-model:value="tableKeyword" size="small" placeholder="搜索表名 / 注释" clearable style="margin-top:8px" />
       </div>
-      <div style="flex:1;overflow:auto;padding:6px;">
+      <div style="flex:1;overflow:auto;padding:6px 0;">
         <NSpin :show="loadingTables" size="small">
-          <div v-if="!loadingTables && filteredTables.length === 0" style="padding:24px 0;">
+          <div v-if="!loadingTables && groupedTables.length === 0" style="padding:24px 0;">
             <NEmpty description="无匹配表" />
           </div>
           <div
-            v-for="t in filteredTables"
-            :key="t.name"
-            :title="dqRowTitle(t)"
-            style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;"
-            :style="current === t.name
-              ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
-              : 'color:#333;'"
-            @click="selectTable(t.name)"
+            v-for="g in groupedTables"
+            :key="g.key"
+            style="margin-bottom:4px;"
           >
-            <span
-              v-if="dqRunAt"
-              style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;"
-              :style="{ background: dqDotColor(t.name) }"
-            ></span>
-            <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;overflow:hidden;">
-              <span style="font-family:Consolas,Menlo,monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</span>
+            <!-- 一级组头 -->
+            <div
+              :data-testid="`grp-${g.key}`"
+              :style="g.categories.length > 1
+                ? 'display:flex;align-items:center;gap:6px;padding:7px 12px;cursor:pointer;user-select:none;font-size:12.5px;font-weight:600;color:#1a1a1a;'
+                : 'display:flex;align-items:center;gap:6px;padding:7px 12px;user-select:none;font-size:12.5px;font-weight:600;color:#1a1a1a;'"
+              @click="g.categories.length > 1 ? toggleGroup(g.key) : undefined"
+            >
               <span
-                v-if="t.comment"
-                style="font-size:11px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-                :style="current === t.name ? 'color:#7BA7D4;font-weight:400;' : 'color:#999;font-weight:400;'"
-              >{{ t.comment }}</span>
+                v-if="g.categories.length > 1"
+                style="font-size:10px;color:#999;width:10px;display:inline-block;transition:transform 0.15s;"
+                :style="expandedGroups.has(g.key) ? 'transform:rotate(90deg);' : ''"
+              >▶</span>
+              <span v-else style="width:10px;display:inline-block;"></span>
+              <span style="font-size:13px;">{{ g.icon }}</span>
+              <span style="flex:1;">{{ g.title }}</span>
+              <span style="font-size:11px;color:#999;font-weight:400;">{{ g.total }}</span>
             </div>
-            <span
-              style="font-size:11px;flex-shrink:0;align-self:flex-start;margin-top:1px;"
-              :style="current === t.name ? 'color:#7BA7D4;' : 'color:#b0b0b0;'"
-            >{{ fmtWan(t.rows_estimate) }}</span>
+            <!-- 二级分类与表 -->
+            <div v-show="g.categories.length === 1 || expandedGroups.has(g.key)" style="padding:0 0 4px 0;">
+              <div
+                v-for="c in g.categories"
+                :key="`${g.key}::${c.key}`"
+              >
+                <!-- 二级分类头 -->
+                <div
+                  v-if="g.categories.length > 1 || c.key === '__未分类__'"
+                  :data-testid="`cat-${g.key}-${c.key}`"
+                  style="display:flex;align-items:center;gap:4px;padding:4px 12px 4px 26px;cursor:pointer;user-select:none;font-size:11.5px;color:#5F5E5A;"
+                  @click="toggleCategory(g.key, c.key)"
+                >
+                  <span style="font-size:9px;width:9px;display:inline-block;transition:transform 0.15s;color:#bbb;"
+                        :style="expandedCategories.has(`${g.key}::${c.key}`) ? 'transform:rotate(90deg);' : ''">▶</span>
+                  <span style="flex:1;">{{ c.name }}</span>
+                  <span style="font-size:10.5px;color:#bbb;">{{ c.tables.length }}</span>
+                </div>
+                <!-- 表行 -->
+                <div
+                  v-show="g.categories.length === 1 || c.key === '__未分类__' || expandedCategories.has(`${g.key}::${c.key}`)"
+                  v-for="t in c.tables"
+                  :key="t.name"
+                  :data-testid="`tbl-${t.name}`"
+                  :title="dqRowTitle(t)"
+                  style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 10px 6px 38px;border-radius:6px;cursor:pointer;font-size:13px;"
+                  :style="current === t.name
+                    ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
+                    : 'color:#333;'"
+                  @click="selectTable(t.name)"
+                >
+                  <span
+                    v-if="dqRunAt"
+                    style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;"
+                    :style="{ background: dqDotColor(t.name) }"
+                  ></span>
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;overflow:hidden;">
+                    <span style="font-family:Consolas,Menlo,monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</span>
+                    <span
+                      v-if="t.comment"
+                      style="font-size:11px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                      :style="current === t.name ? 'color:#7BA7D4;font-weight:400;' : 'color:#999;font-weight:400;'"
+                    >{{ t.comment }}</span>
+                  </div>
+                  <span
+                    style="font-size:11px;flex-shrink:0;align-self:flex-start;margin-top:1px;"
+                    :style="current === t.name ? 'color:#7BA7D4;' : 'color:#b0b0b0;'"
+                  >{{ fmtWan(t.rows_estimate) }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </NSpin>
       </div>

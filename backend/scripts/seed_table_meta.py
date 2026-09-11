@@ -169,6 +169,24 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "备份(巨潮)",
      "v1.4 并入 stock_info 前的旧公司档案宽表（回滚点）；确认稳定后可 DROP。",
      [], "备份表待归档"),
+    # ---- L1/L2 明细表（2026-09-10 新增） ----
+    ("dq_gap_detail", "质量",
+     "自产(data_quality_check_weekly)",
+     "全史疑似缺口明细（L1 gap_scan 产出 → L3 消费）：按 (stock_code, prev_date, next_date) 唯一；status: open/fixed/ignored；30 天保留（与 dq_report 对齐）。",
+     ["data_quality_check_weekly"], ""),
+    ("dq_recon_detail", "质量",
+     "自产(daily_recon)",
+     "外部对账差异明细（L2 recon 产出）：仅记差异，零差异轮次明细为空；30 天保留。",
+     ["daily_recon_window", "daily_recon_sample"], ""),
+    # ---- 系统与配置表 ----
+    ("table_meta", "系统",
+     "手动维护;seed_table_meta",
+     "表级元数据：category/source_desc/flow_desc/writers/writer_cols；数据中心右侧「数据流」折叠卡与本表双向引用；当前 30 张业务表 + 4 张系统/质量表。",
+     [], "元数据自身"),
+    ("user_prefs", "系统",
+     "手动维护;前端 SortPrefsModal",
+     "用户偏好：数据中心表格默认排序（按表持久化）；DataView 「默认排序」弹窗可改。",
+     [], ""),
 ]
 
 # 列级血缘：table_name -> { 任务名: {source, cols[], derived[], note?, col_notes{}} }
