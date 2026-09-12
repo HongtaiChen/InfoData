@@ -4,10 +4,13 @@ import { NCard, NSpace, NSelect, NDataTable, NInput, type DataTableColumns } fro
 import KLineChart from '../components/KLineChart.vue'
 import api from '../api'
 
-// ---------- 股票搜索 ----------
-const stockOptions = ref<{ label: string; value: string }[]>([])
+// ---------- 标的选择（股票 / 指数 二选一，共同驱动下方 K 线） ----------
+const selType = ref<'stock' | 'index'>('stock')
 const currentCode = ref('000001')
 const currentName = ref('平安银行')
+
+// ---------- 股票搜索 ----------
+const stockOptions = ref<{ label: string; value: string }[]>([])
 
 async function searchStocks(keyword: string) {
   if (!keyword) {
@@ -27,9 +30,73 @@ async function searchStocks(keyword: string) {
 }
 
 function onSelect(code: string) {
+  if (!code) return
   const hit = stockOptions.value.find((o) => o.value === code)
+  selType.value = 'stock'
   currentCode.value = code
   currentName.value = hit ? hit.label.replace(`${code} `, '') : code
+}
+
+// ---------- 大盘指数行情 ----------
+interface IndexRow {
+  index_code: string
+  index_name: string
+  trade_date: string
+  close: number
+  change_pct: number
+  change_amount: number
+  amount: number
+  ytd_change_pct: number | null
+  data_source: string
+}
+
+const indices = ref<IndexRow[]>([])
+const indexLoading = ref(false)
+const indexDate = ref('')
+const indexError = ref('')
+
+async function loadIndices() {
+  indexLoading.value = true
+  indexError.value = ''
+  try {
+    const resp: any = await api.get('/market/index-list')
+    indices.value = resp.items || []
+    if (indices.value.length) indexDate.value = indices.value[0].trade_date
+    if (!indices.value.length) indexError.value = '暂无指数行情数据'
+  } catch (e: any) {
+    console.error('[index-list]', e)
+    indexError.value = '指数行情加载失败'
+  } finally {
+    indexLoading.value = false
+  }
+}
+
+function pickIndex(it: IndexRow) {
+  selType.value = 'index'
+  currentCode.value = it.index_code
+  currentName.value = it.index_name
+}
+
+function tint(v: number | null | undefined): string {
+  if (v == null) return 'flat'
+  return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'
+}
+
+function fmtPct(v: number | null | undefined): string {
+  if (v == null) return '--'
+  return `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(2)}%`
+}
+
+function fmtSigned(v: number | null | undefined, digits = 2): string {
+  if (v == null) return '--'
+  return `${Number(v) > 0 ? '+' : ''}${Number(v).toFixed(digits)}`
+}
+
+function fmtAmount(v: number | null | undefined): string {
+  if (v == null) return '--'
+  const yi = v / 1e8
+  if (yi >= 1e4) return `${(yi / 1e4).toFixed(2)}万亿`
+  return `${yi.toFixed(yi >= 100 ? 0 : 1)}亿`
 }
 
 // ---------- 行情表格 ----------
@@ -77,6 +144,7 @@ const columns: DataTableColumns<Row> = [
         {
           class: 'stock-link',
           onClick: () => {
+            selType.value = 'stock'
             currentCode.value = r.stock_code
             currentName.value = r.stock_name
           },
@@ -142,11 +210,55 @@ function onSortChange(sorter: any) {
   loadRows()
 }
 
-onMounted(loadRows)
+onMounted(() => {
+  loadIndices()
+  loadRows()
+})
 </script>
 
 <template>
   <div>
+    <!-- 大盘指数：行情条，点击切换下方 K 线 -->
+    <NCard style="margin-bottom: 12px">
+      <template #header>
+        <NSpace align="center" justify="space-between" style="width: 100%">
+          <span>大盘指数</span>
+          <span class="idx-meta">
+            <template v-if="indexDate">最新交易日 {{ indexDate }} · </template>
+            数据源：中证指数官网 / 国证指数（含成交额）
+          </span>
+        </NSpace>
+      </template>
+
+      <div v-if="indexLoading" class="idx-empty">加载中…</div>
+      <div v-else-if="indexError" class="idx-empty">{{ indexError }}</div>
+      <div v-else class="idx-grid">
+        <div
+          v-for="it in indices"
+          :key="it.index_code"
+          class="idx-card"
+          :class="{ active: selType === 'index' && currentCode === it.index_code }"
+          @click="pickIndex(it)"
+        >
+          <div class="idx-head">
+            <span class="idx-name" :title="it.index_name">{{ it.index_name }}</span>
+            <span class="idx-code">{{ it.index_code }}</span>
+          </div>
+          <div class="idx-close" :class="tint(it.change_pct)">
+            {{ it.close != null ? Number(it.close).toFixed(2) : '--' }}
+          </div>
+          <div class="idx-pct" :class="tint(it.change_pct)">
+            <span>{{ fmtPct(it.change_pct) }}</span>
+            <span class="idx-chg">{{ fmtSigned(it.change_amount) }}</span>
+          </div>
+          <div class="idx-foot">
+            <span>额 {{ fmtAmount(it.amount) }}</span>
+            <span :class="tint(it.ytd_change_pct)">年 {{ fmtPct(it.ytd_change_pct) }}</span>
+          </div>
+        </div>
+      </div>
+    </NCard>
+
     <!-- 顶部：搜索 + 当前标的 -->
     <NCard style="margin-bottom: 12px">
       <NSpace align="center" :size="16" wrap>
@@ -162,13 +274,19 @@ onMounted(loadRows)
         />
         <span style="font-size: 15px; font-weight: 600; color: #333">
           当前标的：{{ currentName }}（{{ currentCode }}）
+          <span v-if="selType === 'index'" class="tag-idx">指数</span>
         </span>
       </NSpace>
     </NCard>
 
-    <!-- K 线 -->
+    <!-- K 线（股票 / 指数共用） -->
     <NCard style="margin-bottom: 12px">
-      <KLineChart :code="currentCode" :name="currentName" :limit="250" />
+      <KLineChart
+        :code="currentCode"
+        :name="currentName"
+        :is-index="selType === 'index'"
+        :limit="250"
+      />
     </NCard>
 
     <!-- 最新行情表格 -->
@@ -219,9 +337,114 @@ onMounted(loadRows)
   text-decoration: underline;
 }
 .c-up {
-  color: #EF232A;
+  color: #ef232a;
 }
 .c-down {
-  color: #14B143;
+  color: #14b143;
+}
+
+/* ---------- 大盘指数行情条 ---------- */
+.idx-meta {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--color-flat, #909399);
+}
+.idx-empty {
+  padding: 18px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-flat, #909399);
+}
+.idx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  gap: 10px;
+}
+.idx-card {
+  border: 1px solid #e6e8ec;
+  border-radius: 6px;
+  padding: 8px 10px 9px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.idx-card:hover {
+  border-color: #b9d3ee;
+  background: #f7fbff;
+}
+.idx-card.active {
+  border-color: var(--color-primary, #185fa5);
+  background: #e6f1fb;
+  box-shadow: inset 0 0 0 1px var(--color-primary, #185fa5);
+}
+.idx-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.idx-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.idx-card.active .idx-name {
+  color: var(--color-primary, #185fa5);
+}
+.idx-code {
+  font-size: 10px;
+  color: #9ca3af;
+  font-family: Consolas, Menlo, monospace;
+  flex: none;
+}
+.idx-close {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.idx-pct {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.idx-chg {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.idx-foot {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px dashed #eef1f5;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-flat, #909399);
+}
+.up {
+  color: var(--color-up, #ef232a);
+}
+.down {
+  color: var(--color-down, #14b143);
+}
+.flat {
+  color: var(--color-flat, #909399);
+}
+.tag-idx {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-primary, #185fa5);
+  background: #e6f1fb;
+  vertical-align: 1px;
 }
 </style>

@@ -53,11 +53,52 @@ def kline(
     end: str = Query("", description="结束日期 YYYYMMDD"),
     limit: int = Query(250, ge=10, le=2000),
     is_concept: bool = Query(False, description="True 表示查询概念指数K线"),
+    is_index: bool = Query(False, description="True 表示查询大盘指数K线（dc_index_market）"),
 ):
     """K线数据（前端 KLineChart 直接消费）"""
+    if is_index:
+        return _kline_from_table("dc_index_market", "index_code", code, start, end, limit)
     if is_concept:
         return _kline_from_table("ths_concept_market", "index_code", code, start, end, limit)
     return _kline_from_table("stock_market_daily", "stock_code", code, start, end, limit)
+
+
+# 指数行情条的展示顺序（未列出的增补指数排在末尾）
+INDEX_ORDER = [
+    "000001", "399001", "399006", "000300", "000016",
+    "000905", "000852", "000688", "000698", "399330",
+    "399673", "899050", "931775",
+]
+
+
+@router.get("/index-list")
+def index_list():
+    """指数行情条：主流指数最新快照（收盘/涨跌/成交额/年初至今）"""
+    sql = """
+        SELECT i.index_code, i.index_name, i.trade_date,
+               i.open, i.high, i.low, i.close, i.volume, i.amount,
+               i.change_amount, i.change_pct, i.turnover_ratio, i.data_source,
+               (SELECT x.close FROM dc_index_market x
+                 WHERE x.index_code = i.index_code
+                   AND x.trade_date < MAKEDATE(YEAR(i.trade_date), 1)
+                 ORDER BY x.trade_date DESC LIMIT 1) AS prev_year_close
+        FROM dc_index_market i
+        JOIN (
+            SELECT index_code, MAX(trade_date) AS md
+            FROM dc_index_market GROUP BY index_code
+        ) t ON t.index_code = i.index_code AND t.md = i.trade_date
+    """
+    rows = query_all(sql)
+    for r in rows:
+        base = r.pop("prev_year_close", None)
+        close = r.get("close")
+        if base not in (None, 0) and close is not None:
+            r["ytd_change_pct"] = round(100.0 * (float(close) - float(base)) / float(base), 2)
+        else:
+            r["ytd_change_pct"] = None
+    rank = {c: n for n, c in enumerate(INDEX_ORDER)}
+    rows.sort(key=lambda r: (rank.get(r["index_code"], len(INDEX_ORDER)), r["index_code"]))
+    return {"total": len(rows), "items": rows}
 
 
 def _kline_from_table(table: str, code_col: str, code: str, start: str, end: str, limit: int) -> dict:
