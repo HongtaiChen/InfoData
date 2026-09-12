@@ -127,6 +127,8 @@ const manualKind = ref<ChartKind | undefined>(undefined)
 const kind = computed<ChartKind | null>(() => manualKind.value ?? resolvedKind.value)
 /** 折线「收益率%」归一化模式：每组以首个有效点为基准 */
 const pctMode = ref(false)
+/** tooltip 按累计收益率降序排列（默认开，记忆偏好） */
+const sortDesc = ref(true)
 
 const kindOptions = computed<SelectOption[]>(() => {
   const opts: SelectOption[] = []
@@ -217,7 +219,7 @@ const CFG_STORE_KEY = 'infodata.explorechart.v1'
 /** 签名 = 列名:类型 拼接 —— 同结构查询（同表/同 SELECT）共享一份记忆 */
 const colSig = computed(() => props.columns.map((c) => `${c.name}:${c.type}`).join('|'))
 
-type ChartCfg = { k?: string; m?: Record<string, unknown>; mas?: string[]; p?: boolean }
+type ChartCfg = { k?: string; m?: Record<string, unknown>; mas?: string[]; p?: boolean; s?: boolean }
 
 function loadCfgStore(): Record<string, ChartCfg> {
   try {
@@ -256,6 +258,7 @@ function applySavedCfg() {
   }
   if (Array.isArray(cfg.mas)) mas.value = cfg.mas.filter((k) => MA_DEFS.some((d) => d.key === k))
   pctMode.value = !!cfg.p
+  if (typeof cfg.s === 'boolean') sortDesc.value = cfg.s
 }
 
 /** 列结构变化（新查询/换表）→ 重算启发式映射，再叠加该结构的历史记忆 */
@@ -263,6 +266,7 @@ watch(() => props.columns, () => {
   autoMap()
   manualKind.value = undefined
   pctMode.value = false
+  sortDesc.value = true
   klineGroup.value = ''
   applySavedCfg()
 }, { immediate: true })
@@ -277,6 +281,7 @@ watch(
     },
     mas: mas.value,
     p: pctMode.value,
+    s: sortDesc.value,
   }),
   (snap) => {
     const store = loadCfgStore()
@@ -358,14 +363,16 @@ function fmtVal(v: number): string {
   return Number.isFinite(v) ? v.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '--'
 }
 
-/** 折线 tooltip：原值 + 较首日累计收益率（红涨绿跌）；归一化模式下主显收益率% */
+/** 折线 tooltip：原值 + 较首日累计收益率（红涨绿跌）；归一化模式下主显收益率%；可按收益率降序 */
 function lineTooltipFormatter(params: unknown): string {
-  const ps = params as { seriesName: string; marker: string; dataIndex: number; axisValue: string }[]
+  const ps = params as { seriesName: string; marker: string; dataIndex: number; axisValue: string; value: unknown }[]
   if (!ps.length) return ''
   let html = `<b>${ps[0].axisValue}</b>`
   if (pctMode.value && baseDate.value) {
     html += `　<span style="color:#98A2B3;">基准 ${baseDate.value} = 0%</span>`
   }
+  interface Row { marker: string; name: string; rawStr: string; rankVal: number; dispHtml: string }
+  const rows: Row[] = []
   for (const p of ps) {
     const rawArr = lineRawMap[p.seriesName]
     const raw = rawArr ? rawArr[p.dataIndex] : null
@@ -375,13 +382,22 @@ function lineTooltipFormatter(params: unknown): string {
     if (pctMode.value && Number.isFinite(Number(p.value))) {
       const nv = Number(p.value)
       const cl = upDownColor(nv)
-      html += `<br/>${p.marker} ${p.seriesName} <b style="color:${cl}">${signed(nv)}%</b>　<span style="color:#98A2B3;">(${rawStr})</span>`
+      rows.push({
+        marker: p.marker, name: p.seriesName, rawStr, rankVal: nv,
+        dispHtml: `<b style="color:${cl}">${signed(nv)}%</b>　<span style="color:#98A2B3;">(${rawStr})</span>`,
+      })
     } else {
       const cl = upDownColor(pct)
       const ret = Number.isFinite(pct) ? `　<b style="color:${cl}">${signed(pct)}%</b>` : ''
-      html += `<br/>${p.marker} ${p.seriesName} <b>${rawStr}</b>${ret}`
+      rows.push({
+        marker: p.marker, name: p.seriesName, rawStr,
+        rankVal: Number.isFinite(pct) ? pct : -Infinity,
+        dispHtml: `<b>${rawStr}</b>${ret}`,
+      })
     }
   }
+  if (sortDesc.value) rows.sort((a, b) => b.rankVal - a.rankVal)
+  for (const r of rows) html += `<br/>${r.marker} ${r.name} ${r.dispHtml}`
   return html
 }
 
@@ -670,6 +686,10 @@ const recommendText = computed(() => {
             v-model:checked="pctMode" size="small" style="font-size:12px;margin-left:4px;"
             title="以每组首个有效点为基准归一化为累计收益率(%)；tooltip 同时显示原值"
           >收益率%</NCheckbox>
+          <NCheckbox
+            v-model:checked="sortDesc" size="small" style="font-size:12px;"
+            title="tooltip 各组按累计收益率从高到低排列（取消勾选则按查询原始顺序）"
+          >降序</NCheckbox>
           <NTag v-if="pctMode && baseDate" size="tiny" :bordered="false" type="info" style="flex:none;">
             基准 {{ baseDate }} = 0%
           </NTag>
