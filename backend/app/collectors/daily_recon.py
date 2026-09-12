@@ -18,6 +18,10 @@ InvestBuddy 日线外部对账（L2）
 4. 结果落库：汇总写 dq_report（check_type='recon'，前端「数据质量」栏目可见）；
    明细写 dq_recon_detail；两者均按 30 天保留。
 5. 限频沿用增量任务纪律：随机延时 0.3~1.2s、25s 硬超时、NO_PROXY（stock_daily_incr 已设置）。
+6. **采集时延与真实差异必须分开**（2026-09-12 实测教训）：首次全量抽样（50 票）报
+   50/50 全部 range_diff，实为对账跑在日线采集（19:00）之前，本地自然还没有当日数据。
+   故引入 `lag_days`（默认 5 自然日）：远端尾部比本地多出 ≤N 天 → 记 `latest_lag`
+   （采集时延，不计入差异、不改变 status），只有超出该窗口的差异才算真实问题。
 """
 import logging
 import random
@@ -35,14 +39,30 @@ logger = logging.getLogger(__name__)
 REPORT_KEEP_DAYS = 30
 # 比对的价格字段（volume/amount 因源单位口径差异大，首版不参与判定）
 PRICE_COLS = ["open", "high", "low", "close"]
+# 尾部容忍窗口：远端比本地多出的最近 N 个自然日视为"采集时延"，不计入差异
+DEFAULT_LAG_DAYS = 5
 
 RUN_STEPS = [
     {"no": 1, "name": "确定对账范围", "params": "window: 最近 N 交易日×在市 A 股；sample: 固定种子抽 N 票"},
     {"no": 2, "name": "拉取外部源", "params": "window→腾讯（独立血缘）；sample→东财（查入库丢行）；adjust=qfq、25s 超时、随机延时"},
-    {"no": 3, "name": "逐票比对", "params": "按 trade_date 对齐；价格容差 0.5%；缺失/数值差异分类记明细"},
+    {"no": 3, "name": "逐票比对", "params": f"按 trade_date 对齐；价格容差 0.5%；"
+                                            f"远端尾部多出 ≤{DEFAULT_LAG_DAYS} 自然日记 latest_lag（采集时延，不计差异）"},
     {"no": 4, "name": "写明细与汇总", "params": "dq_recon_detail 差异明细 + dq_report 汇总（check_type=recon）"},
     {"no": 5, "name": "轮次保留清理", "params": f"删除 run_date 早于 {REPORT_KEEP_DAYS} 天的历史"},
 ]
+
+
+def _date_gap_days(newer: str | None, older: str | None) -> int | None:
+    """两个 YYYY-MM-DD 字符串相隔的自然日数（newer - older），不可解析返回 None"""
+    if not newer or not older:
+        return None
+    try:
+        d1 = datetime.strptime(str(newer)[:10], "%Y-%m-%d").date()
+        d2 = datetime.strptime(str(older)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return (d1 - d2).days
+
 
 
 class DailyReconCollector:
@@ -50,7 +70,7 @@ class DailyReconCollector:
 
     def __init__(self, mode: str = "window", days: int = 5, sample_size: int = 50,
                  seed: int = 42, max_stocks: int = 0, tolerance_pct: float = 0.5,
-                 adjust: str = "qfq"):
+                 adjust: str = "qfq", lag_days: int = DEFAULT_LAG_DAYS):
         self.mode = mode if mode in ("window", "sample") else "window"
         self.days = days
         self.sample_size = sample_size
@@ -58,9 +78,11 @@ class DailyReconCollector:
         self.max_stocks = max_stocks  # 0 = 不限（调试可设小值）
         self.tolerance_pct = tolerance_pct
         self.adjust = adjust
+        self.lag_days = lag_days
         self.run_at = datetime.now()
         self.run_date = self.run_at.date()
         self._diffs: list[tuple] = []
+        self._lags: list[tuple] = []
         self._errors: list[str] = []
         self._compared = 0
         self._written = 0
@@ -124,6 +146,7 @@ class DailyReconCollector:
         logger.info(f"🔍 窗口对账：{start_d}~{end_d}（{len(dates)} 个交易日）× {len(stocks)} 只，源=腾讯")
 
         diffs: list[tuple] = []
+        lags: list[tuple] = []
         errors: list[str] = []
         compared = 0
         with ThreadPoolExecutor(max_workers=4) as ex:
@@ -136,7 +159,7 @@ class DailyReconCollector:
                 code = futures[fut]
                 done += 1
                 try:
-                    code, rows, err = fut.result()
+                    code, rows, lags_one, err = fut.result()
                 except Exception as e:  # noqa: BLE001
                     errors.append(f"{code}: {e}")
                     continue
@@ -145,25 +168,30 @@ class DailyReconCollector:
                 else:
                     compared += 1
                     diffs.extend(rows)
+                    lags.extend(lags_one)
                 if done % 500 == 0:
-                    logger.info(f"进度 {done}/{len(stocks)}，差异 {len(diffs)} 行")
+                    logger.info(f"进度 {done}/{len(stocks)}，差异 {len(diffs)} 行（时延 {len(lags)}）")
 
         self._diffs = diffs
+        self._lags = lags
         self._errors = errors
         self._compared = compared
         n_diff_codes = len({d[0] for d in diffs})
+        # 仅"真实差异"影响判定；latest_lag 属采集时延，不计入
         status = "pass" if not diffs else "warning"
         msg = (
             f"窗口 {start_d}~{end_d}：比对 {compared}/{len(stocks)} 只（失败 {len(errors)}），"
             f"差异 {len(diffs)} 行 / {n_diff_codes} 只，源=腾讯，容差 {self.tolerance_pct}%"
         )
+        if lags:
+            msg += f"；另有采集时延 {len({l[0] for l in lags})} 只 / {len(lags)} 行（≤{self.lag_days} 天，不计差异）"
         return {"status": status, "diff_count": len(diffs), "compared": compared, "message": msg}
 
     def _compare_window_one(self, fetcher, code: str, name: str, start_d, end_d) -> tuple:
         """单票窗口比对：远端（腾讯）vs 本地"""
         df, src = fetcher.fetch_with_retry(code, start_d.strftime("%Y%m%d"), end_d.strftime("%Y%m%d"))
         if df is None or df.empty:
-            return (code, [], f"{code} {name}: 远端返回空")
+            return (code, [], [], f"{code} {name}: 远端返回空")
         remote = {}
         for _, row in df.iterrows():
             d = row.get("日期")
@@ -179,14 +207,27 @@ class DailyReconCollector:
                     (code, start_d, end_d),
                 )
                 local = {str(r["trade_date"]): r for r in cur.fetchall()}
+                cur.execute(
+                    "SELECT MAX(trade_date) AS mx FROM stock_market_daily WHERE stock_code = %s",
+                    (code,),
+                )
+                mx = cur.fetchone()
+                local_max = str(mx["mx"])[:10] if mx and mx["mx"] else None
         finally:
             conn.close()
 
         rows: list[tuple] = []
+        lags: list[tuple] = []
         for d in sorted(set(local) | set(remote)):
             in_l, in_r = d in local, d in remote
             if in_r and not in_l:
-                rows.append((code, d, "missing_local", None, None, None, src, None))
+                gap = _date_gap_days(d, local_max)
+                if gap is not None and 0 < gap <= self.lag_days:
+                    # 本地尚未推进到该日 → 采集时延，不判为缺失
+                    lags.append((code, d, "latest_lag", None, local_max, d, src,
+                                 f"本地最新 {local_max}，疑采集未完成"))
+                else:
+                    rows.append((code, d, "missing_local", None, None, None, src, None))
             elif in_l and not in_r:
                 # 远端无该行：多为停牌（腾讯不返停牌行），语义为"疑似"，不直接判失败
                 rows.append((code, d, "missing_remote", None, str(local[d]["close"]), None, src, "疑似停牌/源缺行"))
@@ -203,7 +244,7 @@ class DailyReconCollector:
                         continue
                     if abs(lvf - rvf) / abs(rvf) * 100 > self.tolerance_pct:
                         rows.append((code, d, "value_diff", col, str(lvf), str(rvf), src, None))
-        return (code, rows, None)
+        return (code, rows, lags, None)
 
     # ---------- sample 模式 ----------
 
@@ -223,6 +264,7 @@ class DailyReconCollector:
         logger.info(f"🔍 全史抽样对账：{len(picked)} 只（种子 {self.seed}），源=东财")
 
         diffs: list[tuple] = []
+        lags: list[tuple] = []
         errors: list[str] = []
         compared = 0
         for code, name in picked:
@@ -252,14 +294,28 @@ class DailyReconCollector:
             lcount = row["c"]
             lmin = str(row["mn"])[:10] if row["mn"] else None
             lmax = str(row["mx"])[:10] if row["mx"] else None
-            # 行数差异：>1% 且 >5 行才报（停牌/退市边界会造成少量差异）
-            if lcount != rcount and (abs(lcount - rcount) > 5 or abs(lcount - rcount) / max(rcount, 1) > 0.01):
+
+            # ① 尾部时延优先判定：远端最新日超出本地 ≤lag_days → 采集未完成，不算数据差异
+            lag = 0
+            if lmax != rmax:
+                gap = _date_gap_days(rmax, lmax)
+                if gap is not None and 0 < gap <= self.lag_days:
+                    lag = gap
+                    lags.append((code, None, "latest_lag", None, lmax, rmax, src,
+                                 f"本地最新 {lmax} vs 远端 {rmax}（+{gap} 天），疑采集未完成"))
+            # ② 行数差异：>1% 且超出 5 行容差（叠加时延天数额外豁免）才报
+            tol_rows = 5 + lag
+            if lcount != rcount and abs(lcount - rcount) > tol_rows and abs(lcount - rcount) / max(rcount, 1) > 0.01:
                 diffs.append((code, None, "count_diff", None, str(lcount), str(rcount), src, f"{lmin}~{lmax}"))
-            if lmin != rmin or lmax != rmax:
-                diffs.append((code, None, "range_diff", None, f"{lmin}~{lmax}", f"{rmin}~{rmax}", src, None))
+            # ③ 区间差异：起始日不同必报；结束日不同仅在非时延情况下报
+            if lmin != rmin:
+                diffs.append((code, None, "range_start_diff", None, f"{lmin}~{lmax}", f"{rmin}~{rmax}", src, None))
+            elif lmax != rmax and not lag:
+                diffs.append((code, None, "range_end_diff", None, f"{lmin}~{lmax}", f"{rmin}~{rmax}", src, None))
             time.sleep(random.uniform(0.3, 1.2))
 
         self._diffs = diffs
+        self._lags = lags
         self._errors = errors
         self._compared = compared
         status = "pass" if not diffs else "warning"
@@ -267,12 +323,15 @@ class DailyReconCollector:
             f"全史抽样 {compared}/{len(picked)} 只（种子 {self.seed}），差异 {len(diffs)} 条"
             f"（count/首末日期；SUM 不判定——前复权基准漂移会致假差异），源=东财"
         )
+        if lags:
+            msg += f"；另有采集时延 {len(lags)} 只（≤{self.lag_days} 天，不计差异）"
         return {"status": status, "diff_count": len(diffs), "compared": compared, "message": msg}
 
     # ---------- 落库 ----------
 
     def _flush_details(self):
-        if not self._diffs:
+        rows = self._diffs + self._lags
+        if not rows:
             self._written = 0
             return
         conn = self._connect()
@@ -285,11 +344,11 @@ class DailyReconCollector:
                     "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     [
                         (self.run_at, self.run_date, self.mode, d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7])
-                        for d in self._diffs
+                        for d in rows
                     ],
                 )
             conn.commit()
-            self._written = len(self._diffs)
+            self._written = len(rows)
         finally:
             conn.close()
 
@@ -325,6 +384,7 @@ class DailyReconCollector:
                 "duration": str(duration),
                 "compared": self._compared,
                 "diff_count": summary["diff_count"],
+                "lag_count": len(self._lags),
                 "errors": self._errors[:10],
                 "error_count": len(self._errors),
                 "note": summary["message"],
@@ -333,7 +393,7 @@ class DailyReconCollector:
             {
                 1: f"mode={self.mode} · 比对 {self._compared} 只",
                 2: "腾讯" if self.mode == "window" else "东财",
-                3: f"差异 {summary['diff_count']} 条",
+                3: f"差异 {summary['diff_count']} 条 · 采集时延 {len(self._lags)} 条",
                 4: f"明细 {self._written} 行 + 汇总 1 条",
                 5: f"清理 ≤{REPORT_KEEP_DAYS} 天前历史",
             },
