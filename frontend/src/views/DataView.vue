@@ -399,10 +399,14 @@ const groupedTables = computed<GroupBucket[]>(() => {
   return out.filter((g) => g.total > 0)
 })
 
-// 默认展开：仅「业务数据」；质量/系统/备份三个单分类组默认折叠（2026-09-12 用户要求）
-// 二级分类默认折叠；搜索时全部强制展开；选中表时自动展开其所属组与分类
+// 默认展开：一级仅「业务数据」展开；质量/系统/备份三个单分类组默认折叠（2026-09-12 用户要求）
+// 二级：业务数据下**全部二级分类默认展开**（2026-09-12 用户要求）——首屏即可看到表行与其红绿灯，
+//       不必再逐类点击；其余组无二级头。搜索时全部强制展开；选中表时自动展开其所属组与分类。
+const BIZ_CAT_KEYS = GROUPS.filter((g) => g.key === 'biz').flatMap((g) =>
+  g.categories.map((c) => `${g.key}::${c}`),
+)
 const expandedGroups = ref<Set<string>>(new Set(['biz']))
-const expandedCategories = ref<Set<string>>(new Set())
+const expandedCategories = ref<Set<string>>(new Set(BIZ_CAT_KEYS))
 
 function ensureCurrentExpanded() {
   if (!current.value) return
@@ -987,6 +991,54 @@ function dqDotColor(name: string): string {
   return s ? DOT_COLORS[s.worst] : DOT_COLORS.none
 }
 
+// ---- 红绿灯聚合（2026-09-12）：一级组头 / 二级分类头也带一个「最差状态」圆点 ----
+// 目的：即使该组/该分类折叠着，也能一眼看出下面有没有异常，不必点开逐个看。
+const DQ_RANK: Record<string, number> = { none: 0, pass: 1, warning: 2, fail: 3, error: 3 }
+interface DqAgg {
+  worst: string
+  covered: number
+  pass: number
+  warning: number
+  bad: number
+}
+function dqAggOf(names: string[]): DqAgg | null {
+  if (!dqRunAt.value || names.length === 0) return null
+  let worst = 'none'
+  let covered = 0
+  let pass = 0
+  let warning = 0
+  let bad = 0
+  names.forEach((n) => {
+    const s = dqStatus.value.get(n)
+    if (!s) return
+    covered += 1
+    pass += s.counts.pass
+    warning += s.counts.warning
+    bad += s.counts.fail + s.counts.error
+    if ((DQ_RANK[s.worst] ?? -1) > (DQ_RANK[worst] ?? -1)) worst = s.worst
+  })
+  if (!covered) return null
+  return { worst, covered, pass, warning, bad }
+}
+function dqAggColor(names: string[]): string {
+  if (!dqRunAt.value) return 'transparent'
+  const a = dqAggOf(names)
+  // 组内/分类内没有任何表纳入体检 → 灰灯（与表行"未纳入体检"的灰点语义一致，而非"无此指示灯"）
+  return DOT_COLORS[a ? a.worst : 'none']
+}
+function dqAggTitle(label: string, names: string[]): string {
+  const a = dqAggOf(names)
+  if (!a) return `${label}\n数据质量：组内暂未纳入自动体检`
+  return `${label}\n数据质量：${WORST_LABEL[a.worst]} · 通过 ${a.pass} / 异常 ${a.bad} / 提醒 ${a.warning}（${a.covered}/${names.length} 张表纳入体检）`
+}
+// 组内全部表名 / 分类内全部表名
+function dqNamesOfGroup(g: { categories: { tables: TableItem[] }[] }): string[] {
+  return g.categories.flatMap((c) => c.tables.map((t) => t.name))
+}
+function dqNamesOfCat(c: { tables: TableItem[] }): string[] {
+  return c.tables.map((t) => t.name)
+}
+
 function dqRowTitle(t: TableItem): string {
   const base = t.comment ? `${t.name} · ${t.comment}` : t.name
   if (!dqRunAt.value) return base
@@ -1110,6 +1162,7 @@ onMounted(async () => {
             <div
               :data-testid="`grp-${g.key}`"
               class="grp-head"
+              :title="dqAggTitle(`${g.title}（${g.total} 张表）`, dqNamesOfGroup(g))"
               style="display:flex;align-items:center;gap:6px;margin:0 6px;padding:7px 6px;cursor:pointer;user-select:none;border-radius:6px;font-size:12.5px;font-weight:600;color:#1a1a1a;"
               @click="toggleGroup(g.key)"
             >
@@ -1119,6 +1172,13 @@ onMounted(async () => {
               >▶</span>
               <span style="font-size:13px;">{{ g.icon }}</span>
               <span style="flex:1;">{{ g.title }}</span>
+              <!-- 组级聚合红绿灯：折叠时也能看出该组有无异常 -->
+              <span
+                v-if="dqRunAt"
+                :data-testid="`dot-grp-${g.key}`"
+                style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
+                :style="{ background: dqAggColor(dqNamesOfGroup(g)) }"
+              ></span>
               <span style="font-size:11px;color:#999;font-weight:400;">{{ g.total }}</span>
             </div>
             <!-- 二级分类与表 -->
@@ -1145,6 +1205,14 @@ onMounted(async () => {
                   <span style="font-size:9px;width:9px;display:inline-block;transition:transform 0.15s;color:#bbb;"
                         :style="expandedCategories.has(`${g.key}::${c.key}`) ? 'transform:rotate(90deg);' : ''">▶</span>
                   <span style="flex:1;">{{ c.name }}</span>
+                  <!-- 分类级聚合红绿灯 -->
+                  <span
+                    v-if="dqRunAt"
+                    :data-testid="`dot-cat-${g.key}-${c.key}`"
+                    :title="dqAggTitle(`${c.name}（${c.tables.length} 张表）`, dqNamesOfCat(c))"
+                    style="width:8px;height:8px;border-radius:50%;flex-shrink:0;"
+                    :style="{ background: dqAggColor(dqNamesOfCat(c)) }"
+                  ></span>
                   <span class="row-move">
                     <button
                       class="mv-btn" :disabled="ci === 0"
@@ -1178,6 +1246,7 @@ onMounted(async () => {
                 >
                   <span
                     v-if="dqRunAt"
+                    :data-testid="`dot-tbl-${t.name}`"
                     style="width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;"
                     :style="{ background: dqDotColor(t.name) }"
                   ></span>
