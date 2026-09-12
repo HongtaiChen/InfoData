@@ -101,11 +101,23 @@ const groupValues = computed<string[]>(() => {
 const groupable = computed(() => map.group !== '' && groupValues.value.length > 1 && groupValues.value.length <= 30)
 const groupValueOptions = computed<SelectOption[]>(() => groupValues.value.map((v) => ({ label: v, value: v })))
 
+/** 折线/柱状/散点仅绘制的组（前端筛选）；空数组 = 全部 */
+const pickedGroups = ref<string[]>([])
+/** 实际参与绘图的组：pickedGroups 过滤并防脏值 */
+const activeGroups = computed<string[]>(() => {
+  if (!groupable.value) return []
+  if (!pickedGroups.value.length) return groupValues.value
+  const set = new Set(pickedGroups.value)
+  return groupValues.value.filter((g) => set.has(g))
+})
+
 /** K 线模式下当前选中的标的（分组列多值时生效） */
 const klineGroup = ref('')
 watch(groupValues, (gv) => {
   if (gv.length && !gv.includes(klineGroup.value)) klineGroup.value = gv[0]
   if (!gv.length) klineGroup.value = ''
+  // 新数据集 → 前端组筛选重置为「全部」（选择与数据强相关，不持久化）
+  pickedGroups.value = []
 })
 
 // ---------------- 图表类型推荐 ----------------
@@ -479,7 +491,7 @@ function buildCategorySeriesSeries(kind: 'line' | 'bar') {
   if (groupable.value) {
     const ys = map.ys.length ? map.ys : ['']
     let ci = 0
-    for (const g of groupValues.value) {
+    for (const g of activeGroups.value) {
       for (const y of ys) {
         const raw = dates.map((d) => {
           const row = groupIndex.value.get(`${g}|${d}`)
@@ -567,7 +579,7 @@ function buildScatter() {
   const series: Record<string, unknown>[] = []
   if (groupable.value) {
     let ci = 0
-    for (const g of groupValues.value) {
+    for (const g of activeGroups.value) {
       const data: [number, number][] = []
       for (const r of sortedRows.value) {
         if (String(r[map.group]) !== g) continue
@@ -681,6 +693,14 @@ const recommendText = computed(() => {
         <span class="lbl">X</span><NSelect v-model:value="map.x" size="small" filterable :options="colOptions" :style="selW" />
         <span class="lbl">Y</span><NSelect v-model:value="map.ys" size="small" filterable multiple :options="yOptions" :style="'width:220px;'" placeholder="数值列（可多选）" />
         <span class="lbl">组</span><NSelect v-model:value="map.group" size="small" filterable clearable :options="groupOptions" :style="selW" title="按该列拆分多条线" />
+        <template v-if="groupable">
+          <span class="lbl">筛选</span>
+          <NSelect
+            v-model:value="pickedGroups" size="small" multiple filterable clearable
+            :max-tag-count="2" :options="groupValueOptions" :style="'width:190px;'"
+            placeholder="全部" title="仅绘制勾选的组；留空 = 全部"
+          />
+        </template>
         <template v-if="kind === 'line'">
           <NCheckbox
             v-model:checked="pctMode" size="small" style="font-size:12px;margin-left:4px;"
@@ -699,6 +719,14 @@ const recommendText = computed(() => {
         <span class="lbl">X</span><NSelect v-model:value="map.scatterX" size="small" filterable :options="numOptions" :style="selW" />
         <span class="lbl">Y</span><NSelect v-model:value="map.scatterY" size="small" filterable :options="numOptions" :style="selW" />
         <span class="lbl">组</span><NSelect v-model:value="map.group" size="small" filterable clearable :options="groupOptions" :style="selW" />
+        <template v-if="groupable">
+          <span class="lbl">筛选</span>
+          <NSelect
+            v-model:value="pickedGroups" size="small" multiple filterable clearable
+            :max-tag-count="2" :options="groupValueOptions" :style="'width:190px;'"
+            placeholder="全部" title="仅绘制勾选的组；留空 = 全部"
+          />
+        </template>
       </template>
     </div>
 
