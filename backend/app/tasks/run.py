@@ -25,6 +25,7 @@ from ..collectors.stock_info_sync import StockInfoSyncCollector
 from ..collectors.concept_sync import ConceptSyncCollector
 from ..collectors.fund_info_sync import FundInfoSyncCollector
 from ..collectors.index_market_sync import IndexMarketSyncCollector
+from ..collectors.index_cons_sync import IndexConsSyncCollector
 from ..collectors.bond_profit_sync import BondProfitSyncCollector
 from ..collectors.finance_calendar_sync import FinanceCalendarSyncCollector
 from ..collectors.data_quality_check import DataQualityCheckCollector
@@ -180,6 +181,15 @@ def run_index_market_sync(params: dict) -> int:
     result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 指数 {result['error_count']} 个失败（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+def run_index_cons_sync(params: dict) -> int:
+    """指数成分股快照同步（index_constituents：csindex 主源 → cni/members 降级）"""
+    collector = IndexConsSyncCollector()
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 指数成分 {result['error_count']} 项异常（其余正常）: {result['errors'][:5]}")
     return result["records_written"]
 
 
@@ -400,6 +410,8 @@ TASKS = {
     "concept_sync": run_concept_sync,
     "fund_info_sync": run_fund_info_sync,
     "index_market_sync": run_index_market_sync,
+    # 2026-09-12 指数成分股快照（月度调样刷新）
+    "index_cons_sync": run_index_cons_sync,
     "bond_profit_sync": run_bond_profit_sync,
     "finance_calendar_sync": run_finance_calendar_sync,
     # 2026-09-05 数据质量体检（读 dq_rules → 写 dq_report）
