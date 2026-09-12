@@ -13,8 +13,9 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
-from ..db import get_db_config, query_all
+from ..db import execute_write, get_db_config, query_all
 
 router = APIRouter()
 
@@ -386,3 +387,35 @@ def tables_flow():
                 }
             )
     return {"items": meta_map}
+
+
+# ---------- 表分类维护（数据中心前端可直接归类） ----------
+
+# 允许的分类白名单（与前端 DataView GROUPS 声明一致；空串 = 未分类）
+_ALLOWED_CATEGORIES = {
+    "行情", "资料", "概念", "日历", "基金", "资金", "财务", "债券", "指数",
+    "AI", "商品", "资讯", "行业", "调研", "基本面", "质量", "系统",
+}
+
+
+class CategoryReq(BaseModel):
+    category: str = Field("", max_length=20, description="分类名；空串 = 移出分类（未分类）")
+
+
+@router.patch("/tables/{table}/category")
+def set_table_category(table: str, req: CategoryReq):
+    """更新表分类（table_meta.category）。
+    表未入库元数据时自动插入一行（仅 table_name + category）；
+    传空串表示移出分类（左侧树落到「未分类」）。"""
+    _require_table(table)
+    cat = req.category.strip()
+    if cat and cat not in _ALLOWED_CATEGORIES:
+        raise HTTPException(
+            400, f"未知分类「{cat}」，允许值：{'/'.join(sorted(_ALLOWED_CATEGORIES))}"
+        )
+    affected = execute_write(
+        "INSERT INTO table_meta (table_name, category) VALUES (%s, NULLIF(%s, '')) "
+        "ON DUPLICATE KEY UPDATE category = VALUES(category)",
+        (table, cat),
+    )
+    return {"table": table, "category": cat or None, "changed": affected > 0}

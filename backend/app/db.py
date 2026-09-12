@@ -67,3 +67,15 @@ def query_one(sql: str, params: tuple | list | None = None) -> dict | None:
     """查询单行，返回 dict 或 None"""
     rows = query_all(sql + " LIMIT 1", params)
     return rows[0] if rows else None
+
+
+def execute_write(sql: str, params: tuple | list | None = None) -> int:
+    """执行单条写语句（INSERT/UPDATE/DELETE），返回受影响行数。仅限元数据类小操作"""
+    conn = _connect()
+    try:
+        with conn.cursor() as cur:
+            affected = cur.execute(sql, params)
+        conn.commit()
+        return affected
+    finally:
+        conn.close()

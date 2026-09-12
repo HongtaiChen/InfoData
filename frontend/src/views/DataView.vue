@@ -340,6 +340,34 @@ function categoryKeyOf(name: string): string {
   return categoryOf(name) || '__未分类__'
 }
 
+// ---------- 表分类编辑（PATCH /db/tables/{name}/category → table_meta） ----------
+const CATEGORY_OPTIONS: SelectOption[] = [
+  ...GROUPS.filter((g) => g.key !== 'bak').flatMap((g) => g.categories),
+].map((c) => ({ label: c, value: c }))
+CATEGORY_OPTIONS.push({ label: '未分类', value: '' })
+
+const catSaving = ref(false)
+const catSavedTip = ref('')
+let catTipTimer: ReturnType<typeof setTimeout> | undefined
+
+async function setCategory(v: string) {
+  if (!current.value) return
+  if ((categoryOf(current.value) || '') === v) return // 未变化
+  catSaving.value = true
+  catSavedTip.value = ''
+  try {
+    await api.patch(`/db/tables/${current.value}/category`, { category: v })
+    await loadFlow() // 重拉元数据：左侧树/信息栏/数据流卡全部联动更新
+    catSavedTip.value = '已更新 ✓'
+    if (catTipTimer) clearTimeout(catTipTimer)
+    catTipTimer = setTimeout(() => (catSavedTip.value = ''), 2500)
+  } catch {
+    /* 失败提示由 api 拦截器全局 toast */
+  } finally {
+    catSaving.value = false
+  }
+}
+
 interface CategoryBucket {
   key: string
   name: string
@@ -1302,6 +1330,21 @@ onMounted(async () => {
               style="white-space:normal;line-height:1.45;align-self:flex-start;overflow-wrap:anywhere;">
           {{ meta.comment }}
         </NTag>
+        <!-- 分类编辑：下拉即改，写 table_meta，左侧树/数据流卡联动 -->
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+          <span style="font-size:12px;color:#888;">分类</span>
+          <NSelect
+            :value="categoryOf(current) || ''"
+            :options="CATEGORY_OPTIONS"
+            size="tiny"
+            :loading="catSaving"
+            :consistent-menu-width="false"
+            style="width:100px;min-width:78px;"
+            title="选择分类后立即保存；「未分类」= 移出分类"
+            @update:value="setCategory"
+          />
+          <span v-if="catSavedTip" style="font-size:11px;color:#185FA5;">{{ catSavedTip }}</span>
+        </span>
         <span style="font-size:12px;color:#888;">{{ totalText }}</span>
         <span v-if="meta?.update_time" style="font-size:12px;color:#bbb;">更新 {{ meta.update_time.replace('T', ' ').slice(0, 19) }}</span>
         <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
