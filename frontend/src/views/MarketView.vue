@@ -2,6 +2,7 @@
 import { ref, onMounted, h } from 'vue'
 import { NCard, NSpace, NSelect, NDataTable, NInput, type DataTableColumns } from 'naive-ui'
 import KLineChart from '../components/KLineChart.vue'
+import IndexDetailDrawer from '../components/IndexDetailDrawer.vue'
 import api from '../api'
 
 // ---------- 标的选择（股票 / 指数 二选一，共同驱动下方 K 线） ----------
@@ -75,6 +76,17 @@ function pickIndex(it: IndexRow) {
   selType.value = 'index'
   currentCode.value = it.index_code
   currentName.value = it.index_name
+}
+
+// ---------- 指数详情抽屉（释义/成分股/行业分布） ----------
+const drawerShow = ref(false)
+const drawerCode = ref('')
+const drawerName = ref('')
+
+function openCons(it: IndexRow) {
+  drawerCode.value = it.index_code
+  drawerName.value = it.index_name
+  drawerShow.value = true
 }
 
 function tint(v: number | null | undefined): string {
@@ -254,6 +266,11 @@ onMounted(() => {
           <div class="idx-foot">
             <span>额 {{ fmtAmount(it.amount) }}</span>
             <span :class="tint(it.ytd_change_pct)">年 {{ fmtPct(it.ytd_change_pct) }}</span>
+            <span
+              class="idx-cons-btn"
+              title="指数释义 / 成分股 / 行业分布"
+              @click.stop="openCons(it)"
+            >成分</span>
           </div>
         </div>
       </div>
@@ -288,6 +305,13 @@ onMounted(() => {
         :limit="250"
       />
     </NCard>
+
+    <!-- 指数详情抽屉：释义 / 成分股 / 行业分布 -->
+    <IndexDetailDrawer
+      v-model:show="drawerShow"
+      :index-code="drawerCode"
+      :index-name="drawerName"
+    />
 
     <!-- 最新行情表格 -->
     <NCard>
@@ -426,6 +450,17 @@ onMounted(() => {
   gap: 6px;
   font-size: 11px;
   color: var(--color-flat, #909399);
+}
+.idx-cons-btn {
+  flex: none;
+  color: var(--color-primary, #185fa5);
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.idx-cons-btn:hover {
+  background: #e6f1fb;
+  text-decoration: underline;
 }
 .up {
   color: var(--color-up, #ef232a);

@@ -147,3 +147,88 @@ def stock_detail(code: str = Query(..., description="股票代码")):
         [code],
     )
     return {"info": info[0] if info else None, "market": mkt[0] if mkt else None}
+
+
+@router.get("/index-detail")
+def index_detail(code: str = Query(..., description="指数代码")):
+    """指数详情：释义档案 + 成分股列表（join 东财行业） + 行业分布聚合
+
+    - 000001 上证指数为全市场指数：成分按「沪市全部上市股」实时派生
+    - 行业分布：成分股有权重时按权重加权占比，否则按等权只数占比
+    """
+    # 1) 指数档案（释义/基准）
+    prof = query_all(
+        "SELECT index_code, index_name, description, base_date, base_point, source "
+        "FROM index_profile WHERE index_code=%s",
+        [code],
+    )
+    profile = prof[0] if prof else None
+    if profile is None:
+        name_rows = query_all(
+            "SELECT DISTINCT index_name FROM dc_index_market WHERE index_code=%s", [code]
+        )
+        profile = {
+            "index_code": code,
+            "index_name": name_rows[0]["index_name"] if name_rows else code,
+            "description": None,
+            "base_date": None,
+            "base_point": None,
+            "source": None,
+        }
+
+    # 2) 成分股（join 行业）；000001 派生
+    derived_note = None
+    if code == "000001":
+        derived_note = "上证指数为全市场指数，成分股按「沪市全部上市股」实时派生（不落快照表）"
+        cons = query_all(
+            """
+            SELECT stock_code, short_name AS stock_name, NULL AS weight,
+                   NULL AS trade_date, 'derived_sh' AS source, industry
+            FROM stock_info
+            WHERE exchange = 'SH' AND list_status = '上市'
+            ORDER BY stock_code
+            """
+        )
+    else:
+        cons = query_all(
+            """
+            SELECT c.stock_code, c.stock_name, c.weight, c.trade_date, c.source,
+                   s.industry
+            FROM index_constituents c
+            LEFT JOIN stock_info s ON s.stock_code = c.stock_code
+            WHERE c.index_code = %s
+            ORDER BY c.weight DESC, c.stock_code
+            """,
+            [code],
+        )
+
+    has_weight = any(r["weight"] is not None for r in cons)
+
+    # 3) 行业分布聚合
+    dist: dict[str, dict] = {}
+    for r in cons:
+        ind = r["industry"] or "其他"
+        d = dist.setdefault(ind, {"industry": ind, "count": 0, "weight": 0.0})
+        d["count"] += 1
+        if r["weight"] is not None:
+            d["weight"] += float(r["weight"])
+    total_w = sum(d["weight"] for d in dist.values())
+    industry_items = []
+    for d in dist.values():
+        if has_weight and total_w > 0:
+            d["weight_pct"] = round(100.0 * d["weight"] / total_w, 2)
+        else:
+            d["weight_pct"] = round(100.0 * d["count"] / len(cons), 2) if cons else 0.0
+        industry_items.append(d)
+    industry_items.sort(key=lambda x: -x["weight_pct"])
+
+    return {
+        "profile": profile,
+        "derived_note": derived_note,
+        "constituents": {
+            "total": len(cons),
+            "has_weight": has_weight,
+            "items": cons,
+        },
+        "industry_dist": industry_items,
+    }

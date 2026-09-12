@@ -4,7 +4,7 @@
  */
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, CandlestickChart, LineChart, ScatterChart } from 'echarts/charts'
+import { BarChart, CandlestickChart, LineChart, PieChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
@@ -22,6 +22,7 @@ export function ensureEcharts(): void {
     BarChart,
     CandlestickChart,
     LineChart,
+    PieChart,
     ScatterChart,
     GridComponent,
     TooltipComponent,
