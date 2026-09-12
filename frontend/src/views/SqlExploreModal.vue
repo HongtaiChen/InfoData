@@ -50,6 +50,41 @@ const errorKind = ref<'safety' | 'timeout' | 'syntax' | 'other'>('other')
 /** 紧凑数字视图（默认 ON）：15000 → "1.50 万"；OFF 时显示原值 */
 const compactNumbers = ref(true)
 
+// ---------------- 本地记忆：保留上次关闭前的 SQL 与展示配置 ----------------
+
+const STORE_KEY = 'infodata.sqlexplore.v1'
+/** 新查询结果默认展示的视图（记忆用户上次的选择） */
+const preferredView = ref<'table' | 'chart'>('table')
+/** 结果视图：表格 / 图表（结果 > 0 行时可用） */
+const resultView = ref<'table' | 'chart'>('table')
+
+function _persistCfg() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({
+      sql: sqlText.value,
+      table: selectedTable.value ?? '',
+      limit: limitInputStr.value,
+      noLimit: noLimit.value,
+      compact: compactNumbers.value,
+      view: preferredView.value,
+    }))
+  } catch { /* localStorage 不可用（隐私模式等）时静默跳过 */ }
+}
+
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}') as Record<string, unknown>
+  if (typeof saved.sql === 'string' && saved.sql.trim()) sqlText.value = saved.sql
+  if (typeof saved.limit === 'string' && /^\d+$/.test(saved.limit)) limitInputStr.value = saved.limit
+  if (typeof saved.noLimit === 'boolean') noLimit.value = saved.noLimit
+  if (typeof saved.compact === 'boolean') compactNumbers.value = saved.compact
+  if (saved.view === 'chart' || saved.view === 'table') preferredView.value = saved.view
+  if (typeof saved.table === 'string' && saved.table) selectedTable.value = saved.table
+} catch { /* 记忆损坏时忽略，走默认值 */ }
+
+/** 视图切换 → 更新偏好（注册顺序在 _persistCfg 之前，保证落盘时偏好已是新值） */
+watch(resultView, (v) => { preferredView.value = v })
+watch([sqlText, limitInputStr, noLimit, compactNumbers, resultView], _persistCfg)
+
 const tableOptions = computed<SelectOption[]>(() => {
   const base: SelectOption[] = [{ label: '（不指定表）', value: '' }]
   if (props.tables?.length) {
@@ -70,12 +105,17 @@ function isNumericType(t: string): boolean {
 }
 
 watch(selectedTable, (v) => {
-  if (v) sqlText.value = `SELECT *\nFROM \`${v}\`\nORDER BY 1 DESC\nLIMIT 100`
+  // SQL 已经引用了该表时不覆盖（避免记忆恢复/手动改写被模板冲掉）
+  if (v && !sqlText.value.includes(`\`${v}\``)) {
+    sqlText.value = `SELECT *\nFROM \`${v}\`\nORDER BY 1 DESC\nLIMIT 100`
+  }
 })
 
 watch(() => props.show, async (v) => {
   if (v) {
-    if (props.currentTable && !sqlText.value.trim().startsWith(props.currentTable)) {
+    // 记忆优先：已有用户 SQL（非默认占位）时不打断，只有空白/占位时才按来源表套模板
+    const hasUserSql = sqlText.value.trim() !== '' && sqlText.value.trim() !== DEFAULT_SQL
+    if (!hasUserSql && props.currentTable) {
       selectedTable.value = props.currentTable
       sqlText.value = `SELECT *\nFROM \`${props.currentTable}\`\nORDER BY 1 DESC\nLIMIT 100`
     }
@@ -219,9 +259,8 @@ const tableColumns = computed(() => {
 })
 const tableData = computed(() => result.value?.rows ?? [])
 
-/** 结果视图：表格（默认）/ 图表（结果 > 0 行时可用）；新查询重置回表格 */
-const resultView = ref<'table' | 'chart'>('table')
-watch(result, () => { resultView.value = 'table' })
+/** 新查询到达 → 恢复偏好视图（记忆用户上次选的是表格还是图表） */
+watch(result, () => { resultView.value = preferredView.value })
 </script>
 
 <template>

@@ -86,7 +86,7 @@ function autoMap() {
   map.scatterY = numericCols.value[1] ?? ''
 }
 
-watch(() => [props.columns, props.rows], () => autoMap(), { immediate: true, deep: false })
+/** 列结构变化时由下方「配置记忆」watcher 统一触发 autoMap + 记忆恢复（见 applySavedCfg） */
 
 /** 结果集里分组列的去重值数（>1 才值得分组） */
 const groupValues = computed<string[]>(() => {
@@ -127,7 +127,6 @@ const manualKind = ref<ChartKind | undefined>(undefined)
 const kind = computed<ChartKind | null>(() => manualKind.value ?? resolvedKind.value)
 /** 折线「收益率%」归一化模式：每组以首个有效点为基准 */
 const pctMode = ref(false)
-watch(() => [props.columns], () => { manualKind.value = undefined; klineGroup.value = ''; pctMode.value = false })
 
 const kindOptions = computed<SelectOption[]>(() => {
   const opts: SelectOption[] = []
@@ -211,6 +210,82 @@ const MA_DEFS = [
 ] as const
 /** 默认展示 MA5/10/20 */
 const mas = ref<string[]>(['ma5', 'ma10', 'ma20'])
+
+// ---------------- 配置记忆（localStorage，按列结构签名恢复） ----------------
+
+const CFG_STORE_KEY = 'infodata.explorechart.v1'
+/** 签名 = 列名:类型 拼接 —— 同结构查询（同表/同 SELECT）共享一份记忆 */
+const colSig = computed(() => props.columns.map((c) => `${c.name}:${c.type}`).join('|'))
+
+type ChartCfg = { k?: string; m?: Record<string, unknown>; mas?: string[]; p?: boolean }
+
+function loadCfgStore(): Record<string, ChartCfg> {
+  try {
+    return JSON.parse(localStorage.getItem(CFG_STORE_KEY) || '{}') as Record<string, ChartCfg>
+  } catch { return {} }
+}
+
+function saveCfgStore(store: Record<string, ChartCfg>) {
+  try { localStorage.setItem(CFG_STORE_KEY, JSON.stringify(store)) } catch { /* ignore */ }
+}
+
+/** 在启发式映射之上叠加记忆配置（仅接受当前结果集中真实存在的列，防脏数据） */
+function applySavedCfg() {
+  const cfg = loadCfgStore()[colSig.value]
+  if (!cfg) return
+  const valid = new Set(colNames.value)
+  const numSet = new Set(numericCols.value)
+  const m = (cfg.m || {}) as Record<string, unknown>
+  const pick = (v: unknown, allowed?: Set<string>): string =>
+    typeof v === 'string' && v && (allowed ? allowed.has(v) : valid.has(v)) ? v : ''
+  map.x = pick(m.x) || map.x
+  map.open = pick(m.open, numSet)
+  map.high = pick(m.high, numSet)
+  map.low = pick(m.low, numSet)
+  map.close = pick(m.close, numSet)
+  map.vol = pick(m.vol, numSet)
+  map.group = pick(m.group)
+  const ys = Array.isArray(m.ys)
+    ? (m.ys as unknown[]).filter((y): y is string => typeof y === 'string' && numSet.has(y))
+    : []
+  if (ys.length) map.ys = ys
+  map.scatterX = pick(m.scatterX, numSet) || map.scatterX
+  map.scatterY = pick(m.scatterY, numSet) || map.scatterY
+  if (cfg.k === 'kline' || cfg.k === 'line' || cfg.k === 'bar' || cfg.k === 'scatter') {
+    manualKind.value = cfg.k
+  }
+  if (Array.isArray(cfg.mas)) mas.value = cfg.mas.filter((k) => MA_DEFS.some((d) => d.key === k))
+  pctMode.value = !!cfg.p
+}
+
+/** 列结构变化（新查询/换表）→ 重算启发式映射，再叠加该结构的历史记忆 */
+watch(() => props.columns, () => {
+  autoMap()
+  manualKind.value = undefined
+  pctMode.value = false
+  klineGroup.value = ''
+  applySavedCfg()
+}, { immediate: true })
+
+// 任意映射/类型/MA/收益率变化 → 持久化到当前列结构签名（保留最近 30 条防膨胀）
+watch(
+  () => JSON.stringify({
+    k: manualKind.value,
+    m: {
+      x: map.x, open: map.open, high: map.high, low: map.low, close: map.close,
+      vol: map.vol, group: map.group, ys: map.ys, sx: map.scatterX, sy: map.scatterY,
+    },
+    mas: mas.value,
+    p: pctMode.value,
+  }),
+  (snap) => {
+    const store = loadCfgStore()
+    store[colSig.value] = JSON.parse(snap) as ChartCfg
+    const keys = Object.keys(store)
+    if (keys.length > 30) delete store[keys[0]]
+    saveCfgStore(store)
+  },
+)
 
 function maValues(closes: number[], n: number): (number | null)[] {
   const out: (number | null)[] = []
