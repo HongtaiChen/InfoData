@@ -7,7 +7,9 @@
 1. 会话级只读：SET SESSION TRANSACTION READ ONLY + autocommit=0
 2. 关键字黑名单：拒 INSERT/UPDATE/DELETE/DROP/TRUNCATE/ALTER/CREATE/REPLACE/RENAME/GRANT/REVOKE/LOCK/UNLOCK/CALL/KILL/LOAD/OUTFILE/INFILE/FOR UPDATE
 3. 多语句防御：剥离注释后只允许一条语句
-4. 强制 LIMIT：单条 SELECT 无 LIMIT 时自动追加；用户传入 limit 上限 2000
+4. LIMIT：SELECT 无 LIMIT 时自动追加（前端可选档位，默认 500、上限 20000）；
+   前端可勾选「不限」（不追加 LIMIT），但服务端仍以 fetchmany 流式取数并施加
+   _HARD_MAX（5 万行）硬上限，防止千万行大表全量拉回冲爆内存/浏览器
 
 超时：SET SESSION MAX_EXECUTION_TIME = 15000（MySQL 8 强制执行毫秒）
 """
@@ -23,7 +25,9 @@ from ..db import get_db_config
 router = APIRouter()
 
 _LIMIT_DEFAULT = 500
-_LIMIT_MAX = 2000
+_LIMIT_MAX = 20000
+_HARD_MAX = 50000
+_FETCH_BATCH = 5000
 _TIMEOUT_MS = 15000
 
 # 黑名单：边界词匹配（大小写不敏感）
@@ -42,6 +46,7 @@ _FIRST_WORD = re.compile(r"^\s*([A-Za-z_]+)")
 class SqlExploreReq(BaseModel):
     sql: str = Field(..., min_length=1, max_length=20000)
     limit: int | None = Field(None, ge=1, le=_LIMIT_MAX)
+    no_limit: bool = False  # 「不限」：不自动追加 LIMIT；仍有 _HARD_MAX 硬上限兜底
 
 
 def _strip_comments(sql: str) -> str:
@@ -96,11 +101,13 @@ def _validate(sql: str) -> str:
     return cleaned
 
 
-def _ensure_limit(sql: str, user_limit: int | None) -> tuple[str, int, bool]:
+def _ensure_limit(sql: str, user_limit: int | None, no_limit: bool = False) -> tuple[str, int, bool]:
     """
     返回 (final_sql, effective_limit, user_specified)
-    - SELECT 类（无 LIMIT 自动追加）
-    - EXPLAIN/SHOW/DESCRIBE 不强制（这些语法不接受 LIMIT）
+    - SELECT 类（无 LIMIT 自动追加，档位上限 _LIMIT_MAX）
+    - no_limit=True 时不追加 LIMIT，effective_limit 取 _HARD_MAX（硬上限提示用）
+    - 用户自写 LIMIT N：尊重原句，effective_limit = min(N, _HARD_MAX)（取数仍受硬上限约束）
+    - EXPLAIN/SHOW/DESCRIBE 不追加（这些语法不接受 LIMIT）
     """
     upper = sql.upper()
     # 不允许 LIMIT 的语法
@@ -108,9 +115,12 @@ def _ensure_limit(sql: str, user_limit: int | None) -> tuple[str, int, bool]:
     if needs_no_limit:
         return sql, 0, False
 
-    has_limit = bool(re.search(r"\bLIMIT\s+\d+", upper))
-    if has_limit:
-        return sql, 0, True
+    m = re.search(r"\bLIMIT\s+(\d+)", upper)
+    if m:
+        return sql, min(int(m.group(1)), _HARD_MAX), True
+
+    if no_limit:
+        return sql, _HARD_MAX, False
 
     target = user_limit if user_limit is not None else _LIMIT_DEFAULT
     target = min(target, _LIMIT_MAX)
@@ -128,7 +138,9 @@ def _normalize_rows(cursor_desc, rows: list[tuple]) -> list[dict]:
 def explore(req: SqlExploreReq) -> dict[str, Any]:
     """执行只读 SQL 并返回结果；不支持事务外修改"""
     cleaned = _validate(req.sql)
-    final_sql, eff_limit, user_limited = _ensure_limit(cleaned, req.limit)
+    final_sql, eff_limit, user_limited = _ensure_limit(cleaned, req.limit, req.no_limit)
+    # 取数硬上限：防止「不限」或用户自写大 LIMIT 时全量拉回千万行大表
+    fetch_cap = eff_limit if eff_limit > 0 else _HARD_MAX
 
     import pymysql
     conn = pymysql.connect(**get_db_config().to_dict())
@@ -143,17 +155,27 @@ def explore(req: SqlExploreReq) -> dict[str, Any]:
         start = time.perf_counter()
         try:
             cur.execute(final_sql)
-            rows = cur.fetchall()
+            # 流式取数：分批 fetch，到硬上限即停并标记截断，服务端内存不随表大小失控
+            rows: list[tuple] = []
+            truncated = False
+            while True:
+                batch = cur.fetchmany(_FETCH_BATCH)
+                if not batch:
+                    break
+                rows.extend(batch)
+                if len(rows) >= fetch_cap:
+                    if cur.fetchone() is not None:
+                        truncated = True
+                    break
             elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+            # 自动追加 LIMIT 的场景：行数打满档位也视为截断（提示调大 LIMIT）
+            if not truncated and not user_limited and 0 < eff_limit <= len(rows):
+                truncated = True
+
         except Exception:
             # READ ONLY 连接下若执意写，会抛 1795 等异常，统一转安全错
             raise
-
-        truncated = (
-            not user_limited
-            and eff_limit > 0
-            and len(rows) >= eff_limit
-        )
 
         cols_meta = []
         if cur.description:
@@ -163,11 +185,7 @@ def explore(req: SqlExploreReq) -> dict[str, Any]:
                     "type": _mysql_type_label(d[1]),
                 })
 
-        # 结果体大小限制（防止一次返回几百万字段冲爆带宽）
         payload_rows = _normalize_rows(cur.description, rows)
-        if len(payload_rows) > eff_limit and eff_limit > 0:
-            payload_rows = payload_rows[:eff_limit]
-            truncated = True
 
         return {
             "columns": cols_meta,

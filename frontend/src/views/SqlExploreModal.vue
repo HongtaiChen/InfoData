@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, h, ref, watch, nextTick } from 'vue'
 import {
-  NButton, NDataTable, NInput, NModal, NRadio, NRadioGroup, NSelect, NSpin, NTag,
+  NButton, NCheckbox, NDataTable, NInput, NModal, NRadio, NRadioGroup, NSelect, NSpin, NTabPane, NTabs, NTag,
   type SelectOption,
 } from 'naive-ui'
 import api from '../api'
+import ExploreChart from '../components/ExploreChart.vue'
 
 interface Props {
   show: boolean
@@ -29,11 +30,13 @@ interface ExploreResp {
 
 const DEFAULT_SQL = 'SELECT 1 AS hello'
 const LIMIT_DEFAULT = 500
-const LIMIT_MAX = 2000
+const LIMIT_MAX = 20000
 
 const selectedTable = ref<string | null>(null)
 const sqlText = ref(DEFAULT_SQL)
 const limitInputStr = ref<string>(String(LIMIT_DEFAULT))
+/** 「不限」：不自动追加 LIMIT（服务端仍有 5 万行硬上限保护） */
+const noLimit = ref(false)
 const limitEffective = computed<number>(() => {
   const n = parseInt(limitInputStr.value, 10)
   if (!Number.isFinite(n) || n < 1) return 1
@@ -93,7 +96,7 @@ async function runSql() {
   try {
     const resp = (await api.post(
       '/sql/explore',
-      { sql: sqlText.value, limit: lim },
+      { sql: sqlText.value, limit: noLimit.value ? null : lim, no_limit: noLimit.value },
       { silent: true, timeout: 20000 },
     )) as ExploreResp
     result.value = resp
@@ -215,6 +218,10 @@ const tableColumns = computed(() => {
   })
 })
 const tableData = computed(() => result.value?.rows ?? [])
+
+/** 结果视图：表格（默认）/ 图表（结果 > 0 行时可用）；新查询重置回表格 */
+const resultView = ref<'table' | 'chart'>('table')
+watch(result, () => { resultView.value = 'table' })
 </script>
 
 <template>
@@ -233,7 +240,7 @@ const tableData = computed(() => result.value?.rows ?? [])
     <template #header>
       <div style="display:flex;align-items:center;gap:10px;">
         <span style="font-size:16px;font-weight:600;color:#185FA5;">数据探查</span>
-        <NTag size="tiny" :bordered="false" type="info" style="font-weight:500;">只读 · 15s 超时 · 强制 LIMIT</NTag>
+        <NTag size="tiny" :bordered="false" type="info" style="font-weight:500;">只读 · 15s 超时 · 保护性上限</NTag>
       </div>
     </template>
 
@@ -243,7 +250,7 @@ const tableData = computed(() => result.value?.rows ?? [])
         style="padding:7px 12px;border-radius:6px;background:#FFF4F4;border:1px solid #F4C9C9;color:#791F1F;font-size:12px;line-height:1.55;margin-bottom:10px;"
       >
         <strong>⚠ 仅支持 SELECT / WITH / EXPLAIN / SHOW / DESCRIBE；</strong>
-        写语句将被<strong>关键字黑名单拦截</strong>，会话强制 <code>READ ONLY</code>，默认自动追加 <code>LIMIT 500</code>，单次最长 15 秒。
+        写语句将被<strong>关键字黑名单拦截</strong>，会话强制 <code>READ ONLY</code>，默认自动追加 <code>LIMIT 500</code>（可调至 20000 或勾选「不限」，不限时仍有 5 万行硬上限保护），单次最长 15 秒。
         <kbd style="padding:0 4px;border:1px solid #791F1F;border-radius:3px;font-size:11px;background:#fff;margin-left:6px;">Ctrl+Enter</kbd> 执行
       </div>
 
@@ -261,12 +268,19 @@ const tableData = computed(() => result.value?.rows ?? [])
         <span style="font-size:12px;color:#888;">LIMIT</span>
         <NInput
           :value="limitInputStr"
-          @update:value="(v: string) => (limitInputStr = v.replace(/\D+/g, '').slice(0, 4))"
+          @update:value="(v: string) => (limitInputStr = v.replace(/\D+/g, '').slice(0, 5))"
           size="small"
-          :input-props="{ inputmode: 'numeric', pattern: '[0-9]*', maxlength: 4 }"
+          :disabled="noLimit"
+          :input-props="{ inputmode: 'numeric', pattern: '[0-9]*', maxlength: 5 }"
           style="width:90px;"
-          :title="`上限 ${LIMIT_MAX}`"
+          :title="`上限 ${LIMIT_MAX}；勾选「不限」后不自动加 LIMIT`"
         />
+        <NCheckbox
+          v-model:checked="noLimit"
+          size="small"
+          style="font-size:12px;"
+          title="不自动追加 LIMIT；服务端仍保留 5 万行硬上限 + 15 秒超时保护"
+        >不限</NCheckbox>
         <NButton size="small" type="primary" :loading="running" @click="runSql()">执行</NButton>
         <NButton size="small" quaternary @click="clearAll()">清空</NButton>
         <NButton size="small" quaternary @click="copySql()">复制 SQL</NButton>
@@ -299,7 +313,7 @@ const tableData = computed(() => result.value?.rows ?? [])
         <span v-else-if="result" style="color:#14B143;">
           ✓ {{ result.row_count }} 行 · {{ result.elapsed_ms }} ms
           <span v-if="result.truncated" style="color:#B45309;">
-            （已截断：表内可能超过 {{ result.limit }} 行；调大 LIMIT 重新跑）
+            （已截断：{{ noLimit ? `命中保护性硬上限 ${result.limit} 行，请加 WHERE 收敛范围` : `表内可能超过 ${result.limit} 行；调大 LIMIT 或勾选「不限」重新跑` }}）
           </span>
         </span>
         <span v-else style="color:#888;">点击「执行」或按 Ctrl+Enter 跑查询</span>
@@ -315,7 +329,7 @@ const tableData = computed(() => result.value?.rows ?? [])
         {{ errorMsg.replace(/^[A-Z_]+:\s*/, '') }}
       </div>
 
-      <!-- 结果区：NDataTable 自带 sticky thead + scroll -->
+      <!-- 结果区：表格 / 图表 双视图 -->
       <div style="border:1px solid #ececec;border-radius:6px;overflow:hidden;background:#fff;">
         <div v-if="!result && !running" style="padding:30px;text-align:center;color:#888;font-size:13px;">
           尚无结果
@@ -323,17 +337,34 @@ const tableData = computed(() => result.value?.rows ?? [])
         <div v-else-if="result && result.rows.length === 0" style="padding:30px;text-align:center;color:#888;font-size:13px;">
           ✓ 查询成功，0 行结果
         </div>
-        <NDataTable
+        <NTabs
           v-else-if="result"
-          :columns="tableColumns"
-          :data="tableData"
-          :bordered="false"
-          :single-line="false"
-          size="small"
-          :max-height="420"
-          :virtual-scroll="true"
-          style="font-family:Consolas,Menlo,monospace;font-size:12.5px;"
-        />
+          v-model:value="resultView"
+          type="line" size="small"
+          style="padding:0 10px;"
+          :pane-style="{ paddingTop: '8px' }"
+        >
+          <NTabPane name="table" tab="表格">
+            <NDataTable
+              :columns="tableColumns"
+              :data="tableData"
+              :bordered="false"
+              :single-line="false"
+              size="small"
+              :max-height="420"
+              :virtual-scroll="true"
+              style="font-family:Consolas,Menlo,monospace;font-size:12.5px;"
+            />
+          </NTabPane>
+          <NTabPane name="chart" tab="图表">
+            <ExploreChart
+              :columns="result.columns"
+              :rows="result.rows"
+              :truncated="result.truncated"
+              :limit="result.limit"
+            />
+          </NTabPane>
+        </NTabs>
       </div>
     </div>
   </NModal>
