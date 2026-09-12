@@ -9,6 +9,8 @@ const props = defineProps<{
   code: string
   name?: string
   isConcept?: boolean
+  /** 大盘指数 K 线（dc_index_market） */
+  isIndex?: boolean
   limit?: number
 }>()
 
@@ -102,7 +104,12 @@ function formatVol(v?: number): string {
 
 async function fetchBars(): Promise<KLineData[]> {
   const resp: any = await api.get('/market/kline', {
-    params: { code: props.code, limit: props.limit ?? 250, is_concept: props.isConcept ?? false },
+    params: {
+      code: props.code,
+      limit: props.limit ?? 250,
+      is_concept: props.isConcept ?? false,
+      is_index: props.isIndex ?? false,
+    },
   })
   return (resp.items || []).map((it: any) => {
     const pct = it.change_pct != null ? Number(it.change_pct) : null
@@ -141,6 +148,7 @@ function initChart() {
   }
   chart = init(containerRef.value)
   if (!chart) return
+  loadingMsg.value = '加载中...'
   applyTonghuashunStyle(chart)
   // 主图 MA + 副图 VOL/MACD（同花顺经典布局）
   chart.createIndicator('MA', false)
@@ -163,6 +171,15 @@ function initChart() {
         })
     },
   })
+  // klinecharts v10 关键：init() 不预设 symbol/period，二者为 null 时
+  // _processDataLoad 会直接 return，getBars 永不触发（K 线一直停在「加载中」）。
+  // 必须先 setDataLoader 再 setSymbol + setPeriod 才会真正发起首屏拉数。
+  chart.setSymbol({ ticker: props.code })
+  chart.setPeriod({ span: 1, type: 'day' })
+  // 布局尺寸兜底：等一帧确保容器已按 CSS 定尺后再重算一次
+  requestAnimationFrame(() => {
+    if (chart) chart.resize()
+  })
 }
 
 onMounted(() => {
@@ -177,9 +194,9 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.code,
+  () => [props.code, props.isIndex, props.isConcept],
   () => {
-    // 切换标的：重建 chart 触发 DataLoader.init 重新拉数
+    // 切换标的（或跨类型切换）：重建 chart 触发 DataLoader.init 重新拉数
     latest.value = null
     initChart()
   },
@@ -209,10 +226,11 @@ watch(
   width: 100%;
   height: 100%;
 }
+/* klinecharts 要求容器有「确定高度」：height:100% 挂在 auto 高度父级上会算成 0，
+   导致内部 pane 高度全为 0（只剩 X 轴），故这里用固定像素高度 */
 .kline-container {
   width: 100%;
-  height: 100%;
-  min-height: 400px;
+  height: 420px;
 }
 .kline-loading {
   position: absolute;

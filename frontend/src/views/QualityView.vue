@@ -475,28 +475,28 @@ watch(tableFilter, (v) => {
         </NGi>
         <NGi>
           <NCard size="small" hoverable>
-            <NStatistic label="通过" :value="passCnt" style="--n-value-text-color:#18a058">
+            <NStatistic label="通过" :value="passCnt" style="--n-value-text-color:#185FA5">
               <template #suffix>项</template>
             </NStatistic>
           </NCard>
         </NGi>
         <NGi>
           <NCard size="small" hoverable>
-            <NStatistic label="提醒" :value="warnCnt" style="--n-value-text-color:#d48806">
+            <NStatistic label="提醒" :value="warnCnt" style="--n-value-text-color:#B45309">
               <template #suffix>项</template>
             </NStatistic>
           </NCard>
         </NGi>
         <NGi>
           <NCard size="small" hoverable>
-            <NStatistic label="异常" :value="failCnt" style="--n-value-text-color:#d03050">
+            <NStatistic label="异常" :value="failCnt" style="--n-value-text-color:#791F1F">
               <template #suffix>项</template>
             </NStatistic>
           </NCard>
         </NGi>
         <NGi>
           <NCard size="small" hoverable>
-            <NStatistic label="执行错误" :value="errCnt" style="--n-value-text-color:#a05e03">
+            <NStatistic label="执行错误" :value="errCnt" style="--n-value-text-color:#791F1F">
               <template #suffix>项</template>
             </NStatistic>
           </NCard>
@@ -513,7 +513,7 @@ watch(tableFilter, (v) => {
               :percentage="passRate"
               :height="14"
               :border-radius="7"
-              :color="passRate >= 90 ? '#18a058' : passRate >= 70 ? '#d48806' : '#d03050'"
+              :color="passRate >= 90 ? '#185FA5' : passRate >= 70 ? '#B45309' : '#791F1F'"
               indicator-placement="inside"
             >
               <span style="font-size:12px;font-weight:600;color:#fff">{{ passRate }}%</span>
@@ -663,10 +663,10 @@ watch(tableFilter, (v) => {
         <div v-else style="display:flex;align-items:flex-end;gap:10px;height:120px;padding:4px 2px 0">
           <div v-for="d in historyDays" :key="d.d" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0">
             <div style="width:100%;display:flex;flex-direction:column-reverse;height:88px;background:#f3f4f6;border-radius:4px;overflow:hidden">
-              <div :style="{ height: (d.pass / barMax) * 100 + '%', background: '#18a058' }" :title="`通过 ${d.pass}`" />
-              <div :style="{ height: (d.warning / barMax) * 100 + '%', background: '#d48806' }" :title="`提醒 ${d.warning}`" />
-              <div :style="{ height: (d.fail / barMax) * 100 + '%', background: '#d03050' }" :title="`异常 ${d.fail}`" />
-              <div :style="{ height: (d.error / barMax) * 100 + '%', background: '#a05e03' }" :title="`执行错误 ${d.error}`" />
+              <div :style="{ height: (d.pass / barMax) * 100 + '%', background: '#185FA5' }" :title="`通过 ${d.pass}`" />
+              <div :style="{ height: (d.warning / barMax) * 100 + '%', background: '#B45309' }" :title="`提醒 ${d.warning}`" />
+              <div :style="{ height: (d.fail / barMax) * 100 + '%', background: '#791F1F' }" :title="`异常 ${d.fail}`" />
+              <div :style="{ height: (d.error / barMax) * 100 + '%', background: '#791F1F' }" :title="`执行错误 ${d.error}`" />
             </div>
             <span style="font-size:11px;color:#9ca3af;white-space:nowrap">{{ d.d }}</span>
           </div>

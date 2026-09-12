@@ -1059,15 +1059,21 @@ function dqTagType(worst: string): 'default' | 'success' | 'warning' | 'error' {
   return 'error'
 }
 
+// 状态 → 文案 / 颜色（2026-09-12 修正）：
+// 原来的实现只判了 error / fail，其余（含 pass）一律落到兜底的「提醒」+ 橙色，
+// 导致规则明细弹窗里 pass 的规则被误显示为 warning。这里补全四个状态分支。
+// 色值遵循《颜色体系设计规范 v2.0》：通过 = 主色蓝，提醒 = 琥珀，失败/错误 = 深红棕。
 function dqIssueStatusLabel(status: string): string {
-  if (status === 'error') return '错误'
+  if (status === 'error') return '执行错误'
   if (status === 'fail') return '异常'
-  return '提醒'
+  if (status === 'warning') return '提醒'
+  return '通过'
 }
 
 function dqIssueColor(status: string): string {
-  if (status === 'error' || status === 'fail') return '#d03050'
-  return '#d48806'
+  if (status === 'error' || status === 'fail') return '#791F1F'
+  if (status === 'warning') return '#B45309'
+  return '#185FA5'
 }
 
 async function openDqModal(focusRule = '') {
