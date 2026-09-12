@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import {
-  NButton, NEmpty, NInput, NModal, NSelect, NSpin, NTable, NTag,
+  NButton, NEmpty, NInput, NModal, NPopconfirm, NSelect, NSpin, NTable, NTag,
   type SelectOption,
 } from 'naive-ui'
 import api from '../api'
@@ -381,18 +381,27 @@ const groupedTables = computed<GroupBucket[]>(() => {
   out.forEach((g, i) => {
     const declared = orderFor(GROUPS[i])
     const m = catMapByGroup.get(g.key)!
-    g.categories = declared
-      .filter((k) => m.has(k))
-      .map((k) => m.get(k)!)
-      // 同分类内：按表名字母序
-      .map((c) => ({ ...c, tables: [...c.tables].sort((a, b) => a.name.localeCompare(b.name)) }))
+    // 二级分类：声明顺序 → 套用用户自定义顺序（增量覆盖，未记录项追加在后）
+    const visibleCatKeys = declared.filter((k) => m.has(k))
+    const orderedCatKeys = applyOrder(visibleCatKeys, sidebarOrder.value.cats[g.key])
+    g.categories = orderedCatKeys.map((k) => {
+      const c = m.get(k)!
+      // 表行：默认按表名字母序 → 套用用户自定义顺序
+      const byName = new Map(c.tables.map((t) => [t.name, t]))
+      const defaultNames = [...c.tables]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((t) => t.name)
+      const orderedNames = applyOrder(defaultNames, sidebarOrder.value.tables[`${g.key}::${k}`])
+      return { ...c, tables: orderedNames.map((n) => byName.get(n)!) }
+    })
   })
   // 过滤掉空组（搜索时可能所有组都空）
   return out.filter((g) => g.total > 0)
 })
 
-// 默认展开：所有一级组 + 当前选中表所属二级分类；二级默认折叠
-const expandedGroups = ref<Set<string>>(new Set(['biz', 'dq', 'sys', 'bak']))
+// 默认展开：仅「业务数据」；质量/系统/备份三个单分类组默认折叠（2026-09-12 用户要求）
+// 二级分类默认折叠；搜索时全部强制展开；选中表时自动展开其所属组与分类
+const expandedGroups = ref<Set<string>>(new Set(['biz']))
 const expandedCategories = ref<Set<string>>(new Set())
 
 function ensureCurrentExpanded() {
@@ -427,6 +436,169 @@ function rowStyle(colCount: number, name: string): string {
       ? 'background:#E6F1FB;color:#185FA5;font-weight:600;'
       : 'color:#333;')
   )
+}
+
+// ---------- 左侧清单手工排序（2026-09-12） ----------
+// 语义：**增量覆盖** —— 只记录用户动过的容器（组内分类 / 容器内表行），
+// 读取时把未记录的表追加到末尾，因此数据库新增表永远不会因为排序而"消失"。
+// 持久化：localStorage 镜像（首屏秒出）+ user_prefs 服务端（跨浏览器/重启有效）。
+type SidebarOrder = {
+  cats: Record<string, string[]> // 组内二级分类顺序：{ 组key: [分类key...] }
+  tables: Record<string, string[]> // 容器内表行顺序：{ '组key::分类key': [表名...] }
+}
+const sidebarOrder = ref<SidebarOrder>({ cats: {}, tables: {} })
+const SIDEBAR_ORDER_LS = 'infodata.sidebarOrder'
+
+function loadSidebarOrderLS(): SidebarOrder {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_ORDER_LS)
+    if (!raw) return { cats: {}, tables: {} }
+    const o = JSON.parse(raw) as Partial<SidebarOrder>
+    return { cats: o?.cats || {}, tables: o?.tables || {} }
+  } catch {
+    return { cats: {}, tables: {} }
+  }
+}
+function saveSidebarOrderLS(o: SidebarOrder) {
+  try {
+    localStorage.setItem(SIDEBAR_ORDER_LS, JSON.stringify(o))
+  } catch {
+    /* 存储不可用则忽略 */
+  }
+}
+
+async function loadSidebarOrder() {
+  // 先上本地镜像兜底（后端未起也能记住顺序），再拉服务端全量覆盖
+  sidebarOrder.value = loadSidebarOrderLS()
+  try {
+    const resp: any = await api.get('/prefs/sidebar-order', { silent: true })
+    const o: SidebarOrder = { cats: resp?.cats || {}, tables: resp?.tables || {} }
+    sidebarOrder.value = o
+    saveSidebarOrderLS(o)
+  } catch {
+    /* 服务端不可达：保持镜像值 */
+  }
+}
+
+let orderTimer: ReturnType<typeof setTimeout> | undefined
+function persistSidebarOrder() {
+  saveSidebarOrderLS(sidebarOrder.value)
+  if (orderTimer) clearTimeout(orderTimer)
+  orderTimer = setTimeout(() => {
+    void api.put('/prefs/sidebar-order', sidebarOrder.value, { silent: true })
+  }, 400)
+}
+
+const hasCustomOrder = computed(
+  () =>
+    Object.keys(sidebarOrder.value.cats).length > 0 ||
+    Object.keys(sidebarOrder.value.tables).length > 0,
+)
+
+/** 把用户自定义顺序套到默认顺序上：手动项优先按手动序，未记录项保持默认序追加在后 */
+function applyOrder(defaultList: string[], saved?: string[]): string[] {
+  if (!saved || saved.length === 0) return defaultList
+  const allowed = new Set(defaultList)
+  const head = saved.filter((x) => allowed.has(x))
+  const seen = new Set(head)
+  return [...head, ...defaultList.filter((x) => !seen.has(x))]
+}
+
+function commitOrder(kind: DragKind, container: string, order: string[]) {
+  const bucket = kind === 'table' ? 'tables' : 'cats'
+  sidebarOrder.value = {
+    ...sidebarOrder.value,
+    [bucket]: { ...sidebarOrder.value[bucket], [container]: order },
+  }
+  persistSidebarOrder()
+}
+
+/** 悬停 ↑↓ 按钮：在 list 内把第 index 项上/下移一位 */
+function moveItem(kind: DragKind, container: string, list: string[], index: number, delta: number) {
+  const to = index + delta
+  if (to < 0 || to >= list.length) return
+  const next = [...list]
+  const [picked] = next.splice(index, 1)
+  next.splice(to, 0, picked)
+  commitOrder(kind, container, next)
+}
+function tableNames(list: TableItem[]): string[] {
+  return list.map((t) => t.name)
+}
+function catKeys(list: CategoryBucket[]): string[] {
+  return list.map((c) => c.key)
+}
+
+function resetSidebarOrder() {
+  sidebarOrder.value = { cats: {}, tables: {} }
+  saveSidebarOrderLS(sidebarOrder.value)
+  try {
+    void api.delete('/prefs/sidebar-order', { silent: true })
+  } catch {
+    /* 静默 */
+  }
+}
+
+// ---------- 拖拽排序（原生 HTML5 DnD，无新依赖） ----------
+type DragKind = 'table' | 'cat'
+const dragCtx = ref<{ kind: DragKind; container: string; name: string } | null>(null)
+// 插入位置：{ 容器, 下标 }，下标 0..len，len 表示插到末尾
+const dropHint = ref<{ container: string; index: number } | null>(null)
+
+function onDragStart(kind: DragKind, container: string, name: string, e: DragEvent) {
+  dragCtx.value = { kind, container, name }
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    try {
+      e.dataTransfer.setData('text/plain', name)
+    } catch {
+      /* 某些浏览器在合成事件下会抛，忽略 */
+    }
+  }
+}
+function onDragEnd() {
+  dragCtx.value = null
+  dropHint.value = null
+}
+function onDragOver(kind: DragKind, container: string, list: string[], overName: string, e: DragEvent) {
+  const d = dragCtx.value
+  // 只允许同容器内排序：跨容器不 preventDefault，浏览器显示禁止光标
+  if (!d || d.kind !== kind || d.container !== container) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  const idx = list.indexOf(overName)
+  if (idx < 0) return
+  const el = e.currentTarget as HTMLElement | null
+  const rect = el?.getBoundingClientRect()
+  const after = rect ? e.clientY > rect.top + rect.height / 2 : false
+  dropHint.value = { container, index: after ? idx + 1 : idx }
+}
+function onDrop(kind: DragKind, container: string, list: string[], e: DragEvent) {
+  e.preventDefault()
+  const d = dragCtx.value
+  const hint = dropHint.value
+  dragCtx.value = null
+  dropHint.value = null
+  if (!d || !hint || d.kind !== kind || d.container !== container) return
+  const from = list.indexOf(d.name)
+  if (from < 0) return
+  // 插入位下标是"移除前"的，移除后位于其后的目标点要左移一位
+  const to = from < hint.index ? hint.index - 1 : hint.index
+  if (to === from) return
+  const next = [...list]
+  next.splice(from, 1)
+  next.splice(to, 0, d.name)
+  commitOrder(kind, container, next)
+}
+
+/** 给行绑定插入指示线样式类 */
+function hintClass(container: string, index: number, len: number): Record<string, boolean> {
+  const h = dropHint.value
+  if (!h || h.container !== container) return {}
+  return {
+    'drop-before': h.index === index,
+    'drop-after': h.index === len && index === len - 1,
+  }
 }
 
 // 搜索时：强制展开所有组和分类，便于看到结果
@@ -898,8 +1070,8 @@ function closeDqModal() {
 }
 
 onMounted(async () => {
-  // 先就绪排序偏好（服务端 → 镜像兜底），再选默认表应用已记住排序
-  await loadSortPrefs()
+  // 并行预热：排序偏好 + 左侧清单手工排序（都由服务端 → 本地镜像兜底）
+  await Promise.all([loadSortPrefs(), loadSidebarOrder()])
   loadTables()
 })
 </script>
@@ -914,6 +1086,15 @@ onMounted(async () => {
           <span style="color:#999;font-weight:400;font-size:12px;">{{ tables.length }} 张表</span>
         </div>
         <NInput v-model:value="tableKeyword" size="small" placeholder="搜索表名 / 注释" clearable style="margin-top:8px" />
+        <div v-if="hasCustomOrder" style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:11px;color:#C9A227;">已自定义排序</span>
+          <NPopconfirm positive-text="确定" negative-text="取消" @positive-click="resetSidebarOrder">
+            <template #trigger>
+              <NButton size="tiny" quaternary data-testid="btn-reset-order">恢复默认顺序</NButton>
+            </template>
+            确定清除全部手工排序，恢复按名称排列？
+          </NPopconfirm>
+        </div>
       </div>
       <div style="flex:1;overflow:auto;padding:6px 0;">
         <NSpin :show="loadingTables" size="small">
@@ -943,32 +1124,57 @@ onMounted(async () => {
             <!-- 二级分类与表 -->
             <div v-show="expandedGroups.has(g.key)" style="padding:0 0 4px 0;">
               <div
-                v-for="c in g.categories"
+                v-for="(c, ci) in g.categories"
                 :key="`${g.key}::${c.key}`"
               >
-                <!-- 二级分类头 -->
+                <!-- 二级分类头（可拖拽排序；仅多分类组显示） -->
                 <div
                   v-if="g.categories.length > 1 || c.key === '__未分类__'"
                   :data-testid="`cat-${g.key}-${c.key}`"
                   class="cat-head"
+                  draggable="true"
+                  title="拖动可调整分类顺序"
+                  :class="hintClass(g.key, ci, g.categories.length)"
                   style="display:flex;align-items:center;gap:4px;margin:0 6px;padding:4px 6px 4px 20px;border-radius:6px;cursor:pointer;user-select:none;font-size:11.5px;color:#5F5E5A;"
                   @click="toggleCategory(g.key, c.key)"
+                  @dragstart="onDragStart('cat', g.key, c.key, $event)"
+                  @dragend="onDragEnd"
+                  @dragover="onDragOver('cat', g.key, catKeys(g.categories), c.key, $event)"
+                  @drop="onDrop('cat', g.key, catKeys(g.categories), $event)"
                 >
                   <span style="font-size:9px;width:9px;display:inline-block;transition:transform 0.15s;color:#bbb;"
                         :style="expandedCategories.has(`${g.key}::${c.key}`) ? 'transform:rotate(90deg);' : ''">▶</span>
                   <span style="flex:1;">{{ c.name }}</span>
-                  <span style="font-size:10.5px;color:#bbb;">{{ c.tables.length }}</span>
+                  <span class="row-move">
+                    <button
+                      class="mv-btn" :disabled="ci === 0"
+                      :data-testid="`up-cat-${g.key}-${c.key}`"
+                      title="上移" @click.stop="moveItem('cat', g.key, catKeys(g.categories), ci, -1)"
+                    >↑</button>
+                    <button
+                      class="mv-btn" :disabled="ci === g.categories.length - 1"
+                      :data-testid="`down-cat-${g.key}-${c.key}`"
+                      title="下移" @click.stop="moveItem('cat', g.key, catKeys(g.categories), ci, 1)"
+                    >↓</button>
+                  </span>
+                  <span class="row-count" style="font-size:10.5px;color:#bbb;">{{ c.tables.length }}</span>
                 </div>
-                <!-- 表行 -->
+                <!-- 表行（可拖拽排序 + 悬停 ↑↓ 微调） -->
                 <div
                   v-show="g.categories.length === 1 || c.key === '__未分类__' || expandedCategories.has(`${g.key}::${c.key}`)"
-                  v-for="t in c.tables"
+                  v-for="(t, ti) in c.tables"
                   :key="t.name"
                   :data-testid="`tbl-${t.name}`"
                   class="tbl-row"
+                  draggable="true"
                   :title="dqRowTitle(t)"
+                  :class="hintClass(`${g.key}::${c.key}`, ti, c.tables.length)"
                   :style="rowStyle(g.categories.length, t.name)"
                   @click="selectTable(t.name)"
+                  @dragstart="onDragStart('table', `${g.key}::${c.key}`, t.name, $event)"
+                  @dragend="onDragEnd"
+                  @dragover="onDragOver('table', `${g.key}::${c.key}`, tableNames(c.tables), t.name, $event)"
+                  @drop="onDrop('table', `${g.key}::${c.key}`, tableNames(c.tables), $event)"
                 >
                   <span
                     v-if="dqRunAt"
@@ -983,7 +1189,20 @@ onMounted(async () => {
                       :style="current === t.name ? 'color:#7BA7D4;font-weight:400;' : 'color:#999;font-weight:400;'"
                     >{{ t.comment }}</span>
                   </div>
+                  <span class="row-move">
+                    <button
+                      class="mv-btn" :disabled="ti === 0"
+                      :data-testid="`up-tbl-${t.name}`"
+                      title="上移" @click.stop="moveItem('table', `${g.key}::${c.key}`, tableNames(c.tables), ti, -1)"
+                    >↑</button>
+                    <button
+                      class="mv-btn" :disabled="ti === c.tables.length - 1"
+                      :data-testid="`down-tbl-${t.name}`"
+                      title="下移" @click.stop="moveItem('table', `${g.key}::${c.key}`, tableNames(c.tables), ti, 1)"
+                    >↓</button>
+                  </span>
                   <span
+                    class="row-count"
                     style="font-size:11px;flex-shrink:0;align-self:flex-start;margin-top:1px;"
                     :style="current === t.name ? 'color:#7BA7D4;' : 'color:#b0b0b0;'"
                   >{{ fmtWan(t.rows_estimate) }}</span>
@@ -1721,5 +1940,54 @@ onMounted(async () => {
 }
 .tbl-row:hover {
   background: #f7f9fc;
+}
+/* 手工排序：悬停时用 ↑↓ 按钮替换右侧行数，常态布局不变 */
+.row-move {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.tbl-row:hover .row-move,
+.cat-head:hover .row-move {
+  display: inline-flex;
+}
+.tbl-row:hover .row-count,
+.cat-head:hover .row-count {
+  display: none;
+}
+.mv-btn {
+  width: 17px;
+  height: 17px;
+  line-height: 1;
+  padding: 0;
+  border: 1px solid #d9e3ef;
+  border-radius: 4px;
+  background: #fff;
+  color: #185FA5;
+  font-size: 11px;
+  cursor: pointer;
+}
+.mv-btn:hover:not(:disabled) {
+  background: #e6f1fb;
+  border-color: #185fa5;
+}
+.mv-btn:disabled {
+  color: #cccccc;
+  border-color: #eeeeee;
+  cursor: default;
+}
+/* 拖拽插入位置指示线（2px 深空蓝） */
+.tbl-row.drop-before,
+.cat-head.drop-before {
+  box-shadow: inset 0 2px 0 #185fa5;
+}
+.tbl-row.drop-after,
+.cat-head.drop-after {
+  box-shadow: inset 0 -2px 0 #185fa5;
+}
+.tbl-row[draggable='true']:active,
+.cat-head[draggable='true']:active {
+  cursor: grabbing;
 }
 </style>
