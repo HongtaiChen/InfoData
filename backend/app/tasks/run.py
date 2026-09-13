@@ -32,6 +32,9 @@ from ..collectors.data_quality_check import DataQualityCheckCollector
 from ..collectors.stock_status_sync import StockStatusSyncCollector
 from ..collectors.stock_company_sync import StockCompanySyncCollector
 from ..collectors.daily_recon import DailyReconCollector
+from ..collectors.ths_dividend_sync import ThsDividendSyncCollector
+from ..collectors.margin_sync import MarginSyncCollector
+from ..collectors.jgdy_sync import JgdySyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -397,6 +400,63 @@ def run_stock_company_sync(params: dict) -> int:
     return result["records_written"]
 
 
+# ============ 历史死表恢复采集（2026-09-13，P0+P1 批次） ============
+
+def run_ths_dividend_sync(params: dict) -> int:
+    """分红送配同步（ths_stock_dividend，同花顺逐股增量补齐）
+
+    params: max_stocks(0=全部) / sleep_sec(0.12) / retry(1) / timeout_sec(30 单只调用超时)
+    """
+    p = _task_params(params, {"max_stocks": 0, "sleep_sec": 0.12, "retry": 1, "timeout_sec": 30})
+    collector = ThsDividendSyncCollector(
+        max_stocks=int(p.get("max_stocks", 0)),
+        sleep_sec=float(p.get("sleep_sec", 0.12)),
+        retry=int(p.get("retry", 1)),
+        timeout_sec=float(p.get("timeout_sec", 30)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 分红送配 {result['error_count']} 只失败（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_margin_sync(params: dict) -> int:
+    """融资融券同步（securities_margin，沪+深+北三市合计）
+
+    params: max_days(0=全部) / sleep_sec(0.25) / timeout_sec(60 单次调用超时) / bse_retry(2)
+    """
+    p = _task_params(params, {"max_days": 0, "sleep_sec": 0.25, "timeout_sec": 60, "bse_retry": 2})
+    collector = MarginSyncCollector(
+        max_days=int(p.get("max_days", 0)),
+        sleep_sec=float(p.get("sleep_sec", 0.25)),
+        timeout_sec=float(p.get("timeout_sec", 60)),
+        bse_retry=int(p.get("bse_retry", 2)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 融资融券 {result['error_count']} 项异常（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_jgdy_sync(params: dict) -> int:
+    """机构调研同步（stock_jgdy_detail，东财按公告日期起点单次拉取）
+
+    params: overlap_days(30) / first_lookback_days(365) / timeout_sec(60)
+    注：stock_jgdy_tj_em 的 date 参数是「公告日期起点」而非接待日期，
+        单次调用即返回该起点之后的全部记录，故无需逐日遍历。
+    """
+    p = _task_params(params, {"overlap_days": 30, "first_lookback_days": 365, "timeout_sec": 60})
+    collector = JgdySyncCollector(
+        overlap_days=int(p.get("overlap_days", 30)),
+        first_lookback_days=int(p.get("first_lookback_days", 365)),
+        timeout_sec=float(p.get("timeout_sec", 60)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 机构调研 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -426,6 +486,10 @@ TASKS = {
     # 2026-09-05 股票档案域（Baostock 上市/退市状态 + 巨潮公司档案）
     "stock_status_sync": run_stock_status_sync,
     "stock_company_sync": run_stock_company_sync,
+    # 2026-09-13 历史死表恢复采集（分红送配 / 融资融券 / 机构调研）
+    "ths_dividend_sync": run_ths_dividend_sync,
+    "margin_sync": run_margin_sync,
+    "jgdy_sync": run_jgdy_sync,
 }
 
 
