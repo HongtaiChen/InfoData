@@ -55,9 +55,10 @@ def _call_with_timeout(fn, timeout_s: float):
 
 RUN_STEPS = [
     {"no": 1, "name": "构建同步清单", "params": "中证系 7 + 深证系 4 + 北证50（上证指数派生不入表）"},
-    {"no": 2, "name": "逐指数拉取成分", "params": "csindex 成分+权重 → cni 样本 → index_members 精确反查"},
-    {"no": 3, "name": "快照重建", "params": "DELETE 旧快照 → 批量 INSERT（uk_index_stock 幂等）"},
-    {"no": 4, "name": "结果巡检", "params": "逐指数行数汇总，失败项计入 errors"},
+    {"no": 2, "name": "逐指数拉取成分", "params": "csindex 成分+权重 → cni 样本（列名 样本简称）→ index_members 精确反查"},
+    {"no": 3, "name": "名称兜底回填", "params": "stock_name 为空时用 stock_info.short_name 补齐（防源列名变动）"},
+    {"no": 4, "name": "快照重建", "params": "DELETE 旧快照 → 批量 INSERT（uk_index_stock 幂等）"},
+    {"no": 5, "name": "结果巡检", "params": "逐指数行数汇总，失败项计入 errors"},
 ]
 
 # 中证系：成分 + 权重双接口
@@ -146,7 +147,8 @@ class IndexConsSyncCollector:
                 w = None
             rows.append({
                 "stock_code": sc,
-                "stock_name": str(r.get("单元格名称") or r.get("样本名称") or "") or None,
+                # 国证接口实际列名为「样本简称」（2026-09-13 修复：原先读 单元格名称/样本名称 → 750 行名称全空）
+                "stock_name": str(r.get("样本简称") or r.get("单元格名称") or r.get("样本名称") or "") or None,
                 "weight": w,
                 "trade_date": date.today().isoformat(),
             })
@@ -166,6 +168,30 @@ class IndexConsSyncCollector:
             {"stock_code": sc, "stock_name": sn, "weight": None, "trade_date": date.today().isoformat()}
             for sc, sn in cur.fetchall()
         ]
+
+    def _backfill_names(self, cur, rows: list[dict]) -> int:
+        """名称兜底回填：源接口列名变动导致 stock_name 为空时，用本地 stock_info.short_name 补齐。
+        返回回填条数（0 表示源名称完整）。"""
+        missing = [r["stock_code"] for r in rows if not r.get("stock_name")]
+        if not missing:
+            return 0
+        name_map: dict[str, str] = {}
+        for i in range(0, len(missing), 900):
+            chunk = missing[i: i + 900]
+            ph = ",".join(["%s"] * len(chunk))
+            cur.execute(
+                f"SELECT stock_code, short_name FROM stock_info WHERE stock_code IN ({ph})",
+                chunk,
+            )
+            for sc, sn in cur.fetchall():
+                if sn:
+                    name_map[sc] = sn
+        filled = 0
+        for r in rows:
+            if not r.get("stock_name") and r["stock_code"] in name_map:
+                r["stock_name"] = name_map[r["stock_code"]]
+                filled += 1
+        return filled
 
     # ---------- 主流程 ----------
     def run(self) -> dict:
@@ -204,6 +230,10 @@ class IndexConsSyncCollector:
                     if not rows:
                         errors.append(f"{code} {name} 成分为空")
                         continue
+
+                    filled = self._backfill_names(cur, rows)
+                    if filled:
+                        notes.append(f"{name} 名称兜底回填 {filled} 只")
 
                     cur.execute("DELETE FROM index_constituents WHERE index_code=%s", (code,))
                     cur.executemany(
