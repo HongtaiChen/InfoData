@@ -110,40 +110,61 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 无采集任务（历史导入/静态/系统） ----
     ("stock_market_daily_ex", "行情",
      "历史导入",
-     "日K线除权扩展表；2026-09-13 实证与 stock_market_daily 同日同股 open/high/low/close/volume/amount 逐字段完全相同（冗余副本，约 3197MB），维持停更、待归档决策。",
-     [], "冗余副本待归档"),
+     "日K线**不复权原始价**（1,689 万行 / 5,779 只 / 1990-12-19~2025-09-19）："
+     "2026-09-13 全表逐字段比对推翻「冗余副本」结论——公共键 1,689 万行中 85% 六字段不同，"
+     "实为复权口径差异（daily=前复权 qfq，有 58.7 万行负价退化区；ex=不复权原始价）；"
+     "另含 109 个 daily 缺失的键（深 B 200020/200429/200726、北交所 430556 老三板等）。"
+     "库内唯一原始价基准，可作为复权因子重建依据，**不可归档**，维持冻结监护。",
+     [], "不复权原始价 · 不可归档"),
     ("stock_market_daily_bak_20250802", "行情",
      "备份",
      "2025-08-02 日线数据备份（一次性），只读归档勿写入。",
      [], "备份表待归档"),
     ("futures_spot_price", "商品",
-     "历史导入",
-     "现货/期货价格（136k 行）；2025-09-15 后无任务。",
-     [], "停更"),
+     "100ppi(akshare futures_spot_price_daily)",
+     "期货现货价格与基差（54 品种，2012-01~）：futures_sync 分块拉取（chunk_days≤30，"
+     "源单块 60~165s）+ 每块独立提交 + 单块 180s 超时；幂等按本地 MAX(trade_date)+1 续跑"
+     "（本表同日多快照且值不同，**物理上不可建唯一索引**）；单位统一元/吨。"
+     "派生列 main_basis_high/low/avg_180d 为日历 180 天滚动窗口（本地历史 basis ∪ 本轮新值）。"
+     "每工作日 22:20。",
+     ["futures_sync"], ""),
     ("stock_capital_flow", "资金",
-     "历史导入",
-     "日度资金流向（706k 行）；2025-09-19 后无任务。",
-     [], "停更"),
+     "历史导入;东财(akshare stock_capital_flow, 未启用)",
+     "日度资金流向（748k 行，停更于 2025-09-19）：capital_flow_sync 已实现"
+     "（逐股滚动 + uk_stock_date 幂等）但**默认禁用**——东财域名在本机沙箱不可达，"
+     "且「主力净流入=超大单+大单」仅 90~93.8% 成立、源口径未与本地表完全对齐，待复核后启用。",
+     ["capital_flow_sync"], "采集器已实现未启用（enabled=0）"),
     ("securities_margin", "资金",
      "上交所;深交所;北交所(akshare)",
      "沪深北三市两融合计：rzye=融资余额、rqye=融券余额、rzrqye=rzye+rqye、rzrqyecz=rzye-rqye（本地派生）。margin_sync 每日 09:00 从本地 MAX(trade_date) 次日增量补齐；单位归一——上交所为元、深交所为亿元(×1e8)、北交所取明细求和(元)。",
      ["margin_sync"], ""),
     ("stock_financial_abstract_ths", "财务",
-     "历史导入",
-     "股票关键指标（322k 行）；2025-06-30 后无任务。",
-     [], "停更"),
+     "同花顺(akshare stock_financial_abstract_ths)",
+     "财务关键指标 8 列（34.4 万行 / 5,854 只）：financial_abstract_sync 每日 23:00 "
+     "只补「MAX(报告期) < max(本地全局 MAX, 披露日历推算最近期)」的滞后股票；"
+     "候选池排除退市股（其报告期恒滞后，会永久占满 max_stocks 名额）；"
+     "缺失值清洗——akshare 对缺失返回布尔 False（非 NaN）→ 统一 NULL，'--' 同处理。"
+     "uk_stock_report 幂等 upsert。",
+     ["financial_abstract_sync"], ""),
     ("ths_stock_dividend", "财务",
      "同花顺(akshare stock_fhps_detail_ths)",
      "分红送配明细（11 业务列与源列一一对应）：ths_dividend_sync 每月 1/15 日 03:00 逐股增量补齐，仅插入源有而本地缺的 report_period，不重写既有行；被 analysis/dividend 分红率分析消费（前端「股息率排行」）。",
      ["ths_dividend_sync"], "含历史重复行约 9.5 万，粒度待专项确认"),
     ("stock_shares", "基本面",
-     "历史导入",
-     "股本信息（140k 行）；2025-08-16 后无任务。",
-     [], "停更"),
+     "巨潮资讯(akshare stock_share_change_cninfo)",
+     "股本变动明细（事件型表，源单位万股→×10000 存股数）：stock_shares_sync 每日 22:40 "
+     "逐股滚动刷新——事件型表 change_date 常年不变，故按 MAX(update_time) 判「久未刷新」"
+     "（refresh_days=30）轮转；退市股源侧无记录（akshare 抛 KeyError 公告日期）归一为"
+     "「无数据」，候选池亦排除；upsert 覆盖（巨潮会回溯修订）。字段口径实证："
+     "list_a_shares←人民币普通股（A 股流通股，非「已流通股份」）、limit_shares←流通受限股份。",
+     ["stock_shares_sync"], ""),
     ("stock_industry_sw", "行业",
-     "历史导入",
-     "申万一二级行业分类（6.9k 行）；2025-08-16 后无任务。",
-     [], "停更"),
+     "申万宏源(akshare index_component_sw)",
+     "申万一二级成分快照（10,428 行 / 5,214 只 / 162 行业 = 31 一级 + 131 二级）："
+     "sw_industry_sync 每月 1 日 03:30 整体重建（DELETE+INSERT 小事务，调样即全量刷新）；"
+     "目录来自 sw_index_first/second_info 遍历，覆盖率 <85% 判源异常回滚。"
+     "uk_stock_level（stock_code+industry_type）幂等。",
+     ["sw_industry_sync"], ""),
     ("stock_jgdy_detail", "调研",
      "东财(akshare stock_jgdy_tj_em)",
      "机构调研明细：jgdy_sync 每日 22:00 从本地 MAX(announcement_date) 回溯 30 天单次拉取增量（该接口 date 参数是「公告日期起点」而非接待日期，一次调用返回区间内全部记录）；按四元组判重跳过。",
@@ -155,7 +176,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 系统表 ----
     ("task_config", "系统",
      "手动维护;作业监控前端",
-     "采集任务配置（15 任务：enabled/cron/params）；作业监控栏目可热改，调度器实时同步。",
+     "采集任务配置（28 任务：enabled/cron/params）；作业监控栏目可热改，调度器实时同步。",
      [], ""),
     ("task_runs", "系统",
      "自产(TaskRecorder)",
@@ -163,7 +184,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      [], ""),
     ("dq_rules", "质量",
      "手动维护;seed_dq_rules",
-     "数据质量规则配置（31 条 / 10 类检查器）；数据质量栏目可维护。",
+     "数据质量规则配置（69 条 / 11 类检查器，daily 64 + weekly 5）；数据质量栏目可维护。",
      [], ""),
     ("stock_company_profile_bak_20260905", "资料",
      "备份(巨潮)",
@@ -378,6 +399,77 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                      "receptionist_date", "announcement_date"],
             "note": "接口 date 参数为「公告日期起点」，单次调用返回区间内全部记录；"
                     "按 (stock_code, receptionist_date, received_method, received_institution_count) 判重",
+        },
+    },
+    # ---- 2026-09-13 死表恢复采集 第 3/4 批（P2 + P3）----
+    "futures_spot_price": {
+        "futures_sync": {
+            "source": "akshare futures_spot_price_daily(100ppi)",
+            "cols": ["trade_date", "good_name", "spot_price", "main_contract_code",
+                     "main_contract_price", "main_contract_basis", "main_contract_change_pct",
+                     "main_basis_high_180d", "main_basis_low_180d", "main_basis_avg_180d"],
+            "derived": ["main_contract_basis", "main_contract_change_pct",
+                        "main_basis_high_180d", "main_basis_low_180d", "main_basis_avg_180d"],
+            "note": "分块拉取（chunk_days≤30）+ 每块独立提交 + 单块 180s 超时；"
+                    "幂等按 MAX(trade_date)+1 续跑（同日多快照不可建唯一索引）；单位统一元/吨",
+            "col_notes": {
+                "main_contract_basis": "现货价 − 主力合约价（源基差列口径自相矛盾，统一本地重算）",
+                "main_contract_change_pct": "基差率 = (现货 − 主力价) / 现货 × 100",
+                "main_basis_high_180d": "日历 180 天窗口内基差最大值（本地历史 basis ∪ 本轮新值）",
+                "main_basis_low_180d": "日历 180 天窗口内基差最小值",
+                "main_basis_avg_180d": "日历 180 天窗口内基差算术均值",
+            },
+        },
+    },
+    "stock_industry_sw": {
+        "sw_industry_sync": {
+            "source": "akshare index_component_sw(申万)",
+            "cols": ["stock_code", "sw_code", "industry_name", "industry_type", "source"],
+            "note": "31 一级 + 131 二级逐行业遍历成分；DELETE+INSERT 小事务整体重建"
+                    "（分类会调样，全量刷新最稳）；覆盖率 <85% 判源异常回滚",
+            "col_notes": {
+                "industry_type": "行业级别标识（一/二级）",
+            },
+        },
+    },
+    "stock_financial_abstract_ths": {
+        "financial_abstract_sync": {
+            "source": "akshare stock_financial_abstract_ths(同花顺)",
+            "cols": ["stock_code", "stock_name", "report_date", "net_profit", "net_profit_yoy_gr",
+                     "total_operating_revenue", "total_operating_yoy_gr",
+                     "basic_eps", "net_asset_ps", "roe"],
+            "note": "只补滞后股票（MAX(报告期) < max(本地全局 MAX, 披露日历推算最近期)）；"
+                    "候选池排除退市股；uk_stock_report 幂等 upsert（财务数据会追溯调整）",
+            "col_notes": {
+                "net_profit": "源缺失值清洗：akshare 返回布尔 False（非 NaN）→ NULL，'--' 同处理",
+                "basic_eps": "DECIMAL(8,2)，'--'/False 清洗为 NULL",
+                "net_asset_ps": "DECIMAL(8,2)，'--'/False 清洗为 NULL",
+            },
+        },
+    },
+    "stock_shares": {
+        "stock_shares_sync": {
+            "source": "akshare stock_share_change_cninfo(巨潮)",
+            "cols": ["stock_code", "change_date", "total_shares", "limit_shares",
+                     "list_a_shares", "change_reason"],
+            "note": "逐股滚动刷新（事件型表按 MAX(update_time) 判久未刷新，refresh_days=30）；"
+                    "源单位万股 ×10000 存股数；upsert 覆盖（巨潮会回溯修订）；"
+                    "退市股源无记录（akshare 抛 KeyError 公告日期）归一为「无数据」",
+            "col_notes": {
+                "total_shares": "← 源「总股本」（万股 ×10000，4 位小数）",
+                "limit_shares": "← 源「流通受限股份」（空按 0）",
+                "list_a_shares": "← 源「人民币普通股」= A 股流通股（不是「已流通股份」；"
+                                 "000002 逐位实证，B 股并存时 ≠ 总股本 − 限售）",
+            },
+        },
+    },
+    "stock_capital_flow": {
+        "capital_flow_sync": {
+            "source": "akshare stock_capital_flow(东财)",
+            "cols": ["stock_code", "short_name", "trade_date", "main_net_inflow", "max_net_inflow",
+                     "lg_net_inflow", "mid_net_inflow", "sm_net_inflow"],
+            "note": "已实现但默认禁用（enabled=0）：东财域沙箱不可达；"
+                    "「主力净流入=超大单+大单」仅 90~93.8% 成立，源口径待复核后启用",
         },
     },
 }

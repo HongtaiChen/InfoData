@@ -18,6 +18,10 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
 - RECOVERED_RULES：2026-09-13 死表恢复采集批次 —— 3 张已完成采集器落地并全量补齐
                    的表（分红送配 / 融资融券 / 机构调研），从 FROZEN 升级为完整规则
                    （含 freshness），并由 RETIRED_RULES 清理其旧冻结规则
+- RECOVERED_RULES_B34：2026-09-13 死表恢复采集 第 3/4 批 —— 4 张表
+                   （期货现货 / 申万行业 / 财务摘要 / 股本变动）从 FROZEN 升级为完整规则。
+                   资金流向（东财域不可达）仍留 FROZEN。
+                   注：futures_spot_price 无唯一索引（同日多快照），刻意不配 unique_index。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -214,16 +218,22 @@ COVERAGE_RULES = [
      "关联程度应落在 1~10（当前 22 行越界，清理后启用）"),
 ]
 
-# ---------- B. 历史导入表冻结监护（原 10 张 → 现存 7 张）----------
+# ---------- B. 历史导入表冻结监护（原 10 张 → 现存 3 张）----------
 # 设计要点：这些表**不加 freshness/date_floor**——期望日期永远对不上，加了必红。
 # 真正风险是「被误删/误清」，故只配防清空类规则（全部走索引，秒级，可进 daily 组）。
-# 2026-09-13 更新：stock_market_daily_ex 经实证与 daily 逐字段相同（冗余副本），
-#   维持冻结；ths_stock_dividend / securities_margin / stock_jgdy_detail 三张
-#   已恢复采集 → 迁出本组，见下方 RECOVERED_RULES。
+# 2026-09-13 更新：ths_stock_dividend / securities_margin / stock_jgdy_detail 三张
+#   已恢复采集 → 迁出本组，见下方 RECOVERED_RULES；futures/sw/fin/shares 四张
+#   已恢复采集 → 迁出本组，见下方 RECOVERED_RULES_B34。
+# ⚠️ stock_market_daily_ex 归档评估结论（2026-09-13 全表逐字段比对，**推翻此前抽样结论**）：
+#   公共键 16,891,204 行中 14,360,378 行（85%）六字段不同，253 万行全等；
+#   抽样验证 daily.close 为前复权（2007 年万科 0.17~15 元、存在 58.7 万行负价退化区），
+#   ex.close 为不复权原始价（同期 21~39 元）——**两表是复权口径差异，非冗余副本**，
+#   且 ex 另有 109 个 daily 缺失的键（B 股 200020/200429/200726、北交所 430556 等）。
+#   **不能归档**，维持冻结监护；它是库内唯一保留原始价的表，可作为后续复权因子重建的基准。
 FROZEN_RULES = [
     ("frozen_daily_ex_rows", "stock_market_daily_ex", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
-     "冻结监护·除权日线：最新日切片行数下限（与 daily 逐字段相同，为冗余副本，待归档决策）"),
+     "冻结监护·除权日线：最新日切片行数下限（**不复权原始价**，与 daily 前复权口径不同、非冗余副本，2026-09-13 全表比对推翻冗余结论；库内唯一原始价基准，不可归档）"),
     ("frozen_capital_flow_rows", "stock_capital_flow", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
      "冻结监护·资金流向：最新日切片行数下限（停更于 2025-09，防误清空；东财域受限待复测）"),
@@ -269,11 +279,75 @@ RECOVERED_RULES = [
      "机构调研明细总行数下限（恢复采集后 4.5 万+）"),
 ]
 
+# ---------- D. 死表恢复采集 · 第 3/4 批（2026-09-13 新增，4 张）----------
+# 这 4 张原属 FROZEN 组，完成采集器落地（futures_sync / sw_industry_sync /
+# financial_abstract_sync / stock_shares_sync）并全量补齐后升级为完整规则。
+# 阈值全部为 dry-run/实测校准（2026-09-13），确认「上线即 pass」：
+#   futures_spot_price            149,514 行 / 2012-01~2026-09-11 / 56 品种 / 每日恒定 54 行
+#   stock_industry_sw              10,428 行 / 5,214 只 / 162 行业（31 一级 + 131 二级）
+#   stock_financial_abstract_ths  344,049 行 / 5,854 只 / MAX 报告期 2026-06-30
+#   stock_shares                   179,396 行 / 5,744 只 / MAX 变动日 2026-09-11
+# 未恢复：stock_capital_flow（东财域不可达 + 口径待复核）继续留在 FROZEN 组。
+#
+# ⚠️ futures_spot_price **无唯一索引**（同日多快照且值不同，物理上不可建），
+#    故本组刻意不给它配 unique_index 规则（配了必红）。
+RECOVERED_RULES_B34 = [
+    # -- 期货现货价格与基差 --
+    ("futures_freshness", "futures_spot_price", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 4}, "warning", 1,
+     "期现价格对齐交易日历（源 100ppi 日频；含周末/假期缓冲，容错 4 日）"),
+    ("futures_rows", "futures_spot_price", "row_count_total",
+     {"min_rows": 130000}, "warning", 1,
+     "期现价格总行数下限（防误清空；实测 14.95 万，日增 ~54）"),
+    ("futures_rows_latest", "futures_spot_price", "row_count_slice",
+     {"date_col": "trade_date", "min_rows": 50}, "critical", 1,
+     "最新日期品种数下限（近 250 日实测恒定 54/日；防‘假成功’只写几行）"),
+    # -- 申万行业分类 --
+    ("sw_rows", "stock_industry_sw", "row_count_total",
+     {"min_rows": 6000}, "warning", 1,
+     "申万行业分类总行数下限（整体重建；实测 10,428 = 5,214 只 × 两级行业）"),
+    ("sw_stock_code", "stock_industry_sw", "regex_count",
+     {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1,
+     "成分股票代码格式校验"),
+    ("sw_uniq", "stock_industry_sw", "unique_index",
+     {"cols": ["stock_code", "industry_type"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_stock_level（同一股票同一级别行业唯一）"),
+    # -- 财务关键指标 --
+    ("fin_abstract_rows", "stock_financial_abstract_ths", "row_count_total",
+     {"min_rows": 300000}, "warning", 1,
+     "财务摘要总行数下限（稀疏事件表按报告期计，实测 34.4 万；不适用日切片规则）"),
+    ("fin_abstract_floor", "stock_financial_abstract_ths", "date_floor",
+     {"date_col": "report_date", "days_back": 230}, "warning", 1,
+     "财务报告期下限：最新报告期不得早于 230 天前（季度披露 + 年报/一季报 4-30 截止的极端空档；防整体停更）"),
+    ("fin_abstract_uniq", "stock_financial_abstract_ths", "unique_index",
+     {"cols": ["stock_code", "report_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_stock_report"),
+    # -- 股本变动 --
+    ("shares_rows", "stock_shares", "row_count_total",
+     {"min_rows": 140000}, "warning", 1,
+     "股本变动总行数下限（防误清空；实测 17.9 万并在补齐中）"),
+    ("shares_floor", "stock_shares", "date_floor",
+     {"date_col": "change_date", "days_back": 45}, "warning", 1,
+     "股本变动日期下限：最新变动日不得早于 45 天前（事件型稀疏表——月度事件量 13~1804 不等，留足空档）"),
+    ("shares_total_positive", "stock_shares", "where_count",
+     {"where": "total_shares <= 0", "max_count": 0}, "warning", 1,
+     "总股本必须为正（采集器已挡 total_shares IS NULL/<=0，此处为入库后复核）"),
+    ("shares_uniq", "stock_shares", "unique_index",
+     {"cols": ["stock_code", "change_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_stock_date"),
+]
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
-    "frozen_dividend_rows",   # → dividend_fresh + dividend_rows
-    "frozen_margin_rows",     # → margin_freshness + margin_rows
-    "frozen_jgdy_rows",       # → jgdy_fresh + jgdy_rows
+    "frozen_dividend_rows",       # → dividend_fresh + dividend_rows
+    "frozen_margin_rows",         # → margin_freshness + margin_rows
+    "frozen_jgdy_rows",           # → jgdy_fresh + jgdy_rows
+    # 2026-09-13 第 3/4 批恢复 → 升级为 RECOVERED_RULES_B34 完整规则
+    "frozen_futures_rows",        # → futures_freshness + futures_rows + futures_rows_latest
+    "frozen_sw_industry_rows",    # → sw_rows + sw_stock_code + sw_uniq
+    "frozen_fin_abstract_rows",   # → fin_abstract_rows + fin_abstract_floor + fin_abstract_uniq
+    "frozen_shares_rows",         # → shares_rows + shares_floor + shares_total_positive + shares_uniq
+    # 保留：frozen_capital_flow_rows（东财域不可达，采集器已实现但默认禁用）
 ]
 
 
@@ -283,9 +357,10 @@ def main():
         all_rules = (
             [(r, "daily") for r in RULES]
             + [(r, "weekly") for r in WEEKLY_RULES]
-            + [(r, "daily") for r in COVERAGE_RULES]   # 2026-09-13 活跃表补全
-            + [(r, "daily") for r in FROZEN_RULES]     # 2026-09-13 历史表冻结监护
-            + [(r, "daily") for r in RECOVERED_RULES]  # 2026-09-13 死表恢复采集（含 freshness）
+            + [(r, "daily") for r in COVERAGE_RULES]      # 2026-09-13 活跃表补全
+            + [(r, "daily") for r in FROZEN_RULES]        # 2026-09-13 历史表冻结监护
+            + [(r, "daily") for r in RECOVERED_RULES]     # 2026-09-13 死表恢复（第 1 批）
+            + [(r, "daily") for r in RECOVERED_RULES_B34]  # 2026-09-13 死表恢复（第 3/4 批）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:
