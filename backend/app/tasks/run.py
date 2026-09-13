@@ -35,6 +35,12 @@ from ..collectors.daily_recon import DailyReconCollector
 from ..collectors.ths_dividend_sync import ThsDividendSyncCollector
 from ..collectors.margin_sync import MarginSyncCollector
 from ..collectors.jgdy_sync import JgdySyncCollector
+# 2026-09-13 历史死表恢复采集 · 第 3/4 批（P2 行情域 + P3 逐股型域）
+from ..collectors.futures_sync import FuturesSpotSyncCollector
+from ..collectors.sw_industry_sync import SwIndustrySyncCollector
+from ..collectors.financial_abstract_sync import FinancialAbstractSyncCollector
+from ..collectors.stock_shares_sync import StockSharesSyncCollector
+from ..collectors.capital_flow_sync import CapitalFlowSyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -457,6 +463,122 @@ def run_jgdy_sync(params: dict) -> int:
     return result["records_written"]
 
 
+# ============ 历史死表恢复采集（2026-09-13，第 3 批 P2：行情域） ============
+
+def run_futures_sync(params: dict) -> int:
+    """期货现货价格与基差同步（futures_spot_price，akshare 100ppi 源）
+
+    params: chunk_days(30) / max_days(0=补到最新) / sleep_sec(0.5) /
+            timeout_sec(180 单块超时) / first_lookback_days(365) / from_date(可空，运维回补起点)
+    注：源单次调用 60~165s（100ppi 重试 5 次），故按 chunk_days 分块 + 每块独立提交 + 单块超时；
+        本表同日存在多快照且值不同，**不可建唯一索引**，幂等靠 MAX(trade_date)+1 续跑。
+        派生列 main_basis_high/low/avg_180d 为日历 180 天滚动窗口。
+    """
+    p = _task_params(params, {"chunk_days": 30, "max_days": 0, "sleep_sec": 0.5,
+                              "timeout_sec": 180, "first_lookback_days": 365,
+                              "from_date": None})
+    collector = FuturesSpotSyncCollector(
+        chunk_days=int(p.get("chunk_days", 30)),
+        max_days=int(p.get("max_days", 0)),
+        sleep_sec=float(p.get("sleep_sec", 0.5)),
+        timeout_sec=float(p.get("timeout_sec", 180)),
+        first_lookback_days=int(p.get("first_lookback_days", 365)),
+        from_date=p.get("from_date"),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 期货现货 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_sw_industry_sync(params: dict) -> int:
+    """申万行业分类快照同步（stock_industry_sw，31 一级 + 131 二级成分）
+
+    params: sleep_sec(0.15) / timeout_sec(30) / min_coverage(0.85 覆盖率护栏)
+    注：小事务 DELETE+INSERT 整体重建（分类会调样），覆盖率低于 min_coverage 直接判定源异常并回滚。
+    """
+    p = _task_params(params, {"sleep_sec": 0.15, "timeout_sec": 30, "min_coverage": 0.85})
+    collector = SwIndustrySyncCollector(
+        sleep_sec=float(p.get("sleep_sec", 0.15)),
+        timeout_sec=float(p.get("timeout_sec", 30)),
+        min_coverage=float(p.get("min_coverage", 0.85)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 申万行业 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+# ============ 历史死表恢复采集（2026-09-13，第 4 批 P3：逐股型） ============
+
+def run_financial_abstract_sync(params: dict) -> int:
+    """财务关键指标同步（stock_financial_abstract_ths，同花顺逐股增量）
+
+    params: max_stocks(400 本轮上限) / sleep_sec(0.12) / timeout_sec(30) / full_sweep(全池重扫)
+    注：只补「MAX(报告期) < max(本地全局 MAX, 披露日历推算最近期)」的滞后股票；
+        候选池已排除退市股（其报告期恒滞后，会永久占满 max_stocks 名额）。
+    """
+    p = _task_params(params, {"max_stocks": 400, "sleep_sec": 0.12,
+                              "timeout_sec": 30, "full_sweep": False})
+    collector = FinancialAbstractSyncCollector(
+        max_stocks=int(p.get("max_stocks", 400)),
+        sleep_sec=float(p.get("sleep_sec", 0.12)),
+        timeout_sec=float(p.get("timeout_sec", 30)),
+        full_sweep=bool(p.get("full_sweep", False)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 财务摘要 {result['error_count']} 只失败（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_stock_shares_sync(params: dict) -> int:
+    """股本变动同步（stock_shares，巨潮逐股滚动）
+
+    params: max_stocks(400 本轮上限) / refresh_days(30) / sleep_sec(0.12) /
+            timeout_sec(30) / full_sweep(全池重扫)
+    注：事件型表，data_col(change_date) 常年不变，故以 update_time 判「久未刷新」；
+        退市股源侧无记录（akshare 抛 KeyError 公告日期）已归一为「无数据」，候选池亦排除。
+    """
+    p = _task_params(params, {"max_stocks": 400, "refresh_days": 30, "sleep_sec": 0.12,
+                              "timeout_sec": 30, "full_sweep": False})
+    collector = StockSharesSyncCollector(
+        max_stocks=int(p.get("max_stocks", 400)),
+        refresh_days=int(p.get("refresh_days", 30)),
+        sleep_sec=float(p.get("sleep_sec", 0.12)),
+        timeout_sec=float(p.get("timeout_sec", 30)),
+        full_sweep=bool(p.get("full_sweep", False)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 股本变动 {result['error_count']} 只失败（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_capital_flow_sync(params: dict) -> int:
+    """资金流向同步（stock_capital_flow，东财逐股）
+
+    params: max_stocks(400) / refresh_days(7) / sleep_sec(0.12) /
+            timeout_sec(30) / full_sweep(False)
+    ⚠️ 2026-09-13 状态：**默认禁用**（task_config.enabled=0）。原因：东财域名在本机
+       沙箱环境不可达，且「主力净流入 = 超大单 + 大单」仅 90~93.8% 成立，
+       源口径未完全对齐本地表 → 先实现不启用，待网络放行 + 口径复核后再开。
+    """
+    p = _task_params(params, {"max_stocks": 400, "refresh_days": 7, "sleep_sec": 0.12,
+                              "timeout_sec": 30, "full_sweep": False})
+    collector = CapitalFlowSyncCollector(
+        max_stocks=int(p.get("max_stocks", 400)),
+        refresh_days=int(p.get("refresh_days", 7)),
+        sleep_sec=float(p.get("sleep_sec", 0.12)),
+        timeout_sec=float(p.get("timeout_sec", 30)),
+        full_sweep=bool(p.get("full_sweep", False)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 资金流向 {result['error_count']} 只失败（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -490,6 +612,13 @@ TASKS = {
     "ths_dividend_sync": run_ths_dividend_sync,
     "margin_sync": run_margin_sync,
     "jgdy_sync": run_jgdy_sync,
+    # 2026-09-13 历史死表恢复采集 · 第 3 批 P2（期货现货 / 申万行业）
+    "futures_sync": run_futures_sync,
+    "sw_industry_sync": run_sw_industry_sync,
+    # 2026-09-13 历史死表恢复采集 · 第 4 批 P3（财务摘要 / 股本变动 / 资金流向）
+    "financial_abstract_sync": run_financial_abstract_sync,
+    "stock_shares_sync": run_stock_shares_sync,
+    "capital_flow_sync": run_capital_flow_sync,
 }
 
 
