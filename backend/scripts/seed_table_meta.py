@@ -57,7 +57,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["market_current_sync"], ""),
     ("dc_index_market", "指数",
      "中证官网;国证+腾讯;东财",
-     "指数日线（21 个主流指数：宽基 9 / 风格 6 / 热点 5 / 北证 1）：中证官网主源含全字段，国证+腾讯合并链（OHLCV 腾讯、成交额国证），东财降级；每工作日 18:30 增量。",
+     "指数日线（21 个主流指数：宽基 10 / 进攻 8 / 防守 3）：中证官网主源含全字段，国证+腾讯合并链（OHLCV 腾讯、成交额国证），东财降级；每工作日 18:30 增量。",
      ["index_market_sync"], ""),
     ("bond_profit_daily", "债券",
      "中债;美债(akshare bond_zh_us_rate)",
@@ -286,7 +286,7 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
             "cols": ["index_code", "index_name", "trade_date", "open", "high", "low", "close",
                      "volume", "amount", "change_amount", "change_pct", "turnover_ratio",
                      "index_group", "group_desc"],
-            "note": "21 个指数（宽基9/风格6/热点5/北证1，INDEX_META 随行写 index_group/group_desc）；"
+            "note": "21 个指数（宽基10/进攻8/防守3，INDEX_META 随行写 index_group/group_desc）；"
                     "中证官网主源全字段（2005 前历史为源侧回溯测算值，注意假日锚点行需清理），国证+腾讯合并链，东财降级仅 OHLCV",
         },
     },
