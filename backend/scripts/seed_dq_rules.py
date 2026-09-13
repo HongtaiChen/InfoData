@@ -71,7 +71,7 @@ RULES = [
     ("index_freshness", "dc_index_market", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "指数日线对齐交易日历"),
     ("index_rows_latest", "dc_index_market", "row_count_slice",
-     {"date_col": "trade_date", "min_rows": 12}, "warning", 1, "最新日指数条数（当前跟踪 13 只，含 931775 待补）"),
+     {"date_col": "trade_date", "min_rows": 20}, "warning", 1, "最新日指数条数（当前跟踪 21 只）"),
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),
