@@ -8,6 +8,7 @@ InvestBuddy 指数日线采集器（dc_index_market 表，21 个主流指数增�
 - 风格 6：科创50 / 科创100 / 创业板指 / 创业板50 / 中证红利 / 中证转债
 - 热点 5：中证全指房地产 / 证券公司 / 中证银行 / 国证芯片 / 中证白酒
 - 北证 1：北证50
+分组/角色说明由 INDEX_META 随行写入 index_group / group_desc（2026-09-13 v2.3 新增列），供前端分组与语义展示。
 
 数据源优先级（2026-09 起东财主源在本机网络不可达，已降为末位）：
 1. 中证指数官网 API（csindex.com.cn）—— 沪市 / 中证 / 北证系列 16 个指数（含 399 系中证管理行业指数），全字段：
@@ -42,7 +43,7 @@ RUN_STEPS = [
     {"no": 2, "name": "逐指数定增量窗口", "params": "本地 MAX(trade_date) 起回退 7 天重叠 → 今天；无记录回补 500 天"},
     {"no": 3, "name": "多源拉取", "params": "中证官网 / 国证 + 腾讯 → 东财 → 腾讯 逐级降级"},
     {"no": 4, "name": "涨跌自愈", "params": "用前一交易日收盘补算缺失的涨跌额/涨跌幅"},
-    {"no": 5, "name": "窗口清理 + 写入 + 名称归一", "params": "DELETE 窗口内旧行 → 批量 INSERT → index_name 归一到规范简称"},
+    {"no": 5, "name": "窗口清理 + 写入 + 名称/分组归一", "params": "DELETE 窗口内旧行 → 批量 INSERT（含 index_group/group_desc）→ 同码历史行统一到规范值"},
 ]
 
 # 指数代码 → (腾讯市场前缀, 规范简称)。腾讯前缀仅降级路径使用。
@@ -70,6 +71,35 @@ INDEX_MAP: dict[str, tuple[str, str]] = {
     "980017": ("sz", "国证芯片"),
     "399997": ("sz", "中证白酒"),
     "899050": ("bj", "北证50"),
+}
+
+# 指数代码 → (分组, 角色说明)。随行写入 index_group / group_desc 两列，供前端分组展示与形势感知语义。
+INDEX_META: dict[str, tuple[str, str]] = {
+    # ---- 宽基 9 ----
+    "000001": ("宽基", "沪市旗舰基准"),
+    "000016": ("宽基", "超大盘权重"),
+    "000300": ("宽基", "核心资产基准"),
+    "000985": ("宽基", "全A基准锚点"),
+    "000905": ("宽基", "中盘基准"),
+    "000852": ("宽基", "小盘基准"),
+    "932000": ("宽基", "微盘情绪"),
+    "399001": ("宽基", "深市旗舰"),
+    "399330": ("宽基", "深市核心"),
+    # ---- 风格 6 ----
+    "000688": ("风格", "硬科技大盘"),
+    "000698": ("风格", "硬科技中盘"),
+    "399006": ("风格", "成长风格基准"),
+    "399673": ("风格", "成长高弹性"),
+    "000922": ("风格", "防守/高股息开关"),
+    "000832": ("风格", "股债联动温度计"),
+    # ---- 热点 5 ----
+    "931775": ("热点", "地产链晴雨"),
+    "399975": ("热点", "牛市旗手"),
+    "399986": ("热点", "权重防守/利率映射"),
+    "980017": ("热点", "硬科技主线"),
+    "399997": ("热点", "核心消费/外资偏好"),
+    # ---- 北证 1 ----
+    "899050": ("北证", "北交所旗舰"),
 }
 
 # 中证指数官网覆盖（沪市 / 中证 / 北证系列，含 399 系中证管理行业指数），含成交额
@@ -355,8 +385,9 @@ class IndexMarketSyncCollector:
             return None
 
     # ---------- 全量回补（按区间强制重建） ----------
-    def backfill(self, start: str, end: str | None = None) -> dict:
-        """忽略增量窗口，对 [start, end] 区间强制重建（用于历史成交额 / 涨跌缺口回补）"""
+    def backfill(self, start: str, end: str | None = None, codes: list[str] | None = None) -> dict:
+        """忽略增量窗口，对 [start, end] 区间强制重建（用于历史成交额 / 涨跌缺口 / 全史回补）。
+        codes：指定只回补这些指数（默认 None = 全部）"""
         end = end or _today_str()
         conn = pymysql.connect(**get_db_config().to_dict())
         written = healed = 0
@@ -368,8 +399,11 @@ class IndexMarketSyncCollector:
                 cur.execute("SELECT DISTINCT index_code, index_name FROM dc_index_market")
                 for code, name in cur.fetchall():
                     index_map.setdefault(code, (_guess_market(code), name))
+                if codes:
+                    index_map = {c: v for c, v in index_map.items() if c in set(codes)}
 
                 for code, (market, name) in index_map.items():
+                    grp, desc = INDEX_META.get(code, (None, None))
                     rows, source = self._fetch(code, market, start, end)
                     if rows is None:
                         errors.append(f"{code} {name} 全部数据源失败")
@@ -387,20 +421,22 @@ class IndexMarketSyncCollector:
                         (
                             code, name, r["trade_date"], r["open"], r["high"], r["low"], r["close"],
                             r["volume"], r["amount"], r["change_amount"], r["change_pct"],
-                            r["turnover_ratio"], source,
+                            r["turnover_ratio"], grp, desc, source,
                         )
                         for r in rows
                     ]
                     cur.executemany(
                         "INSERT INTO dc_index_market "
                         "(index_code, index_name, trade_date, open, high, low, close, volume, amount, "
-                        " change_amount, change_pct, turnover_ratio, update_time, data_source) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)",
+                        " change_amount, change_pct, turnover_ratio, index_group, group_desc, update_time, data_source) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)",
                         payload,
                     )
                     cur.execute(
-                        "UPDATE dc_index_market SET index_name=%s WHERE index_code=%s AND (index_name IS NULL OR index_name<>%s)",
-                        (name, code, name),
+                        "UPDATE dc_index_market SET index_name=%s, index_group=%s, group_desc=%s "
+                        "WHERE index_code=%s AND (index_name<>%s OR index_group<>%s OR group_desc<>%s "
+                        " OR index_name IS NULL OR index_group IS NULL OR group_desc IS NULL)",
+                        (name, grp, desc, code, name, grp, desc),
                     )
                     written += len(payload)
                     notes.append(f"{name} {len(payload)} 行({source})")
@@ -474,24 +510,26 @@ class IndexMarketSyncCollector:
                         (
                             code, name, r["trade_date"], r["open"], r["high"], r["low"], r["close"],
                             r["volume"], r["amount"], r["change_amount"], r["change_pct"],
-                            r["turnover_ratio"], source,
+                            r["turnover_ratio"], grp, desc, source,
                         )
                         for r in rows
                     ]
                     cur.executemany(
                         "INSERT INTO dc_index_market "
                         "(index_code, index_name, trade_date, open, high, low, close, volume, amount, "
-                        " change_amount, change_pct, turnover_ratio, update_time, data_source) "
-                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)",
+                        " change_amount, change_pct, turnover_ratio, index_group, group_desc, update_time, data_source) "
+                        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)",
                         payload,
                     )
                     written += len(payload)
                     notes.append(f"{name} +{len(payload)}({source})")
 
-                    # 名称归一：同码历史行统一到规范简称（修 399006「创业板 / 创业板指」劈叉）
+                    # 名称/分组归一：同码历史行统一到规范值（修历史行劈叉 + 新增分组列回填）
                     cur.execute(
-                        "UPDATE dc_index_market SET index_name=%s WHERE index_code=%s AND (index_name IS NULL OR index_name<>%s)",
-                        (name, code, name),
+                        "UPDATE dc_index_market SET index_name=%s, index_group=%s, group_desc=%s "
+                        "WHERE index_code=%s AND (index_name<>%s OR index_group<>%s OR group_desc<>%s "
+                        " OR index_name IS NULL OR index_group IS NULL OR group_desc IS NULL)",
+                        (name, grp, desc, code, name, grp, desc),
                     )
 
                 # 收盘滞后巡检（覆盖被 skip 的指数）：最新日落后于基准即告警
