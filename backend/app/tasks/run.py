@@ -514,17 +514,21 @@ def run_sw_industry_sync(params: dict) -> int:
 def run_financial_abstract_sync(params: dict) -> int:
     """财务关键指标同步（stock_financial_abstract_ths，同花顺逐股增量）
 
-    params: max_stocks(400 本轮上限) / sleep_sec(0.12) / timeout_sec(30) / full_sweep(全池重扫)
+    params: max_stocks(400 本轮上限) / sleep_sec(0.12) / timeout_sec(30) /
+            full_sweep(全池重扫) / retry(1 单股重试) / retry_backoff(2.0s)
     注：只补「MAX(报告期) < max(本地全局 MAX, 披露日历推算最近期)」的滞后股票；
         候选池已排除退市股（其报告期恒滞后，会永久占满 max_stocks 名额）。
+        同花顺长跑会间歇限流（实测 34% 失败，停跑即恢复）→ 单股退避重试必备。
     """
-    p = _task_params(params, {"max_stocks": 400, "sleep_sec": 0.12,
-                              "timeout_sec": 30, "full_sweep": False})
+    p = _task_params(params, {"max_stocks": 400, "sleep_sec": 0.12, "timeout_sec": 30,
+                              "full_sweep": False, "retry": 1, "retry_backoff": 2.0})
     collector = FinancialAbstractSyncCollector(
         max_stocks=int(p.get("max_stocks", 400)),
         sleep_sec=float(p.get("sleep_sec", 0.12)),
         timeout_sec=float(p.get("timeout_sec", 30)),
         full_sweep=bool(p.get("full_sweep", False)),
+        retry=int(p.get("retry", 1)),
+        retry_backoff=float(p.get("retry_backoff", 2.0)),
     )
     result = _collector_run(collector)
     if result["error_count"] > 0:

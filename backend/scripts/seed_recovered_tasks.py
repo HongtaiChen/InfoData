@@ -20,6 +20,7 @@
 - futures_sync              工作日 22:20      —— 现货/基差为日频，单次调用 60~165s，盘后取最稳
 - stock_shares_sync         每日 22:40        —— 事件型；refresh_days=30 全市场约 6 天轮一遍后空跑
 - financial_abstract_sync   每日 23:00        —— 滞后股票 ~800/日，财报季约 7 天收敛全市场
+                                                 （同花顺长跑会间歇限流，已加单股退避重试 retry=1）
 - ths_dividend_sync         每月 1/15 日 03:00 —— 逐股型（约 5,100 次请求），避免高频空跑
 - sw_industry_sync          每月 1 日 03:30    —— 申万分类调样频率低，月度快照足够
 - capital_flow_sync         每日 23:00（禁用） —— 东财域沙箱不可达 + 口径待复核，先关闭
@@ -49,7 +50,8 @@ TASKS = [
      {"sleep_sec": 0.15, "timeout_sec": 30, "min_coverage": 0.85}),
     # ---- 第 4 批 P3 ----
     ("financial_abstract_sync", 1, "0 23 * * *",
-     {"max_stocks": 800, "sleep_sec": 0.12, "timeout_sec": 30, "full_sweep": False}),
+     {"max_stocks": 800, "sleep_sec": 0.12, "timeout_sec": 30, "full_sweep": False,
+      "retry": 1, "retry_backoff": 2.0}),
     ("stock_shares_sync", 1, "40 22 * * *",
      {"max_stocks": 1000, "refresh_days": 30, "sleep_sec": 0.12,
       "timeout_sec": 30, "full_sweep": False}),

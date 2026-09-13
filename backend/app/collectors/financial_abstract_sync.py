@@ -118,17 +118,34 @@ class FinancialAbstractSyncCollector:
     TABLE = "stock_financial_abstract_ths"
 
     def __init__(self, max_stocks: int = 0, sleep_sec: float = 0.12,
-                 timeout_sec: float = 30, full_sweep: bool = False):
+                 timeout_sec: float = 30, full_sweep: bool = False,
+                 retry: int = 1, retry_backoff: float = 2.0):
         self.max_stocks = int(max_stocks or 0)
         self.sleep_sec = float(sleep_sec)
         self.timeout_sec = float(timeout_sec)
         self.full_sweep = bool(full_sweep)
+        self.retry = max(int(retry or 0), 0)
+        self.retry_backoff = float(retry_backoff)
 
     # ---------- 数据源 ----------
 
-    def _fetch(self, code: str):
+    def _fetch_once(self, code: str):
         return call_with_timeout(ak.stock_financial_abstract_ths, self.timeout_sec,
                                  symbol=code, indicator="按报告期")
+
+    def _fetch(self, code: str):
+        """单股重试：同花顺在长跑中会间歇限流（实测全量 5,379 只跑到后半程 34% 失败，
+        停跑后单测同样的股票立即恢复正常——301076/301568 复测 39/33 行），
+        失败退避后重试即可恢复；真无页面（如部分新上市股）重试后仍失败则记 error。"""
+        last = None
+        for attempt in range(self.retry + 1):
+            try:
+                return self._fetch_once(code)
+            except Exception as e:  # noqa: BLE001 - 重试后仍失败向上抛
+                last = e
+                if attempt < self.retry:
+                    time.sleep(self.retry_backoff)
+        raise last
 
     # ---------- 主流程 ----------
 
