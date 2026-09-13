@@ -5,7 +5,21 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
 用法：python scripts/seed_dq_rules.py
 - 不存在则插入，存在则更新 params/severity/description/enabled/rule_group
 - 规则阈值基于 2026-09-05 全库盘点 + 2026-09-10 日线全史实测校准
+  + 2026-09-13 全库覆盖率排查（COVERAGE_RULES / FROZEN_RULES 两批，见下）
   （见 docs/design/数据体系设计规范.md §5 与 docs/design/日线质量体检与对账体系设计规范.md）
+
+规则批次（2026-09-13 起按来源分三段）：
+- RULES          ：首批 31 条（行情/资料/概念/日历/资讯/系统核心表）
+- WEEKLY_RULES   ：周频全史扫描 5 条
+- COVERAGE_RULES ：2026-09-13 活跃表补全 —— index_constituents / index_profile /
+                   finance_concept_analysis（3 张有采集器但此前无规则的表）
+- FROZEN_RULES   ：2026-09-13 历史导入表冻结监护 —— 10 张无采集任务、水位停于
+                   2025-08/09 的表，只配防清空规则，刻意不加 freshness（加了必红）
+
+⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
+   任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
+   否则下次跑 seed 会把手工调整静默覆盖回去（已发生：concept_market 两条规则
+   09-12 手工调过阈值，09-13 跑 seed 被还原成旧值导致体检变红）。
 
 规则分组（dq_rules.rule_group）：
 - daily ：每日盘后 20:30 跑（最新切片类，秒级）
@@ -58,10 +72,11 @@ RULES = [
      {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1, "快照股票代码格式校验"),
     # ---------- 概念 ----------
     ("concept_market_freshness", "ths_concept_market", "freshness_daily",
-     {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "概念指数日线对齐交易日历"),
+     {"date_col": "trade_date", "warn_days": 5}, "warning", 1,
+     "概念指数日线对齐交易日历（同花顺周级波动容忍，2026-09-12 由 2 放宽至 5）"),
     ("concept_market_rows", "ths_concept_market", "row_count_slice",
-     {"date_col": "trade_date", "min_rows": 300}, "critical", 1,
-     "概念指数最新日条数（正常 ~375；2026-09-04 曾仅 22 行大面积缺失）"),
+     {"date_col": "trade_date", "min_rows": 240}, "critical", 1,
+     "概念指数最新日条数（正常 ~375；源侧回 257 时仍属正常区间，2026-09-12 由 300 下调至 240）"),
     ("concept_info_rows", "ths_concept_info", "row_count_total",
      {"min_rows": 300}, "warning", 1, "概念清单总行数下限（当前 406）"),
     ("stock_concepts_rows", "ths_stock_concepts", "row_count_total",
@@ -145,11 +160,103 @@ WEEKLY_RULES = [
      "跨源衔接一致性：相邻行 data_source 变化处 pre_close 与上一笔 close 偏差 >0.5%（复权基准微差）"),
 ]
 
+# ============================================================================
+# 2026-09-13 批次：全库覆盖率排查补充（36 表盘点，纳入体检的表 13 → 26）
+# 排查方法：用 DataQualityCheckCollector 的内部检查器对候选规则逐条 dry-run，
+#          确认「当前状态全部 pass」后才写入，避免上线即红。
+# 两条硬约束（本次排查得出的教训）：
+#   1) severity 不参与 worst 计算（quality.py dq_table_status 只看 status）
+#      → 缺唯一索引这类结构缺失不能配 expect=exists，否则该表永久标红；
+#        须先补 DDL 再加规则。本批次因此只给「已有唯一索引」的表配结构规则。
+#   2) 大表禁用 row_count_total（COUNT(*) 全扫）→ 用 row_count_slice 走 MAX 索引；
+#      但事件型稀疏表（最新日仅数行）只能用 row_count_total。
+# ============================================================================
+
+# ---------- A. 活跃表补全（3 张）----------
+COVERAGE_RULES = [
+    ("index_cons_fresh", "index_constituents", "date_floor",
+     {"date_col": "trade_date", "days_back": 45}, "critical", 1,
+     "成分快照新鲜度：月度任务（每月15日 08:30），快照日期不得早于 45 天前（防连续漏跑）"),
+    ("index_cons_rows", "index_constituents", "row_count_total",
+     {"min_rows": 2600}, "critical", 1,
+     "成分股快照总行数下限（11 指数实测 2819；北证50 待 akshare 修复后补）"),
+    ("index_cons_uniq", "index_constituents", "unique_index",
+     {"cols": ["index_code", "stock_code"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_index_stock（指数 × 成分唯一）"),
+    ("index_cons_stock_code", "index_constituents", "regex_count",
+     {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1,
+     "成分股代码格式校验"),
+    ("index_cons_weight_bounds", "index_constituents", "where_count",
+     {"where": "weight IS NOT NULL AND (weight <= 0 OR weight > 100)", "max_count": 0},
+     "warning", 1, "权重越界拦截：权重应落在 (0,100]"),
+    ("index_cons_name_cover", "index_constituents", "where_count",
+     {"where": "stock_name IS NULL OR stock_name = ''", "max_count": 0}, "warning", 1,
+     "成分股名称覆盖（曾因国证列名读错致 750 行为空；采集器已加 stock_info 兜底回填）"),
+    ("index_profile_rows", "index_profile", "row_count_total",
+     {"min_rows": 13}, "warning", 1,
+     "指数档案行数下限（13 只跟踪指数）"),
+    ("index_profile_uniq", "index_profile", "unique_index",
+     {"cols": ["index_code"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_index_code"),
+    ("index_profile_desc", "index_profile", "where_count",
+     {"where": "description IS NULL OR description = ''", "max_count": 0}, "info", 1,
+     "释义覆盖：13 只指数均应有简介"),
+    ("ai_concept_rows", "finance_concept_analysis", "row_count_total",
+     {"min_rows": 600}, "warning", 1,
+     "AI 概念分析结果行数下限（防误清空；实测 699）"),
+    # enabled=0：当前 22 行 relation_degree 越界，清理脏数据后再启用（否则该表永久标红）
+    ("ai_concept_dim_range", "finance_concept_analysis", "where_count",
+     {"where": "relation_degree < 1 OR relation_degree > 10", "max_count": 0},
+     "warning", 0,
+     "关联程度应落在 1~10（当前 22 行越界，清理后启用）"),
+]
+
+# ---------- B. 历史导入表冻结监护（10 张，无采集任务、水位停于 2025-08/09）----------
+# 设计要点：这些表**不加 freshness/date_floor**——期望日期永远对不上，加了必红。
+# 真正风险是「被误删/误清」，故只配防清空类规则（全部走索引，秒级，可进 daily 组）。
+FROZEN_RULES = [
+    ("frozen_daily_ex_rows", "stock_market_daily_ex", "row_count_slice",
+     {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
+     "冻结监护·除权日线：最新日切片行数下限（停更于 2025-09，防误清空）"),
+    ("frozen_capital_flow_rows", "stock_capital_flow", "row_count_slice",
+     {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
+     "冻结监护·资金流向：最新日切片行数下限（停更于 2025-09，防误清空）"),
+    ("frozen_fin_abstract_rows", "stock_financial_abstract_ths", "row_count_slice",
+     {"date_col": "report_date", "min_rows": 4000}, "warning", 1,
+     "冻结监护·财务关键指标：最新报告期切片行数下限（停更于 2025-09，防误清空）"),
+    ("frozen_shares_rows", "stock_shares", "row_count_total",
+     {"min_rows": 140000}, "warning", 1,
+     "冻结监护·股本事件表（稀疏，最新日仅数行→不适用切片）：总行数下限（防误清空）"),
+    ("frozen_dividend_rows", "ths_stock_dividend", "row_count_total",
+     {"min_rows": 130000}, "warning", 1,
+     "冻结监护·分红派息（稀疏）：总行数下限；**该表被 analysis/dividend 分红率分析消费，恢复采集优先级最高**"),
+    ("frozen_hold_by_fund_rows", "stock_hold_by_fund", "row_count_total",
+     {"min_rows": 100000}, "warning", 1,
+     "冻结监护·基金重仓：总行数下限（防误清空）"),
+    ("frozen_jgdy_rows", "stock_jgdy_detail", "row_count_total",
+     {"min_rows": 20000}, "warning", 1,
+     "冻结监护·机构调研明细：总行数下限（防误清空）"),
+    ("frozen_margin_rows", "securities_margin", "row_count_total",
+     {"min_rows": 3500}, "warning", 1,
+     "冻结监护·融资融券：总行数下限（防误清空）"),
+    ("frozen_sw_industry_rows", "stock_industry_sw", "row_count_total",
+     {"min_rows": 6000}, "warning", 1,
+     "冻结监护·申万行业：总行数下限（防误清空）"),
+    ("frozen_futures_rows", "futures_spot_price", "row_count_total",
+     {"min_rows": 130000}, "warning", 1,
+     "冻结监护·期现价格：总行数下限（防误清空）"),
+]
+
 
 def main():
     conn = pymysql.connect(**get_db_config().to_dict())
     try:
-        all_rules = [(r, "daily") for r in RULES] + [(r, "weekly") for r in WEEKLY_RULES]
+        all_rules = (
+            [(r, "daily") for r in RULES]
+            + [(r, "weekly") for r in WEEKLY_RULES]
+            + [(r, "daily") for r in COVERAGE_RULES]   # 2026-09-13 活跃表补全
+            + [(r, "daily") for r in FROZEN_RULES]     # 2026-09-13 历史表冻结监护
+        )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:
                 cur.execute(
