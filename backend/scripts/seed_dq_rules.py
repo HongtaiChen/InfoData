@@ -72,6 +72,11 @@ RULES = [
      {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "指数日线对齐交易日历"),
     ("index_rows_latest", "dc_index_market", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 20}, "warning", 1, "最新日指数条数（当前跟踪 21 只）"),
+    # ---------- 市场风格物化（分析研究·市场风向模块数据源，2026-09-13） ----------
+    ("style_freshness", "market_style_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "风格物化表对齐交易日历（18:45 挂指数同步后）"),
+    ("style_rows", "market_style_daily", "row_count_total",
+     {"min_rows": 1000}, "warning", 1, "风格物化表行数下限（全史约 5,300 行，防清空）"),
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),

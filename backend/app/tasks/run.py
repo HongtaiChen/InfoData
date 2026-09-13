@@ -41,6 +41,7 @@ from ..collectors.sw_industry_sync import SwIndustrySyncCollector
 from ..collectors.financial_abstract_sync import FinancialAbstractSyncCollector
 from ..collectors.stock_shares_sync import StockSharesSyncCollector
 from ..collectors.capital_flow_sync import CapitalFlowSyncCollector
+from ..collectors.market_style_sync import MarketStyleSyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -190,6 +191,13 @@ def run_index_market_sync(params: dict) -> int:
     result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 指数 {result['error_count']} 个失败（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+def run_market_style_sync(params: dict) -> int:
+    """市场风格日频物化表计算（market_style_daily：纯库内，挂 index_market_sync 之后）"""
+    collector = MarketStyleSyncCollector()
+    result = _collector_run(collector)
     return result["records_written"]
 
 
@@ -623,6 +631,8 @@ TASKS = {
     "financial_abstract_sync": run_financial_abstract_sync,
     "stock_shares_sync": run_stock_shares_sync,
     "capital_flow_sync": run_capital_flow_sync,
+    # 2026-09-13 分析研究框架 · 市场风向模块（风格物化表计算，挂 index_market_sync 之后）
+    "market_style_sync": run_market_style_sync,
 }
 
 

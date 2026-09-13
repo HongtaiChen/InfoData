@@ -1,0 +1,67 @@
+<script setup lang="ts">
+/**
+ * AnalysisModuleView —— 分析模块详情容器（AnalysisShell v0.2）
+ * 路由 /analysis/:moduleId；标题区（名称/口径/分组/截至）由容器统一渲染，主视图由模块组件注入
+ * 模块注册：后端 app/analysis/registry.py；前端组件映射 src/analysis/modules.ts
+ */
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { NButton, NCard, NEmpty, NSpin, NTag } from 'naive-ui'
+import api from '../api'
+
+const route = useRoute()
+const router = useRouter()
+const moduleId = computed(() => String(route.params.moduleId ?? ''))
+
+const loading = ref(false)
+const moduleMeta = ref<any>(null)
+
+const moduleViews: Record<string, any> = {
+  'market-wind': () => import('./analysis/MarketWindView.vue'),
+}
+const viewComp = computed(() => moduleViews[moduleId.value])
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const resp: any = await api.get('/analysis/registry')
+    moduleMeta.value = (resp.items ?? []).find((m: any) => m.module_id === moduleId.value) ?? null
+  } catch (e) {
+    console.error('[analysis-registry]', e)
+  } finally {
+    loading.value = false
+  }
+})
+</script>
+
+<template>
+  <NSpin :show="loading">
+    <NCard v-if="moduleMeta" size="small" class="am-shell">
+      <div class="am-head">
+        <div class="am-head-left">
+          <NButton size="tiny" quaternary @click="router.push('/analysis')">← 分析研究</NButton>
+          <h2 class="am-title">{{ moduleMeta.icon }} {{ moduleMeta.name }}</h2>
+          <NTag size="small" :bordered="false" type="info">{{ moduleMeta.group }}</NTag>
+          <NTag size="small" :bordered="false">{{ moduleMeta.kind === 'track' ? '跟踪' : '研究' }}</NTag>
+        </div>
+        <div class="am-desc">{{ moduleMeta.desc }}<span v-if="moduleMeta.updated_cron"> · 更新：{{ moduleMeta.updated_cron }}</span></div>
+      </div>
+      <component v-if="viewComp" :is="viewComp" />
+      <NEmpty v-else description="模块视图开发中…" style="padding: 40px 0" />
+    </NCard>
+    <NCard v-else-if="!loading" size="small">
+      <NEmpty description="未找到该分析模块">
+        <template #extra>
+          <NButton size="small" @click="router.push('/analysis')">返回分析研究</NButton>
+        </template>
+      </NEmpty>
+    </NCard>
+  </NSpin>
+</template>
+
+<style scoped>
+.am-head { margin-bottom: 14px; }
+.am-head-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.am-title { margin: 0; font-size: 18px; color: #1F2937; }
+.am-desc { font-size: 12px; color: #9CA3AF; margin-top: 6px; }
+</style>

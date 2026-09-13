@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, h } from 'vue'
+import { useRoute } from 'vue-router'
 import { NCard, NSpace, NSelect, NDataTable, NInput, type DataTableColumns } from 'naive-ui'
 import KLineChart from '../components/KLineChart.vue'
 import IndexDetailDrawer from '../components/IndexDetailDrawer.vue'
 import api from '../api'
+
+const route = useRoute()
 
 // ---------- 标的选择（股票 / 指数 二选一，共同驱动下方 K 线） ----------
 const selType = ref<'stock' | 'index'>('stock')
@@ -225,6 +228,13 @@ function onSortChange(sorter: any) {
 onMounted(() => {
   loadIndices()
   loadRows()
+  // 下钻支持：/market?index=CODE&name=名称（分析研究模块跳转预选指数 K 线）
+  const qIndex = route.query.index as string | undefined
+  if (qIndex) {
+    selType.value = 'index'
+    currentCode.value = qIndex
+    currentName.value = (route.query.name as string) || qIndex
+  }
 })
 </script>
 
