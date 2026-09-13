@@ -8,13 +8,16 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
   + 2026-09-13 全库覆盖率排查（COVERAGE_RULES / FROZEN_RULES 两批，见下）
   （见 docs/design/数据体系设计规范.md §5 与 docs/design/日线质量体检与对账体系设计规范.md）
 
-规则批次（2026-09-13 起按来源分三段）：
+规则批次（2026-09-13 起按来源分四段）：
 - RULES          ：首批 31 条（行情/资料/概念/日历/资讯/系统核心表）
 - WEEKLY_RULES   ：周频全史扫描 5 条
 - COVERAGE_RULES ：2026-09-13 活跃表补全 —— index_constituents / index_profile /
                    finance_concept_analysis（3 张有采集器但此前无规则的表）
 - FROZEN_RULES   ：2026-09-13 历史导入表冻结监护 —— 10 张无采集任务、水位停于
                    2025-08/09 的表，只配防清空规则，刻意不加 freshness（加了必红）
+- RECOVERED_RULES：2026-09-13 死表恢复采集批次 —— 3 张已完成采集器落地并全量补齐
+                   的表（分红送配 / 融资融券 / 机构调研），从 FROZEN 升级为完整规则
+                   （含 freshness），并由 RETIRED_RULES 清理其旧冻结规则
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -211,40 +214,66 @@ COVERAGE_RULES = [
      "关联程度应落在 1~10（当前 22 行越界，清理后启用）"),
 ]
 
-# ---------- B. 历史导入表冻结监护（10 张，无采集任务、水位停于 2025-08/09）----------
+# ---------- B. 历史导入表冻结监护（原 10 张 → 现存 7 张）----------
 # 设计要点：这些表**不加 freshness/date_floor**——期望日期永远对不上，加了必红。
 # 真正风险是「被误删/误清」，故只配防清空类规则（全部走索引，秒级，可进 daily 组）。
+# 2026-09-13 更新：stock_market_daily_ex 经实证与 daily 逐字段相同（冗余副本），
+#   维持冻结；ths_stock_dividend / securities_margin / stock_jgdy_detail 三张
+#   已恢复采集 → 迁出本组，见下方 RECOVERED_RULES。
 FROZEN_RULES = [
     ("frozen_daily_ex_rows", "stock_market_daily_ex", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
-     "冻结监护·除权日线：最新日切片行数下限（停更于 2025-09，防误清空）"),
+     "冻结监护·除权日线：最新日切片行数下限（与 daily 逐字段相同，为冗余副本，待归档决策）"),
     ("frozen_capital_flow_rows", "stock_capital_flow", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
-     "冻结监护·资金流向：最新日切片行数下限（停更于 2025-09，防误清空）"),
+     "冻结监护·资金流向：最新日切片行数下限（停更于 2025-09，防误清空；东财域受限待复测）"),
     ("frozen_fin_abstract_rows", "stock_financial_abstract_ths", "row_count_slice",
      {"date_col": "report_date", "min_rows": 4000}, "warning", 1,
      "冻结监护·财务关键指标：最新报告期切片行数下限（停更于 2025-09，防误清空）"),
     ("frozen_shares_rows", "stock_shares", "row_count_total",
      {"min_rows": 140000}, "warning", 1,
      "冻结监护·股本事件表（稀疏，最新日仅数行→不适用切片）：总行数下限（防误清空）"),
-    ("frozen_dividend_rows", "ths_stock_dividend", "row_count_total",
-     {"min_rows": 130000}, "warning", 1,
-     "冻结监护·分红派息（稀疏）：总行数下限；**该表被 analysis/dividend 分红率分析消费，恢复采集优先级最高**"),
     ("frozen_hold_by_fund_rows", "stock_hold_by_fund", "row_count_total",
      {"min_rows": 100000}, "warning", 1,
      "冻结监护·基金重仓：总行数下限（防误清空）"),
-    ("frozen_jgdy_rows", "stock_jgdy_detail", "row_count_total",
-     {"min_rows": 20000}, "warning", 1,
-     "冻结监护·机构调研明细：总行数下限（防误清空）"),
-    ("frozen_margin_rows", "securities_margin", "row_count_total",
-     {"min_rows": 3500}, "warning", 1,
-     "冻结监护·融资融券：总行数下限（防误清空）"),
     ("frozen_sw_industry_rows", "stock_industry_sw", "row_count_total",
      {"min_rows": 6000}, "warning", 1,
      "冻结监护·申万行业：总行数下限（防误清空）"),
     ("frozen_futures_rows", "futures_spot_price", "row_count_total",
      {"min_rows": 130000}, "warning", 1,
      "冻结监护·期现价格：总行数下限（防误清空）"),
+]
+
+# ---------- C. 死表恢复采集（2026-09-13 新增，3 张）----------
+# 这 3 张原属 FROZEN 组，2026-09-13 完成采集器落地（ths_dividend_sync /
+# margin_sync / jgdy_sync）并全量补齐后，升级为**完整规则**——即加上 freshness。
+# 阈值均为 dry-run 实测校准，确认「上线即 pass」。
+RECOVERED_RULES = [
+    ("dividend_fresh", "ths_stock_dividend", "date_floor",
+     {"date_col": "board_date", "days_back": 200}, "warning", 1,
+     "分红送配新鲜度：最新董事会日期不得早于 200 天前（分红披露季节性——年报3-4月/中报8月/三季报10月，最长空档约 5 个月）"),
+    ("dividend_rows", "ths_stock_dividend", "row_count_total",
+     {"min_rows": 130000}, "warning", 1,
+     "分红送配总行数下限（当前 14.9 万；该表被 analysis/dividend 分红率分析消费）"),
+    ("margin_freshness", "securities_margin", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 3}, "warning", 1,
+     "融资融券对齐交易日历（沪深所 T+1 发布，容错 3 个交易日）"),
+    ("margin_rows", "securities_margin", "row_count_total",
+     {"min_rows": 3500}, "warning", 1,
+     "融资融券总行数下限（三市合计口径：沪+深+北）"),
+    ("jgdy_fresh", "stock_jgdy_detail", "date_floor",
+     {"date_col": "announcement_date", "days_back": 30}, "warning", 1,
+     "机构调研新鲜度：最新公告日期不得早于 30 天前（调研公告日频但存在假期空档）"),
+    ("jgdy_rows", "stock_jgdy_detail", "row_count_total",
+     {"min_rows": 20000}, "warning", 1,
+     "机构调研明细总行数下限（恢复采集后 4.5 万+）"),
+]
+
+# 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
+RETIRED_RULES = [
+    "frozen_dividend_rows",   # → dividend_fresh + dividend_rows
+    "frozen_margin_rows",     # → margin_freshness + margin_rows
+    "frozen_jgdy_rows",       # → jgdy_fresh + jgdy_rows
 ]
 
 
@@ -256,6 +285,7 @@ def main():
             + [(r, "weekly") for r in WEEKLY_RULES]
             + [(r, "daily") for r in COVERAGE_RULES]   # 2026-09-13 活跃表补全
             + [(r, "daily") for r in FROZEN_RULES]     # 2026-09-13 历史表冻结监护
+            + [(r, "daily") for r in RECOVERED_RULES]  # 2026-09-13 死表恢复采集（含 freshness）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:
@@ -268,6 +298,13 @@ def main():
                        enabled=VALUES(enabled), description=VALUES(description)""",
                     (name, table, ctype, group, json.dumps(params, ensure_ascii=False), severity, enabled, desc),
                 )
+            # 废弃规则清理（升级后避免新旧并存产生重复告警）
+            retired = 0
+            if RETIRED_RULES:
+                ph = ", ".join(["%s"] * len(RETIRED_RULES))
+                cur.execute(f"SELECT COUNT(*) FROM dq_rules WHERE rule_name IN ({ph})", tuple(RETIRED_RULES))
+                retired = cur.fetchone()[0]
+                cur.execute(f"DELETE FROM dq_rules WHERE rule_name IN ({ph})", tuple(RETIRED_RULES))
         conn.commit()
         with conn.cursor() as cur:
             cur.execute("SELECT rule_group, COUNT(*) FROM dq_rules GROUP BY rule_group")
@@ -275,6 +312,8 @@ def main():
             cur.execute("SELECT COUNT(*) FROM dq_rules")
             total = cur.fetchone()[0]
         print(f"seed 完成，dq_rules 共 {total} 条规则，分组分布: {dist}")
+        if retired:
+            print(f"已清理废弃规则 {retired} 条: {RETIRED_RULES}")
     finally:
         conn.close()
 
