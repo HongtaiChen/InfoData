@@ -17,7 +17,7 @@ import api from '../../api'
 
 const router = useRouter()
 
-interface Kpi { key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string; tone?: string }
+interface Kpi { key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string; tone?: 'updown' | 'neutral' }
 interface GroupRow { group: string; ret_20: number | null; ret_60: number | null }
 interface GradRow { code: string; name: string; desc: string; ret_20: number | null; change_pct: number | null }
 interface DetailRow {

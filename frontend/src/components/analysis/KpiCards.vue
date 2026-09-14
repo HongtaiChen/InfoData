@@ -12,19 +12,24 @@ interface Kpi {
   unit?: string
   status?: string
   hint?: string
-  tone?: 'updown' | 'neutral'   // updown=红正绿负，neutral=主色（默认）
+  // 后端必须显式给出 tone：updown=红正绿负（行情语义），neutral=主色（分位/占比等非涨跌语义）
+  // 缺失时按 updown 兜底，避免老接口把涨跌指标渲染成主色
+  tone?: 'updown' | 'neutral'
 }
 
 const props = defineProps<{ items: Kpi[] }>()
 
 function valueClass(k: Kpi): string {
   if (k.value == null) return 'c-neutral'
-  if (k.tone === 'neutral') return 'c-primary'
+  if (isNeutral(k)) return 'c-primary'
   return k.value > 0 ? 'c-up' : k.value < 0 ? 'c-down' : 'c-neutral'
+}
+function isNeutral(k: Kpi): boolean {
+  return k.tone === 'neutral'
 }
 function fmt(k: Kpi): string {
   if (k.value == null) return '--'
-  const sign = k.tone === 'updown' && k.value > 0 ? '+' : ''
+  const sign = !isNeutral(k) && k.value > 0 ? '+' : ''
   return `${sign}${k.value}${k.unit ?? ''}`
 }
 </script>

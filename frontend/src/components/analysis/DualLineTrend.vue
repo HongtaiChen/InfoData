@@ -9,7 +9,7 @@ import { use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent, MarkLineComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { ensureEcharts, BRAND_COLOR } from '../../echarts'
+import { ensureEcharts } from '../../echarts'
 
 ensureEcharts()
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, MarkLineComponent])

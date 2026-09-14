@@ -93,7 +93,7 @@ function kpiText(k: CardKpi): string {
         <div class="ao-card-desc">{{ m.desc }}</div>
         <div class="ao-card-kpis" v-if="cardKpis[m.module_id]?.length">
           <div v-for="k in cardKpis[m.module_id]" :key="k.label" class="ao-kpi">
-            <div class="ao-kpi-label">{{ k.label }}</div>
+            <div class="ao-kpi-label" :title="k.label">{{ k.label }}</div>
             <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
             <div class="ao-kpi-status">{{ k.status }}</div>
           </div>
@@ -122,18 +122,21 @@ function kpiText(k: CardKpi): string {
 <style scoped>
 .ao-title { margin: 0 0 16px; color: #1F2937; }
 .ao-section { font-size: 14px; font-weight: 600; color: #185FA5; margin: 18px 0 10px; }
-.ao-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+/* min(440px,100%)：窗口极窄时轨道不小于容器，避免卡片自身撑破内容区 */
+.ao-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr)); gap: 12px; }
 .ao-card { cursor: pointer; }
-.ao-card-head { display: flex; justify-content: space-between; align-items: center; }
+.ao-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .ao-card-name { font-size: 15px; font-weight: 600; color: #1F2937; }
-.ao-card-desc { font-size: 12px; color: #9CA3AF; margin: 4px 0 10px; }
-.ao-card-kpis { display: flex; gap: 10px; }
-.ao-kpi { flex: 1; background: #F5F7FA; border-radius: 6px; padding: 8px 10px; }
+.ao-card-desc { font-size: 12px; color: #6B7280; margin: 4px 0 10px; }
+/* auto-fit + 确定最小轨宽：KPI 等宽、自适应个数，且数学上不可能撑破卡片
+   （曾因 flex:1 的 min-width:auto 溢出 36px，第三个盒子右侧压到页面底） */
+.ao-card-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.ao-kpi { min-width: 0; background: #F5F7FA; border-radius: 6px; padding: 8px 10px; }
 .ao-kpi-label { font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ao-kpi-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.ao-kpi-status { font-size: 11px; color: #6B7280; }
+.ao-kpi-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ao-kpi-status { font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ao-group { margin-bottom: 12px; }
-.ao-group-name { font-size: 12px; color: #9CA3AF; margin-bottom: 6px; }
+.ao-group-name { font-size: 12px; color: #6B7280; margin-bottom: 6px; }
 .ao-group-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .ao-item { cursor: pointer; }
 .ao-item-desc { font-size: 12px; color: #6B7280; margin-top: 4px; }
