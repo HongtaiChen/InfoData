@@ -86,6 +86,7 @@ interface FlowLineage {
 interface FlowJob {
   task_name: string
   cron: string | null
+  cron_human?: string | null
   enabled: boolean | null
   scheduled: boolean | null
   next_run: string | null
@@ -977,27 +978,49 @@ function flowDerivedCols(j: FlowJob): string[] {
   return (j.lineage?.cols || []).filter((c) => (j.lineage?.derived || []).includes(c))
 }
 
+// ⚠️ APScheduler 语义：day_of_week **0=周一**、6=周日（与 Unix crontab 的 0=周日相反）。
+// 「周一至周五」是 0-4；写成 1-5 会变成周二至周六（2026-09-14 事故根因）。
 const DOW_CN: Record<string, string> = {
-  '0': '周日', '1': '周一', '2': '周二', '3': '周三', '4': '周四', '5': '周五', '6': '周六', '7': '周日',
+  '0': '周一', '1': '周二', '2': '周三', '3': '周四', '4': '周五', '5': '周六', '6': '周日',
 }
 
-/** 极简 5 段 cron → 中文（覆盖本平台 15 任务所用表达式） */
-function cronToText(cron: string | null): string {
+/** 5 段 cron → 中文。**优先用后端 `cron_human`**（与真正跑的调度器同源），
+ *  本函数仅在后端字段缺失时兜底，且必须遵循 APScheduler 星期语义。 */
+function cronToText(cron: string | null, human?: string | null): string {
+  if (human) return human
   const s = (cron || '').trim()
   if (!s) return ''
   if (s === '手动') return '手动触发'
   const p = s.split(/\s+/)
   if (p.length !== 5) return s
-  const [min, hour, dom, , dow] = p
-  if (min === '*/30' && hour === '*') return '每30分钟'
+  const [min, hour, dom, mon, dow] = p
+  if (min.startsWith('*/') && hour === '*' && dom === '*' && mon === '*' && dow === '*') {
+    return `每 ${min.slice(2)} 分钟`
+  }
+  const week = (t: string) => DOW_CN[t] || null
   let when: string
-  if (dow === '1-5') when = '工作日'
-  else if (dow !== '*') when = DOW_CN[dow] || `周${dow}`
-  else if (dom !== '*') when = `每月${dom}日`
-  else when = '每天'
+  if (dow !== '*') {
+    if (dow.includes('-')) {
+      const [a, b] = dow.split('-')
+      const wa = week(a)
+      const wb = week(b)
+      when = wa && wb ? `每${wa}至${wb}` : `周${dow}`
+    } else {
+      const parts = dow.split(',').map(week)
+      when = parts.every(Boolean) ? `每${parts.join('、')}` : `周${dow}`
+    }
+  } else if (dom !== '*') {
+    when = `每月${dom}日`
+  } else {
+    when = '每天'
+  }
   if (hour === '*') return when
   const mm = min === '0' ? '00' : min
-  return `${when} ${hour.padStart(2, '0')}:${mm}`
+  const hhmm = hour
+    .split(',')
+    .map((h) => `${h.padStart(2, '0')}:${mm}`)
+    .join('、')
+  return `${when} ${hhmm}`
 }
 
 function fmtFlowDt(s: string | null): string {
@@ -1623,7 +1646,7 @@ onMounted(async () => {
               <div style="font-size:11px;color:#888;">维护任务 · 运行逻辑</div>
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                 <span style="font-family:Consolas,Menlo,monospace;font-weight:500;color:#185FA5;font-size:13px;">{{ flowMainJob.task_name }}</span>
-                <span v-if="flowMainJob.cron" style="font-size:11px;color:#555;background:#F5F8FC;border:1px solid #e0e6ed;border-radius:4px;padding:1px 6px;">{{ cronToText(flowMainJob.cron) }}</span>
+                <span v-if="flowMainJob.cron" style="font-size:11px;color:#555;background:#F5F8FC;border:1px solid #e0e6ed;border-radius:4px;padding:1px 6px;">{{ cronToText(flowMainJob.cron, flowMainJob.cron_human) }}</span>
                 <span v-if="flowMainJob.enabled === false" style="font-size:11px;color:#999;">已停用</span>
                 <span v-if="flowMainJob.running" style="font-size:11px;color:#185FA5;">运行中…</span>
               </div>
@@ -1764,7 +1787,7 @@ onMounted(async () => {
                 <div style="font-size:11px;color:#888;">维护任务 · 运行逻辑</div>
                 <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                   <span style="font-family:Consolas,Menlo,monospace;font-weight:500;color:#185FA5;font-size:13px;">{{ j.task_name }}</span>
-                  <span v-if="j.cron" style="font-size:11px;color:#555;background:#F5F8FC;border:1px solid #e0e6ed;border-radius:4px;padding:1px 6px;">{{ cronToText(j.cron) }}</span>
+                  <span v-if="j.cron" style="font-size:11px;color:#555;background:#F5F8FC;border:1px solid #e0e6ed;border-radius:4px;padding:1px 6px;">{{ cronToText(j.cron, j.cron_human) }}</span>
                   <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
                   <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
                 </div>
@@ -1864,7 +1887,7 @@ onMounted(async () => {
                 style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:5px 10px;"
               >
                 <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#185FA5;">{{ j.task_name }}</span>
-                <span style="color:#555;">{{ cronToText(j.cron) }}</span>
+                <span style="color:#555;">{{ cronToText(j.cron, j.cron_human) }}</span>
                 <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
                 <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
                   <span>
@@ -1903,7 +1926,7 @@ onMounted(async () => {
                   </NTag>
                   <!-- 任务 + cron -->
                   <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#222;font-size:12px;">{{ j.task_name }}</span>
-                  <span style="color:#777;font-size:11.5px;">{{ cronToText(j.cron) }}</span>
+                  <span style="color:#777;font-size:11.5px;">{{ cronToText(j.cron, j.cron_human) }}</span>
                   <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
                   <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
                   <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">
@@ -1981,7 +2004,7 @@ onMounted(async () => {
                 style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:6px 10px;"
               >
                 <span style="font-family:Consolas,Menlo,monospace;font-weight:600;color:#185FA5;">{{ j.task_name }}</span>
-                <span style="color:#555;">{{ cronToText(j.cron) }}</span>
+                <span style="color:#555;">{{ cronToText(j.cron, j.cron_human) }}</span>
                 <span v-if="j.enabled === false" style="font-size:11px;color:#999;">已停用</span>
                 <span v-if="j.running" style="font-size:11px;color:#185FA5;">运行中…</span>
                 <span style="margin-left:auto;display:flex;gap:10px;color:#999;font-size:11px;flex-wrap:wrap;">

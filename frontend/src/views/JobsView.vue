@@ -6,8 +6,6 @@ import {
   NDescriptionsItem, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
-import { CronExpressionParser } from 'cron-parser'
-import dayjs from 'dayjs'
 import api from '../api'
 
 const message = useMessage()
@@ -70,41 +68,44 @@ const editCron = ref('')
 const editEnabled = ref(true)
 
 // cron 实时预览（接下来 5 次运行时间）
-const weekCn = ['日', '一', '二', '三', '四', '五', '六']
-type CronPreviewTime = { date: string; week: string; time: string }
-const cronPreview = ref<{ mode: 'idle' | 'manual' | 'invalid' | 'ok'; times: CronPreviewTime[]; error?: string }>({
+//
+// ⚠️ 必须由**后端**计算（2026-09-14 复盘）：原先用 `cron-parser` 在浏览器里算，
+// 而 cron-parser 遵循 Unix 语义 day_of_week（0=周日），后端 APScheduler 是**0=周一**，
+// 两者相差一天 —— 编辑弹窗里的「接下来 5 次实际运行」会比真实调度早一天/换错星期，
+// 等于把排期语义坑从后端搬进了 UI。现改调 /api/jobs/cron-preview，与调度器同源。
+type CronPreviewTime = { at: string; week: string }
+const cronPreview = ref<{
+  mode: 'idle' | 'manual' | 'invalid' | 'ok'
+  times: CronPreviewTime[]
+  human?: string
+  error?: string
+}>({
   mode: 'idle',
   times: [],
 })
 let previewTimer: any = null
+let previewSeq = 0 // 丢弃过期响应（连续输入时旧请求可能后到）
 
 function recomputePreview(expr: string) {
   if (previewTimer) clearTimeout(previewTimer)
-  previewTimer = setTimeout(() => {
-    const v = (expr || '').trim()
-    if (!v || v === '手动') {
-      cronPreview.value = { mode: 'manual', times: [] }
-      return
-    }
+  const v = (expr || '').trim()
+  if (!v || v === '手动') {
+    cronPreview.value = { mode: 'manual', times: [] }
+    return
+  }
+  previewTimer = setTimeout(async () => {
+    const seq = ++previewSeq
     try {
-      const interval = CronExpressionParser.parse(v)
-      const times: CronPreviewTime[] = []
-      for (let i = 0; i < 5; i++) {
-        const d = interval.next().toDate()
-        const dt = dayjs(d)
-        times.push({
-          date: dt.format('YYYY-MM-DD'),
-          week: weekCn[dt.day()],
-          time: dt.format('HH:mm'),
-        })
+      const resp: any = await api.get('/jobs/cron-preview', { params: { cron: v, count: 5 } })
+      if (seq !== previewSeq) return
+      if (!resp.ok) {
+        cronPreview.value = { mode: 'invalid', times: [], human: resp.cron_human, error: resp.error }
+        return
       }
-      cronPreview.value = { mode: 'ok', times }
+      cronPreview.value = { mode: 'ok', times: resp.times || [], human: resp.cron_human }
     } catch (e: any) {
-      cronPreview.value = {
-        mode: 'invalid',
-        times: [],
-        error: `cron 格式无效：${e?.message || e}`,
-      }
+      if (seq !== previewSeq) return
+      cronPreview.value = { mode: 'invalid', times: [], error: `预览失败：${e?.message || e}` }
     }
   }, 300)
 }
@@ -590,7 +591,7 @@ onUnmounted(() => {
           <div class="cron-form-stack">
             <NInput
               v-model:value="editCron"
-              placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 1-5（工作日 19:00）"
+              placeholder="如 */30 * * * *（每 30 分钟）或 0 19 * * 0-4（周一至周五 19:00）"
               size="large"
               clearable
             />
@@ -598,15 +599,19 @@ onUnmounted(() => {
             <div v-if="cronPreview.mode === 'ok'" class="cron-preview-box cron-preview-ok">
               <div class="cron-preview-head">
                 <span class="cron-preview-icon">📅</span>
-                <span class="cron-preview-title">接下来 5 次实际运行</span>
-                <NTag size="small" :bordered="false" type="info" class="cron-preview-tag">实时预览</NTag>
+                <span class="cron-preview-title">
+                  {{ cronPreview.human ? `实际语义：${cronPreview.human}` : '接下来 5 次实际运行' }}
+                </span>
+                <NTag size="small" :bordered="false" type="info" class="cron-preview-tag">
+                  后端调度器计算
+                </NTag>
               </div>
               <div class="cron-preview-list">
                 <div v-for="(t, i) in cronPreview.times" :key="i" class="cron-preview-row">
                   <span class="cron-preview-idx">{{ i + 1 }}</span>
-                  <span class="cron-preview-date">{{ t.date }}</span>
-                  <span class="cron-preview-week">周{{ t.week }}</span>
-                  <span class="cron-preview-time">{{ t.time }}</span>
+                  <span class="cron-preview-date">{{ t.at.slice(0, 10) }}</span>
+                  <span class="cron-preview-week">{{ t.week }}</span>
+                  <span class="cron-preview-time">{{ t.at.slice(11, 16) }}</span>
                 </div>
               </div>
             </div>
@@ -635,13 +640,17 @@ onUnmounted(() => {
                 <code>分 时 日 月 周</code>
               </NDescriptionsItem>
               <NDescriptionsItem label="取值">
-                分 0-59 · 时 0-23 · 日 1-31 · 月 1-12 · 周 0-6（0=周日，1-5=周一至周五）
+                分 0-59 · 时 0-23 · 日 1-31 · 月 1-12 · 周 0-6（<b>0=周一</b>、6=周日）
               </NDescriptionsItem>
               <NDescriptionsItem label="常用">
                 <code>*</code> 任意 · <code>*/n</code> 每 n · <code>a-b</code> 区间 · <code>a,b,c</code> 离散
               </NDescriptionsItem>
               <NDescriptionsItem label="示例">
-                <code>0 19 * * 1-5</code> = 工作日 19:00 整点
+                <code>0 19 * * 0-4</code> = 周一至周五 19:00 整点
+              </NDescriptionsItem>
+              <NDescriptionsItem label="⚠️ 星期">
+                本系统用 APScheduler，周字段 <b>0=周一</b>（与 Unix crontab 的 0=周日相反）。
+                「周一至周五」是 <code>0-4</code>；写成 <code>1-5</code> 会变成<b>周二至周六</b>。
               </NDescriptionsItem>
               <NDescriptionsItem label="手动">
                 留空或填「手动」= 仅手动触发，不自动调度

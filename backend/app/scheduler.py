@@ -42,6 +42,110 @@ def parse_cron(cron: str):
         return None
 
 
+# ============================================================================
+# ⚠️ 星期语义陷阱（2026-09-14 事故根因，务必记住）
+#
+# APScheduler 的 `CronTrigger.from_crontab()` **不做任何语义翻译**，其
+# day_of_week 字段直接沿用 APScheduler 自身的编号：**0=周一、6=周日**。
+# 这与 Unix crontab「0=周日、1=周一…6=周六」**完全相反**。
+#
+# 后果实测：`20 22 * * 1-5` 在 Unix 语义下是「工作日」，在 APScheduler 下却是
+# **周二~周六**——futures_sync 因此周一漏跑、周六空跑（2026-09-14 发现）。
+# 反过来 `0-4` 才等于周一~周五。
+#
+# 故本模块统一提供 `cron_human()` 把 cron 渲染成中文，并在调度同步时逐条打日志、
+# 在 /api/jobs 与数据流卡里回传，让「写 cron 的人」和「读 cron 的人」都能立刻
+# 看到真实语义，避免继续凭直觉写数字。
+# ============================================================================
+_WEEK_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]  # APScheduler: 0=周一
+
+
+def _week_span(token: str) -> str | None:
+    """把 day_of_week 字段渲染为中文（None 表示无法识别）"""
+    token = token.strip()
+    if not token or token == "*":
+        return None
+
+    def _one(t: str) -> str | None:
+        t = t.strip()
+        if not t.isdigit():
+            return None
+        i = int(t)
+        return _WEEK_CN[i] if 0 <= i <= 6 else None
+
+    if "-" in token:
+        a, _, b = token.partition("-")
+        wa, wb = _one(a), _one(b)
+        return f"{wa}至{wb}" if wa and wb else None
+    parts = [_one(p) for p in token.split(",")]
+    return "、".join(p for p in parts if p) if all(parts) else None
+
+
+def _dom_span(token: str) -> str | None:
+    """把 day_of_month 字段渲染为中文（None 表示每天）"""
+    token = token.strip()
+    if not token or token == "*":
+        return None
+    if token.isdigit():
+        return f"每月{int(token)}日"
+    if "," in token and all(p.strip().isdigit() for p in token.split(",")):
+        return "每月" + "、".join(str(int(p)) for p in token.split(",")) + "日"
+    return None
+
+
+def cron_human(cron: str | None) -> str:
+    """cron → 中文可读调度描述（用于日志/接口展示，消除 day_of_week 语义误读）。
+
+    例：
+      '0 19 * * 0-4'  -> '每周一至周五 19:00'
+      '30 21 * * 0'   -> '每周一 21:30'
+      '0 10 * * 6'    -> '每周日 10:00'
+      '20 22 * * 1-5' -> '每周二至周六 22:20'   ← 就是这个语义坑
+      '*/30 * * * *'  -> '每 30 分钟'
+      '30 20 * * *'   -> '每天 20:30'
+      '0 3 1,15 * *'  -> '每月1、15日 03:00'
+      '手动'           -> '手动触发'
+    无法识别时原样返回 cron。
+    """
+    if not cron:
+        return "手动触发"
+    raw = cron.strip()
+    if raw.lower() in (MANUAL_MARK, "none", "-"):
+        return "手动触发"
+    parts = raw.split()
+    if len(parts) != 5:
+        return raw
+    mi, ho, dom, mon, dow = parts
+
+    # 高频形态：分钟 */N 且其余为 *
+    if mi.startswith("*/") and mi[2:].isdigit() and ho == dom == mon == dow == "*":
+        return f"每 {int(mi[2:])} 分钟"
+
+    if not mi.isdigit():
+        return raw
+    # 小时支持逗号列表（如 '0 20,22 * * 0-4' = 每天 20:00、22:00 两班）
+    hours = ho.split(",")
+    if not hours or not all(h.strip().isdigit() for h in hours):
+        return raw
+    hhmm = "、".join(f"{int(h):02d}:{int(mi):02d}" for h in hours)
+
+    dom_txt = _dom_span(dom)
+    dow_txt = _week_span(dow)
+    month_txt = f"{int(mon)} 月" if mon.isdigit() else None
+
+    if dom_txt:
+        prefix = dom_txt
+        if month_txt:
+            prefix = f"每年{month_txt}的{dom_txt[2:]}".replace("每月", "")
+    elif dow_txt:
+        prefix = f"每{dow_txt}"
+    elif dow == "*":
+        prefix = "每天"
+    else:
+        return raw
+    return f"{prefix} {hhmm}"
+
+
 class SchedulerManager:
     """全局单例：管理 APScheduler 与 task_config 的同步"""
 
@@ -61,6 +165,13 @@ class SchedulerManager:
             return
         self._scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
         self._scheduler.start()
+        # 启动自愈：上一进程被中断留下的 running 记录必须先回收，否则
+        # 「同任务 2h 内 running 视为仍在运行」的保护会让这些任务在 2h 内拒绝重跑，
+        # 且 catchup_missed 也会被同一保护挡住（见 reap_orphan_runs 文档）
+        try:
+            self.reap_orphan_runs()
+        except Exception:
+            logger.exception("启动自愈（僵尸 running 回收）异常")
         self.sync_from_db()
         # 启动补偿：电脑关机/睡眠期间错过的 cron 班次，开机后自动补跑
         try:
@@ -68,6 +179,42 @@ class SchedulerManager:
         except Exception:
             logger.exception("启动补偿执行异常")
         logger.info("🕒 调度器已启动")
+
+    def reap_orphan_runs(self) -> int:
+        """把上一进程遗留的 running 记录标记为 failed（启动自愈），返回回收条数。
+
+        为什么必须做（2026-09-14 复盘）：uvicorn 未开 --reload，重启/被杀会中断正在
+        执行的任务，被中断的 run 会永久停在 running 状态。而调度器的运行中保护是
+        「同任务 2h 内有 running 记录则跳过本次触发」——于是被中断的任务在重启后
+        **2 小时内无法重跑**，连 catchup_missed 补跑也会被挡掉。
+        实测代价：`daily_recon_window` 在 09-11 20:00 起的 run 被中断后留下僵尸记录，
+        导致 09-11、09-12 连续两个 20:45 计划班次被静默跳过（历史 4 次运行全是
+        手工/中断，从未按 cron 自然跑成）。
+
+        判定依据：本方法只在 SchedulerManager.start() 中调用，此刻进程刚起，
+        **不可能存在由本进程发起的 running 记录**，因此全部视作僵尸，可安全回收。
+        （原先靠人工执行 scripts/fix_stale_running.py，属「需要人记得做」的脆弱流程。）
+        """
+        from .db import _connect  # noqa: PLC0415
+
+        conn = _connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, task_name, started_at FROM task_runs WHERE status='running'")
+                zombies = cur.fetchall()
+                if zombies:
+                    cur.execute(
+                        "UPDATE task_runs SET status='failed', finished_at=NOW(), "
+                        "error_message=CONCAT(COALESCE(error_message,''), %s) WHERE status='running'",
+                        ("[启动自愈] 进程重启中断，已自动标记为 failed（非任务本身失败）",),
+                    )
+            conn.commit()
+            if zombies:
+                names = ", ".join(f"{z[1]}#{z[0]}" for z in zombies[:8])
+                logger.warning(f"🧹 启动自愈：回收僵尸 running 记录 {len(zombies)} 条 → {names}")
+            return len(zombies)
+        finally:
+            conn.close()
 
     def shutdown(self):
         if self._scheduler and self._scheduler.running:
@@ -130,7 +277,11 @@ class SchedulerManager:
                     replace_existing=True,
                 )
             scheduled.append(name)
-        logger.info(f"调度同步完成: 计划 {len(scheduled)} 个任务 {scheduled}, 解析失败 {errors}")
+        # 逐条打印中文调度语义：APScheduler 的 day_of_week 是 0=周一（与 Unix crontab
+        # 的 0=周日相反），写错 `1-5` 会静默变成「周二~周六」。把 cron 渲染成中文可肉眼复核。
+        for name in sorted(scheduled):
+            logger.info(f"  ↳ {name:<26} {want[name]['cron']:<16} {cron_human(want[name]['cron'])}")
+        logger.info(f"调度同步完成: 计划 {len(scheduled)} 个任务, 解析失败 {errors}")
         return {"scheduled": scheduled, "errors": errors}
 
     # ---------- 任务执行 ----------
@@ -306,6 +457,7 @@ class SchedulerManager:
                     "task_name": name,
                     "enabled": bool(r["enabled"]),
                     "cron": r["cron"] or MANUAL_MARK,
+                    "cron_human": cron_human(r["cron"]),   # 中文语义（防 day_of_week 误读）
                     "params": r["params"],
                     "update_time": r["update_time"],
                     "implemented": name in known,            # TASKS 中是否有实现

@@ -40,6 +40,12 @@ weekly 组设计说明（2026-09-10 实测结论）：
 - daily_source_handoff  跨源衔接偏差（实测 2,532 行，AKSHARE→TENCENT 基准微差，真实问题）
 - 已废弃：daily_amount_cross（量额勾稽）—— 实测 47% 行违反，根因是 volume/amount 为真实值
   而 OHLC 为前复权值，两者不同口径，勾稽数学退化。不可实现，故不写入规则。
+
+🗓️ 调度语义提醒（2026-09-14 事故）：task_config 的 cron 由 APScheduler
+   `CronTrigger.from_crontab` 解析，**day_of_week 为 0=周一、6=周日**，
+   与 Unix crontab 相反。写 `* * 1-5` 不是「工作日」而是「周二~周六」。
+   `futures_sync` 曾因此周一漏跑、周六空跑。凡涉及星期的 cron 请用
+   `scheduler.cron_human()` 复核中文语义后再落库（作业监控页与调度日志均会显示）。
 """
 import json
 import sys
@@ -80,6 +86,13 @@ RULES = [
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),
+    # 2026-09-14 补盲点：本表**没有 trade_date 列**，此前只有行数 + 代码正则两条规则，
+    # 行数达标即判 pass —— 实测 update_time 曾停在 09-12 09:33（缺 09-14 全天）
+    # 而 5121 行依然 pass，是「体检说没事、实际已停更」的唯一盲点。
+    # freshness_daily 检查器取 MAX(date_col) 后只截前 10 位比较，可直接吃时间戳列。
+    ("current_fresh", "stock_market_current", "freshness_daily",
+     {"date_col": "update_time", "warn_days": 1}, "warning", 1,
+     "快照新鲜度（表无 trade_date，改以 update_time 判定）：快照更新日应对齐最近交易日，容忍 1 个交易日（2026-09-14 补盲点）"),
     ("current_code", "stock_market_current", "regex_count",
      {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1, "快照股票代码格式校验"),
     # ---------- 概念 ----------
@@ -87,8 +100,10 @@ RULES = [
      {"date_col": "trade_date", "warn_days": 5}, "warning", 1,
      "概念指数日线对齐交易日历（同花顺周级波动容忍，2026-09-12 由 2 放宽至 5）"),
     ("concept_market_rows", "ths_concept_market", "row_count_slice",
-     {"date_col": "trade_date", "min_rows": 240}, "critical", 1,
-     "概念指数最新日条数（正常 ~375；源侧回 257 时仍属正常区间，2026-09-12 由 300 下调至 240）"),
+     {"date_col": "trade_date", "min_rows": 150}, "critical", 1,
+     "概念指数最新日条数（正常 375；源侧对部分新概念**延迟/分批发布**，20:30 体检时实测可能只有 ~204，"
+     "已由 20:00 主班次 + 22:00 补班次同日晚间补齐。2026-09-14 由 240 下调至 150：240 会把「分批发布」"
+     "误判为 fail，150 仍能挡住「只写几行」的假成功）"),
     ("concept_info_rows", "ths_concept_info", "row_count_total",
      {"min_rows": 300}, "warning", 1, "概念清单总行数下限（当前 406）"),
     ("stock_concepts_rows", "ths_stock_concepts", "row_count_total",
@@ -141,6 +156,14 @@ RULES = [
      {"where": "list_status='上市' AND (stock_code LIKE '6%' OR stock_code LIKE '0%' OR stock_code LIKE '3%') AND company_name IS NULL",
       "max_count": 0}, "warning", 1,
      "档案覆盖：沪深在市 A 股均应已有巨潮公司档案（company_name 非空）"),
+    # ---------- 调度/运维健康（2026-09-14 新增） ----------
+    # 关注对象不是业务数据，而是「采集任务本身有没有被卡住」。
+    # 起因：uvicorn 重启中断任务 → 留下永久 running 记录 → 调度器「同任务 2h running 保护」
+    # 令该任务 2h 内无法重跑（daily_recon_window 因此连续两个 20:45 班次被静默跳过）。
+    # 兜底层：SchedulerManager.start() 的启动自愈；本规则负责进程未重启时的长挂兜底。
+    ("task_stale_running", "task_runs", "stale_running",
+     {"hours": 3}, "warning", 1,
+     "僵尸 running 记录：任务记录停在 running 且已超 3 小时（重启中断的残留，会阻塞该任务后续触发）"),
 ]
 
 # weekly 组：全史窗口扫描类（每周一 21:30 独立任务，见文件头说明）
@@ -216,11 +239,13 @@ COVERAGE_RULES = [
     ("ai_concept_rows", "finance_concept_analysis", "row_count_total",
      {"min_rows": 600}, "warning", 1,
      "AI 概念分析结果行数下限（防误清空；实测 699）"),
-    # enabled=0：当前 22 行 relation_degree 越界，清理脏数据后再启用（否则该表永久标红）
+    # 2026-09-14 启用：22 行 legacy 负值（-6~-1）已归一到绝对值——早期版本用「符号表方向」
+    # （负=利空），与现行「1~10 表强度、relation_type 表方向」口径冲突；已在
+    # concept_ai._clamp_degree 加写入末关（入库前强制夹紧 1~10），三处写入路径全部覆盖。
     ("ai_concept_dim_range", "finance_concept_analysis", "where_count",
      {"where": "relation_degree < 1 OR relation_degree > 10", "max_count": 0},
-     "warning", 0,
-     "关联程度应落在 1~10（当前 22 行越界，清理后启用）"),
+     "warning", 1,
+     "关联程度应落在 1~10（2026-09-14 清理 22 行 legacy 负值后启用；写入侧已加夹紧）"),
 ]
 
 # ---------- B. 历史导入表冻结监护（原 10 张 → 现存 3 张）----------
@@ -271,8 +296,8 @@ RECOVERED_RULES = [
      {"min_rows": 130000}, "warning", 1,
      "分红送配总行数下限（当前 14.9 万；该表被 analysis/dividend 分红率分析消费）"),
     ("margin_freshness", "securities_margin", "freshness_daily",
-     {"date_col": "trade_date", "warn_days": 3}, "warning", 1,
-     "融资融券对齐交易日历（沪深所 T+1 发布，容错 3 个交易日）"),
+     {"date_col": "trade_date", "warn_days": 3, "grace_days": 1}, "warning", 1,
+     "融资融券对齐交易日历（沪深所 T+1 发布）：grace_days=1 表示交易日盘后只能拿到 T-1，属固有滞后不算异常；连停 2 日 → warning，>3 日 → fail（2026-09-14 加 grace，此前每个交易日盘后恒 warning，是固定假信号）"),
     ("margin_rows", "securities_margin", "row_count_total",
      {"min_rows": 3500}, "warning", 1,
      "融资融券总行数下限（三市合计口径：沪+深+北）"),
@@ -393,7 +418,7 @@ def main():
             total = cur.fetchone()[0]
         print(f"seed 完成，dq_rules 共 {total} 条规则，分组分布: {dist}")
         if retired:
-            print(f"已清理废弃规则 {retired} 条: {RETIRED_RULES}")
+            print(f"已清理废弃规则 {retired} 条（配置清单 {len(RETIRED_RULES)} 条，其余此前已删除）: {RETIRED_RULES}")
     finally:
         conn.close()
 

@@ -4,6 +4,8 @@
 InvestBuddy 后端 API 入口
 启动：uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
+import logging
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,6 +13,28 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer, prefs
 from .scheduler import manager as scheduler_manager
+
+
+def _setup_logging() -> None:
+    """让调度器/采集器的 INFO 日志可见（幂等，重复调用无副作用）。
+
+    为什么必须在这里配（2026-09-14 复盘）：uvicorn 只配置自己的 logger，root logger
+    停留在默认 WARNING，导致 `scheduler.sync_from_db()` 的中文调度语义日志（cron_human）
+    与启动补偿（catchup_missed）日志**根本不会输出**——「调度语义可视化」机制形同虚设。
+    此前 `🧹 启动自愈` 能看到，是因为 WARNING 恰好够到 logging.lastResort 兜底 handler
+    （无时间戳/无 logger 名），属于巧合而非设计。
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+    # 第三方库降噪：默认 INFO 会把 akshare/requests 的噪音淹没调度日志
+    for noisy in ("urllib3", "requests", "akshare", "matplotlib", "PIL", "asyncio"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_setup_logging()
 
 
 @asynccontextmanager

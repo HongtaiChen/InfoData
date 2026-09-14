@@ -212,6 +212,22 @@ def _clear_existing(event_id: int) -> None:
         conn.close()
 
 
+def _clamp_degree(v) -> int:
+    """关联程度归一化到 1~10 的整数。
+
+    ⚠️ 2026-09-14 复盘：`finance_concept_analysis.relation_degree` 曾出现 22 行
+    **负值**（-6~-1）——早期版本用「符号表达方向」（负=利空）写入，与现行
+    「1~10 表强度、relation_type 表方向」的口径冲突，使 where_count 规则
+    （1<=x<=10）恒红故被停用。故所有写入路径统一经本函数夹紧，
+    防止再次写入越界值（`_call_doubao` 已夹紧，占位实现恒为 5，此处为入库末关）。
+    """
+    try:
+        d = int(v)
+    except (TypeError, ValueError):
+        d = 5
+    return max(1, min(10, d))
+
+
 def _save_concepts(
     event_id: int, event: dict, concepts: list[dict], source: str
 ) -> None:
@@ -233,7 +249,7 @@ def _save_concepts(
                         c.get("concept_code") or "",
                         c.get("concept_name") or "",
                         c.get("relation_type") or "中性",
-                        int(c.get("relation_degree") or 0),
+                        _clamp_degree(c.get("relation_degree")),
                         (c.get("analysis") or "") + (f" [source={source}]" if source == "placeholder" else ""),
                         datetime.now(),
                     ),

@@ -2,12 +2,14 @@
 # -*- coding: utf-8 -*-
 """作业监控 API：任务配置（含调度状态）+ 运行记录 + 调度管理"""
 import json
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..db import get_db_config, query_all
 from ..scheduler import manager as scheduler_manager
+from ..scheduler import TZ, cron_human, parse_cron
 
 router = APIRouter()
 
@@ -67,6 +69,47 @@ def task_update(task_name: str, body: TaskUpdateBody):
     sync = scheduler_manager.sync_from_db()
     item = next((x for x in scheduler_manager.list_status() if x["task_name"] == task_name), None)
     return {"ok": True, "task": item, "sync": sync}
+
+
+@router.get("/cron-preview")
+def cron_preview(
+    cron: str = Query(..., description="5 字段 crontab（APScheduler 语义：day_of_week 0=周一）"),
+    count: int = Query(5, ge=1, le=20),
+):
+    """用**调度器同一套解析器**预览未来 N 次运行时间。
+
+    为什么必须由后端算（2026-09-14 复盘）：前端原先用 `cron-parser` 预览，而
+    cron-parser 遵循 Unix 语义（day_of_week 0=周日），与 APScheduler（0=周一）
+    **相差一天**——用户在「编辑 cron」弹窗里看到的未来运行时间是错的，
+    等于把排期语义坑从后端搬到了 UI。故统一改为后端计算，前端只负责展示。
+
+    返回值同时带 `cron_human`（中文语义），保证「说的」和「跑的」是同一个事实。
+    """
+    expr = (cron or "").strip()
+    trigger = parse_cron(expr)
+    if trigger is None:
+        return {
+            "ok": False,
+            "cron": expr,
+            "cron_human": cron_human(expr),
+            "error": "cron 格式无效，或为手动触发模式（不参与自动调度）",
+            "times": [],
+        }
+    week_cn = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    times: list[dict] = []
+    prev = None
+    cur = datetime.now(TZ)
+    for _ in range(count):
+        nxt = trigger.get_next_fire_time(prev, cur)
+        if nxt is None:
+            break
+        local = nxt.astimezone(TZ)
+        times.append({
+            "at": local.strftime("%Y-%m-%d %H:%M"),
+            "week": week_cn[local.weekday()],
+        })
+        prev = cur = nxt
+    return {"ok": True, "cron": expr, "cron_human": cron_human(expr), "times": times}
 
 
 @router.post("/tasks/{task_name}/trigger")

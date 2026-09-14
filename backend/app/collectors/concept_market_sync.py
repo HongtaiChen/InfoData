@@ -15,6 +15,12 @@
 - 东财概念接口（stock_board_concept_hist_em）受风控不可用，同花顺为主力源
 - 概念只增不减的极端情况：已下架概念保留在库中（名称匹配不到则跳过，不影响历史）
 - 增量窗口：库内该概念最大交易日的次日 → 今天；无历史数据的新概念默认回补近 400 天
+
+⚠️ 容错契约（2026-09-14 修复）：本采集器**所有**外部调用都必须经
+   `call_with_timeout` / `call_with_retry` 包裹——akshare 底层 requests 不传 timeout，
+   且同花顺连接常被对端重置（ConnectionResetError 10054）。此前主入口
+   `ak.stock_board_concept_name_ths()` 裸调、无超时无重试，一次瞬态重置即整轮失败，
+   导致 `ths_concept_market` 连停数日（09-12、09-14 各失败一次）。
 """
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -25,16 +31,16 @@ import pandas as pd
 import pymysql
 
 from ..db import get_db_config
-from ._common import with_steps
+from ._common import with_steps, call_with_timeout, call_with_retry
 
 logger = logging.getLogger("infodata.concept_market_sync")
 
 # 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
 RUN_STEPS = [
-    {"no": 1, "name": "拉概念清单", "params": "同花顺 stock_board_concept_name_ths()（name + concept_code 309xxx）"},
+    {"no": 1, "name": "拉概念清单", "params": "同花顺 stock_board_concept_name_ths()（name + concept_code 309xxx），60s 超时 + 3 次退避重试"},
     {"no": 2, "name": "对齐库内映射", "params": "concept_name → index_code/库内最大日期（886 段优先继承）"},
     {"no": 3, "name": "增量窗口判定", "params": "库内最大日次日 → 今天；新概念回补 400 天；已最新跳过"},
-    {"no": 4, "name": "并发拉取历史", "params": "4 线程 stock_board_concept_index_ths，单概念 40s 硬超时"},
+    {"no": 4, "name": "并发拉取历史", "params": "4 线程 stock_board_concept_index_ths，单概念 40s 硬超时 + 1 次重试"},
     {"no": 5, "name": "组装与推算", "params": "中文列归一（日期/OHLC/量额）；涨跌额/涨跌幅按收盘连算推算"},
     {"no": 6, "name": "双表写入", "params": "新概念入 ths_concept_info；行情 INSERT IGNORE（唯一键 index_code+trade_date）"},
 ]
@@ -47,6 +53,11 @@ FALLBACK_DAYS = 400
 WORKERS = 4
 # 单概念拉取硬超时（秒）
 FETCH_TIMEOUT = 40
+# 单概念失败后的额外重试次数
+FETCH_RETRY = 1
+# 概念清单（主入口）超时与重试：此调用是整轮的单点，必须最稳
+LIST_TIMEOUT = 60
+LIST_RETRY = 3
 
 
 def _to_num(x):
@@ -70,8 +81,15 @@ class ConceptMarketSyncCollector:
     # ---------- 拉取单概念历史 ----------
 
     def _fetch_hist(self, name: str, start: str, end: str):
-        """返回 DataFrame（akshare 中文列）或抛异常"""
-        return ak.stock_board_concept_index_ths(symbol=name, start_date=start, end_date=end)
+        """返回 DataFrame（akshare 中文列）或抛异常
+
+        硬超时 + 少量重试（连接重置/限流均为瞬态，重试一次即可显著降低失败率）。
+        """
+        return call_with_retry(
+            ak.stock_board_concept_index_ths, FETCH_TIMEOUT,
+            attempts=FETCH_RETRY + 1,
+            symbol=name, start_date=start, end_date=end,
+        )
 
     # ---------- 主流程 ----------
 
@@ -80,7 +98,10 @@ class ConceptMarketSyncCollector:
         try:
             # 1. 当前概念列表（name + concept_code）
             logger.info("拉取同花顺概念列表…")
-            list_df = ak.stock_board_concept_name_ths()
+            # 单点调用：超时 60s + 3 次退避重试（1.5s→3s→6s）
+            list_df = call_with_retry(
+                ak.stock_board_concept_name_ths, LIST_TIMEOUT, attempts=LIST_RETRY,
+            )
             concepts = []
             for _, r in list_df.iterrows():
                 name = str(r["name"]).strip()

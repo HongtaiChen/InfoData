@@ -43,7 +43,8 @@ TASKS = [
     ("ths_dividend_sync", 1, "0 3 1,15 * *",
      {"max_stocks": 0, "sleep_sec": 0.12, "retry": 1, "timeout_sec": 30}),
     # ---- 第 3 批 P2 ----
-    ("futures_sync", 1, "20 22 * * 1-5",
+    # ⚠️ `0-4` = 周一~周五（APScheduler 0=周一）；写成 `1-5` 会变成周二~周六（2026-09-14 修正）
+    ("futures_sync", 1, "20 22 * * 0-4",
      {"chunk_days": 30, "max_days": 0, "sleep_sec": 0.5,
       "timeout_sec": 180, "first_lookback_days": 365, "from_date": None}),
     ("sw_industry_sync", 1, "30 3 1 * *",

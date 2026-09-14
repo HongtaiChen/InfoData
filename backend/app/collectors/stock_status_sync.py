@@ -10,8 +10,16 @@ InvestBuddy 上市/退市状态采集器（stock_status_sync，Baostock 权威�
   2. list_date 仅补 NULL（用官方 ipoDate，不覆盖已有值）
 - 边界：Baostock 仅覆盖沪深 A 股；B 股/北交所代码不在名单 → 保持 NULL 不误标
 - 幂等：整轮可安全重复执行
+
+⚠️ 容错契约（2026-09-14 补）：Baostock 为**登录态会话**，网络抖动常表现为
+   「登录失败: 网络接收错误」/「query_stock_basic 失败: 网络接收错误」并在数秒内快速失败
+   （2026-09-14 一天内实测失败 2 次，均在重跑后立刻成功）。故本采集器加**重试 + 退避**：
+   整段「登录 → 拉取 → 登出」作为一次尝试，失败则退避后重来（而不是只重试单个接口）。
+   刻意不用 `call_with_timeout` 的守护线程超时——被放弃的线程仍持有全局 baostock 会话，
+   其 logout() 会踩掉重试会话，反而制造更诡异的行为。
 """
 import logging
+import time
 
 import pymysql
 
@@ -24,19 +32,22 @@ logger = logging.getLogger(__name__)
 
 # 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
 RUN_STEPS = [
-    {"no": 1, "name": "Baostock 全量拉取", "params": "query_stock_basic（沪深全部，含退市 300+ 只）"},
+    {"no": 1, "name": "Baostock 全量拉取", "params": "query_stock_basic（沪深全部，含退市 300+ 只）；登录态会话，失败退避重试 2 次"},
     {"no": 2, "name": "数量护栏校验", "params": "返回 < 4000 只拒绝覆盖（防接口异常）"},
     {"no": 3, "name": "状态全量覆盖", "params": "逐只 UPDATE stock_info.list_status（上市/退市）"},
     {"no": 4, "name": "日期字段补充", "params": "outDate → delist_date；官方 ipoDate 仅补空 list_date（不覆盖本地推断）"},
 ]
 
 _PREFIX = ("sh.", "sz.")
+# Baostock 网络抖动重试（见模块头「容错契约」）
+RETRY = 2
+BACKOFF = 3.0
 
 
 class StockStatusSyncCollector:
     """上市/退市状态同步（Baostock）"""
 
-    def _fetch_all_stocks(self) -> list[dict]:
+    def _fetch_once(self) -> list[dict]:
         lg = bs.login()
         if lg.error_code != "0":
             raise RuntimeError(f"Baostock 登录失败: {lg.error_msg}")
@@ -62,6 +73,21 @@ class StockStatusSyncCollector:
             return out
         finally:
             bs.logout()
+
+    def _fetch_all_stocks(self) -> list[dict]:
+        """带退避重试的全量拉取（登录态会话整体重来，见模块头「容错契约」）"""
+        last: Exception | None = None
+        for i in range(RETRY + 1):
+            try:
+                return self._fetch_once()
+            except Exception as e:  # noqa: BLE001 - 重试后仍失败则原样抛出
+                last = e
+                if i < RETRY:
+                    delay = BACKOFF * (2 ** i)
+                    logger.warning(f"Baostock 拉取失败（第 {i + 1}/{RETRY + 1} 次），{delay:g}s 后重试: {e}")
+                    time.sleep(delay)
+        assert last is not None
+        raise last
 
     def run(self) -> dict:
         stocks = self._fetch_all_stocks()

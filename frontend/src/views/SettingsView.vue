@@ -8,6 +8,12 @@ import api from '../api'
 
 const backendInfo = ref<any>(null)
 
+// 任务调度语义：一律从 /jobs/tasks 实时取（后端用与调度器同源的 cron_human 渲染），
+// 页面里**不再手抄 cron**——手抄必然漂移（2026-09-14 实测：本页曾写
+// market_current_sync=工作日18:30 / trade_calendar_sync=周日02:30，
+// 而真实为 19:30 / 周日09:00；finance_calendar_sync 标「源失效」但当日已成功运行）。
+const scheduleMap = ref<Record<string, { human: string; enabled: boolean; scheduled: boolean }>>({})
+
 // 数据库概览（直接查 information_schema 行数估计，不扫描大表）
 async function loadDbStats() {
   try {
@@ -16,6 +22,20 @@ async function loadDbStats() {
     backendInfo.value = { jobsApi: 'ok', taskCount: resp.items?.length || 0 }
   } catch (e) {
     backendInfo.value = { jobsApi: 'error' }
+  }
+  try {
+    const tr: any = await api.get('/jobs/tasks')
+    const m: Record<string, { human: string; enabled: boolean; scheduled: boolean }> = {}
+    for (const t of tr.items || []) {
+      m[t.task_name] = {
+        human: t.cron_human || t.cron || '',
+        enabled: !!t.enabled,
+        scheduled: !!t.scheduled,
+      }
+    }
+    scheduleMap.value = m
+  } catch (e) {
+    console.error('[settings/schedules]', e)
   }
 }
 
@@ -29,16 +49,36 @@ const dataSources = [
   { source: '财联社', scope: '财联社电报（与东财双源轮询）', status: '已接入', type: 'info' as const },
 ]
 
-const taskOverview = [
-  { name: 'stock_daily_incr', desc: '股票日线增量采集（东财→腾讯→新浪→Tushare 四级降级）', schedule: '工作日 19:00', statusType: 'info' as const },
-  { name: 'news_fetch', desc: '资讯采集：财联社 + 东财 双源去重', schedule: '每 30 分钟', statusType: 'info' as const },
-  { name: 'concept_market_sync', desc: '同花顺概念板块行情增量同步（375 概念，85265 行历史已回补）', schedule: '工作日 20:00', statusType: 'info' as const },
-  { name: 'market_current_sync', desc: '行情快照聚合（最新交易日 OHLC + YTD）', schedule: '工作日 18:30', statusType: 'info' as const },
-  { name: 'trade_calendar_sync', desc: '交易日历补齐（含 year/month/day 冗余列回填）', schedule: '周日 02:30', statusType: 'info' as const },
-  { name: 'ai_concept_analysis', desc: '日历事件 AI 概念分析（豆包，无 Key 时降级占位）', schedule: '手动/触发', statusType: 'info' as const },
-  { name: 'finance_calendar_sync', desc: '投资日历事件（原 JY 源失效，待替代源）', schedule: '源失效', statusType: 'warning' as const },
-  { name: 'ths_stock_concepts_sync', desc: '同花顺概念成分股映射（东财风控停摆，源恢复后补）', schedule: '源受限', statusType: 'warning' as const },
+// 任务概览：只维护「任务名 + 职责说明 + 未配置时的兜底文案」，
+// 调度时间由 scheduleMap（task_config 实时值）提供（见上方注释，防手抄漂移）。
+type TaskOverviewItem = { name: string; desc: string; fallback?: string }
+const taskOverview: TaskOverviewItem[] = [
+  { name: 'stock_daily_incr', desc: '股票日线增量采集（东财→腾讯→新浪→Tushare 四级降级）' },
+  { name: 'news_fetch', desc: '资讯采集：财联社 + 东财 双源去重' },
+  { name: 'concept_market_sync', desc: '同花顺概念板块行情增量同步（晚间主班 + 补班，覆盖分批发布）' },
+  { name: 'market_current_sync', desc: '行情快照聚合（最新交易日 OHLC + YTD）' },
+  { name: 'trade_calendar_sync', desc: '交易日历补齐（含 year/month/day 冗余列回填）' },
+  { name: 'ai_concept_analysis', desc: '日历事件 AI 概念分析（豆包，无 Key 时降级占位）', fallback: '手动触发' },
+  { name: 'finance_calendar_sync', desc: '投资日历事件同步（财经日历源）' },
+  { name: 'ths_stock_concepts_sync', desc: '同花顺概念成分股映射（东财风控停摆，源恢复后补）', fallback: '未纳入 task_config' },
+  { name: 'data_quality_check', desc: '数据质量日检（全库规则体检，结果见「数据质量」栏目）' },
+  { name: 'daily_recon_window', desc: '腾讯滚动窗口对账（与本地日线逐日比对）' },
+  { name: 'capital_flow_sync', desc: '主力资金流向（东财口径校验未达标，暂不参与调度）' },
 ]
+
+function scheduleOf(t: TaskOverviewItem): string {
+  const s = scheduleMap.value[t.name]
+  if (!s) return t.fallback || '未配置'
+  if (s.human === '手动触发') return '手动触发' // 手动类任务 enabled=0 是常态，不算「停用」
+  if (!s.enabled) return `${s.human}（已停用）`
+  return s.human
+}
+function scheduleTypeOf(t: TaskOverviewItem): 'info' | 'warning' | 'default' {
+  const s = scheduleMap.value[t.name]
+  if (!s) return 'default'
+  if (s.human === '手动触发') return 'default'
+  return s.enabled ? 'info' : 'warning'
+}
 
 onMounted(loadDbStats)
 </script>
@@ -111,7 +151,7 @@ onMounted(loadDbStats)
             <tr v-for="t in taskOverview" :key="t.name">
               <td style="font-weight: 600; font-family: monospace">{{ t.name }}</td>
               <td style="color: #666">{{ t.desc }}</td>
-              <td><NTag size="small" :bordered="false" :type="t.statusType">{{ t.schedule }}</NTag></td>
+              <td><NTag size="small" :bordered="false" :type="scheduleTypeOf(t)">{{ scheduleOf(t) }}</NTag></td>
             </tr>
           </tbody>
         </NTable>

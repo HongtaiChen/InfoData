@@ -16,6 +16,7 @@ call_with_timeout：给 akshare 等「裸 requests 调用」加超时兜底。
   由调用方按「跳过该日 / 记 error / 下轮自动补」的容错策略处理，绝不无限等待。
 """
 import threading
+import time
 from datetime import date, datetime, timedelta
 
 __all__ = ["with_steps", "CollectorTimeout", "call_with_timeout",
@@ -74,6 +75,33 @@ def call_with_timeout(fn, timeout: float, *args, **kwargs):
     if "error" in box:
         raise box["error"]
     return box.get("value")
+
+
+def call_with_retry(fn, timeout: float, attempts: int = 3, base_delay: float = 1.5,
+                    *args, **kwargs):
+    """`call_with_timeout` + 指数退避重试（瞬态网络故障的通用兜底）。
+
+    背景（2026-09-14 复盘）：`concept_market_sync` 的主入口
+    `ak.stock_board_concept_name_ths()` 只有一次机会，一旦对端
+    `ConnectionResetError(10054)`（同花顺反爬/长连接被重置）就整轮失败——
+    实测 09-12、09-14 各失败一次，每次 3 秒即挂、`ths_concept_market` 随之停更。
+    这类错误是**瞬态**的（同一调用稍后重试即成功：09-11 手工重试当场写 631 行），
+    所以正确做法不是「失败即放弃」，而是有限次退避重试。
+
+    attempts 为总尝试次数（含首次）；全部失败时抛出最后一次的异常，
+    由调用方按「记 error / 下轮自动补」处理。delay 序列 base_delay × 2^i（1.5s→3s→6s）。
+    """
+    last: Exception | None = None
+    n = max(1, int(attempts))
+    for i in range(n):
+        try:
+            return call_with_timeout(fn, timeout, *args, **kwargs)
+        except Exception as e:  # noqa: BLE001 - 重试后仍失败则原样抛出
+            last = e
+            if i < n - 1:
+                time.sleep(base_delay * (2 ** i))
+    assert last is not None
+    raise last
 
 
 def with_steps(result: dict, run_steps: list[dict], values: dict[int, str]) -> dict:

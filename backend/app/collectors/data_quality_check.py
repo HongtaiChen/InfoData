@@ -17,7 +17,9 @@ InvestBuddy 数据质量体检（DQ）
   （dq_gap_detail 明细同策略）
 
 dq_rules.params（JSON）契约，按 check_type 分：
-  freshness_daily   {date_col, calendar, warn_days}        对齐交易日历，落后>warn_days fail
+  freshness_daily   {date_col, calendar, warn_days, grace_days}
+                                    对齐交易日历；落后 ≤grace_days 判 pass（源固有 T+1 滞后），
+                                    落后 ≤warn_days 判 warning，否则 fail
   freshness_interval {time_col, pass_hours, fail_hours}    距当前时长分级
   date_floor        {date_col, days_back}                  MAX(date_col) >= 今天-days_back
   row_count_slice   {date_col, min_rows}                   最新切片行数下限
@@ -32,6 +34,7 @@ dq_rules.params（JSON）契约，按 check_type 分：
   per_key_coverage  {date_col, key_col, window_days, min_rows, min_listed_days,
                      ref_table, ref_key, ref_status_col, ref_status_val, ref_date_col,
                      exclude_prefixes}                     近端每票行数下限（在市老票）
+  stale_running     {hours}                              僵尸 running 记录数（task_runs）
 """
 import logging
 import json
@@ -49,7 +52,7 @@ logger = logging.getLogger(__name__)
 RUN_STEPS = [
     {"no": 1, "name": "读启用规则", "params": "dq_rules enabled=1（按 rule_group 分组过滤，按表排序）"},
     {"no": 2, "name": "规则预校验", "params": "表/列（含参照表）information_schema 白名单 + where 标识符白名单（防注入）"},
-    {"no": 3, "name": "执行检查器", "params": "13 类检查器（新鲜度/切片行数/空值率/违规数/全史缺口/跨源衔接/覆盖率…）；单条失败记 error 不中断"},
+    {"no": 3, "name": "执行检查器", "params": "14 类检查器（新鲜度/切片行数/空值率/违规数/全史缺口/跨源衔接/覆盖率/僵尸运行…）；单条失败记 error 不中断"},
     {"no": 4, "name": "写入结果", "params": "dq_report 每规则一行 + gap_scan 明细写 dq_gap_detail（供 L3 修复闭环）"},
     {"no": 5, "name": "轮次保留清理", "params": "删除 run_date 早于 30 天的 dq_report / dq_gap_detail 历史"},
 ]
@@ -144,11 +147,20 @@ class DataQualityCheckCollector:
     # ---------- 检查器 ----------
 
     def _freshness_daily(self, conn, rule: dict) -> dict:
-        """对齐交易日历：表 MAX(date_col) 与最近交易日比较，返回 report 字段"""
+        """对齐交易日历：表 MAX(date_col) 与最近交易日比较，返回 report 字段
+
+        `grace_days`（2026-09-14 新增，默认 0）：**允许的固有滞后**，落后 ≤ grace
+        即判 pass。用于「源本身 T+1 发布」的表——两融（securities_margin）在交易日
+        盘后天然只能拿到 T-1，此前 behind 恒为 1、warn_days 只区分 warning/fail，
+        于是该规则在**每个交易日盘后必然 warning**，成了恒定的假信号。
+        设 grace_days=1 后：正常 → pass，连停 2 日 → warning，超 warn_days → fail，
+        仍能抓住真实停更（只是延后一个交易日暴露）。
+        """
         p = rule.get("params") or {}
         date_col = p.get("date_col", "trade_date")
         calendar = p.get("calendar", "trade_calendar")
         warn_days = int(p.get("warn_days", 2))
+        grace_days = int(p.get("grace_days", 0))
         table = rule["table_name"]
         with conn.cursor() as cur:
             cur.execute(f"SELECT MAX(`{date_col}`) AS d FROM `{table}`")
@@ -170,14 +182,14 @@ class DataQualityCheckCollector:
                 (max_date, expected),
             )
             behind = cur.fetchone()["n"]
-        if behind == 0:
+        if behind <= grace_days:
             status = "pass"
         elif behind <= warn_days:
             status = "warning"
         else:
             status = "fail"
         if status == "pass":
-            msg = f"最新 {max_date}，与交易日历一致"
+            msg = f"最新 {max_date}，与交易日历一致" if behind == 0 else f"最新 {max_date}，落后 {behind} 个交易日（≤ 固有滞后 {grace_days} 日，视为一致）"
         else:
             msg = f"最新 {max_date}，落后 {behind} 个交易日（应为 {expected}）"
         return {"status": status, "metric_value": max_date, "message": msg}
@@ -482,6 +494,31 @@ class DataQualityCheckCollector:
         msg = f"近 {window_days} 日行数 <{min_rows} 的在市老票 {n} 只（参照 {ref_table}，排除北交所前缀 {excludes}）"
         return {"status": status, "metric_value": str(n), "message": msg}
 
+    def _stale_running(self, conn, rule: dict) -> dict:
+        """僵尸 running 记录：status='running' 且 started_at 早于 N 小时前。
+
+        为什么需要（2026-09-14 复盘）：uvicorn 重启会中断正在执行的任务，被中断的 run
+        永久停在 running；而调度器的运行中保护是「同任务 2h 内 running 则跳过触发」，
+        于是被中断的任务在重启后 2h 内无法重跑。实测 `daily_recon_window` 因此连续
+        两个 20:45 班次被静默跳过（对账多日未按计划执行的真根因）。
+
+        兜底层次：SchedulerManager.start() 已加「启动自愈」自动回收，本规则负责
+        在**进程未重启**的情况下也能发现长挂任务（如无超时的外部调用卡死）。
+        """
+        p = rule.get("params") or {}
+        hours = float(p.get("hours", 3))
+        table = rule["table_name"]
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT COUNT(*) AS n FROM `{table}` "
+                "WHERE status='running' AND started_at < DATE_SUB(NOW(), INTERVAL %s HOUR)",
+                (hours,),
+            )
+            n = cur.fetchone()["n"]
+        status = "pass" if n == 0 else "warning"
+        msg = f"疑似僵尸 running {n} 条（running 且已启动 >{hours:g}h）"
+        return {"status": status, "metric_value": str(n), "message": msg}
+
     CHECKERS = {
         "freshness_daily": _freshness_daily,
         "freshness_interval": _freshness_interval,
@@ -496,6 +533,7 @@ class DataQualityCheckCollector:
         "gap_scan": _gap_scan,
         "source_handoff": _source_handoff,
         "per_key_coverage": _per_key_coverage,
+        "stale_running": _stale_running,
     }
 
     # ---------- 主流程 ----------
