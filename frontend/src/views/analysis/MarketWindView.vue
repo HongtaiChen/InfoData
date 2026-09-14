@@ -17,7 +17,13 @@ import api from '../../api'
 
 const router = useRouter()
 
-interface Kpi { key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string; tone?: 'updown' | 'neutral' }
+interface Kpi {
+  key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string
+  tone?: 'updown' | 'neutral'
+  pct?: number | null   // 近 250 日分位（0~100）
+  highlight?: boolean   // 分位进极值区 → 金色标记
+  anchor?: string       // 点 KPI 卡滚动到的页内锚点
+}
 interface GroupRow { group: string; ret_20: number | null; ret_60: number | null }
 interface GradRow { code: string; name: string; desc: string; ret_20: number | null; change_pct: number | null }
 interface DetailRow {
@@ -27,6 +33,7 @@ interface DetailRow {
 
 const loading = ref(false)
 const asOf = ref('')
+const staleSessions = ref(0)   // as_of 之后已走过的交易日数（0=最新）
 const kpis = ref<Kpi[]>([])
 const groups = ref<GroupRow[]>([])
 const gradient = ref<GradRow[]>([])
@@ -47,6 +54,7 @@ async function load() {
   try {
     const resp: any = await api.get('/analysis/market-wind', { params: { trend_days: trendDays.value } })
     asOf.value = resp.as_of ?? ''
+    staleSessions.value = resp.stale_sessions ?? 0
     // tone 由后端 KPI payload 给出（分位数类指标 = neutral，不按红涨绿跌染色）
     kpis.value = (resp.kpis ?? []).map((k: Kpi) => ({ ...k, tone: k.tone ?? 'updown' }))
     groups.value = resp.groups ?? []
@@ -90,7 +98,10 @@ const detailColumns: DataTableColumns<DetailRow> = [
   <NSpin :show="loading">
     <!-- ② 参数区 -->
     <div class="mw-params">
-      <span class="mw-asof">数据截至 <b>{{ asOf || '--' }}</b></span>
+      <span class="mw-asof">
+        数据截至 <b :class="{ stale: staleSessions > 0 }">{{ asOf || '--' }}</b>
+        <span v-if="staleSessions > 0" class="mw-stale">· 已落后 {{ staleSessions }} 个交易日</span>
+      </span>
       <NSelect v-model:value="trendDays" :options="trendDaysOptions" size="tiny" style="width: 100px" @update:value="load" />
     </div>
 
@@ -98,19 +109,19 @@ const detailColumns: DataTableColumns<DetailRow> = [
     <KpiCards :items="kpis" />
 
     <!-- ④ 主视图 -->
-    <NCard size="small" class="mw-card" title="六组等权收益（20 日，红涨绿跌）">
+    <NCard id="mw-heat" size="small" class="mw-card" title="六组等权收益（20 日，副标为 60 日，红涨绿跌）">
       <GroupHeatBars
         :rows="groups.map((g) => ({ label: g.group, value: g.ret_20, sub: g.ret_60 == null ? '' : `60日 ${g.ret_60 > 0 ? '+' : ''}${g.ret_60.toFixed(2)}%` }))"
       />
     </NCard>
 
     <div class="mw-two-col">
-      <NCard size="small" class="mw-card" title="市值风格五档（20 日收益）">
+      <NCard id="mw-gradient" size="small" class="mw-card" title="市值风格五档（20 日收益）">
         <SizeGradient
           :items="gradient.map((g) => ({ name: g.name, desc: g.desc, value: g.ret_20, change_pct: g.change_pct }))"
         />
       </NCard>
-      <NCard size="small" class="mw-card" title="风格轮动时序（剪刀差 & 风偏分数）">
+      <NCard id="mw-trend" size="small" class="mw-card" title="风格轮动时序（剪刀差 & 风偏分数）">
         <DualLineTrend
           :dates="trend.dates"
           :series="[
@@ -123,7 +134,7 @@ const detailColumns: DataTableColumns<DetailRow> = [
     </div>
 
     <!-- ⑤ 明细下钻区 -->
-    <NCard size="small" class="mw-card" title="指数明细（21 只）">
+    <NCard id="mw-detail" size="small" class="mw-card" title="指数明细（21 只）">
       <template #header-extra>
         <DrillLink :items="[{ label: '行情看板看K线', to: '/market' }]" />
       </template>
@@ -142,7 +153,10 @@ const detailColumns: DataTableColumns<DetailRow> = [
 <style scoped>
 .mw-params { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .mw-asof { font-size: 13px; color: #6B7280; }
-.mw-card { margin-bottom: 12px; }
+/* 滞后提示（设计规范 §2.2）：数据落后于最新交易日时标琥珀，避免静默展示旧数据 */
+.mw-asof b.stale, .mw-asof .mw-stale { color: #B45309; }
+/* scroll-margin-top：KPI 卡点击滚到锚点时留出顶栏高度，避免卡片标题被顶栏遮住 */
+.mw-card { margin-bottom: 12px; scroll-margin-top: 12px; }
 .mw-two-col { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; }
 @media (max-width: 900px) { .mw-two-col { grid-template-columns: 1fr; } }
 </style>

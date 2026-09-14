@@ -2,7 +2,8 @@
 /**
  * AnalysisModuleView —— 分析模块详情容器（AnalysisShell v0.2）
  * 路由 /analysis/:moduleId；标题区（名称/口径/分组/截至）由容器统一渲染，主视图由模块组件注入
- * 模块注册：后端 app/analysis/registry.py；前端组件映射 src/analysis/modules.ts
+ * 模块注册：后端 app/analysis/registry.py；前端组件映射见本文件下方 moduleViews（此前注释指向
+ * 已不存在的 src/analysis/modules.ts，2026-09-14 订正）
  */
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
