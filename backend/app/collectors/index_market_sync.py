@@ -481,6 +481,8 @@ class IndexMarketSyncCollector:
                     index_map.setdefault(code, (_guess_market(code), name))
 
                 for code, (market, name) in index_map.items():
+                    # 分组/角色说明（INDEX_META 为唯一事实来源；DB 增补代码无元数据时置 NULL）
+                    grp, desc = INDEX_META.get(code, (None, None))
                     cur.execute(
                         "SELECT COALESCE(MAX(trade_date), NULL) FROM dc_index_market WHERE index_code=%s",
                         (code,),
