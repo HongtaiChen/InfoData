@@ -124,13 +124,13 @@ def market_wind(trend_days: int = 250) -> dict:
                   _num(cur_row.get("scissors_20")),
                   _num(cur_row.get("bench_pos_pct")))
     kpis = [
-        {"key": "risk_appetite", "label": "风偏分数（20日）", "value": ra, "unit": "pp",
+        {"key": "risk_appetite", "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
          "hint": "科技成长组 − 股息防守组 等权20日收益差；正=偏进攻，负=偏防守"},
-        {"key": "scissors", "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp",
+        {"key": "scissors", "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "updown",
          "status": _scissors_status(sc, prev5.get("scissors_20")),
          "hint": "(中证1000+中证2000) − (上证50+沪深300) 等权20日收益差；正=小盘占优"},
-        {"key": "bench_pos", "label": "大势位置（250日分位）", "value": bp, "unit": "%",
+        {"key": "bench_pos", "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
          "status": _pos_status(bp), "hint": "中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位"},
     ]
 

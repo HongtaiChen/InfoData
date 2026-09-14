@@ -17,13 +17,20 @@ interface RegistryItem {
   icon?: string
   desc: string
 }
+interface CardKpi {
+  label: string
+  value: number | null
+  unit?: string
+  status?: string
+  tone?: 'updown' | 'neutral'
+}
 
 const GROUP_ORDER = ['市场风向', '板块与概念', '个股基本面', '资金与情绪', '跟踪清单']
 
 const router = useRouter()
 const loading = ref(false)
 const modules = ref<RegistryItem[]>([])
-const cardKpis = ref<Record<string, { label: string; value: number | null; unit?: string; status?: string }[]>>({})
+const cardKpis = ref<Record<string, CardKpi[]>>({})
 
 onMounted(async () => {
   loading.value = true
@@ -58,8 +65,16 @@ const researchByGroup = computed(() => {
 function open(m: RegistryItem) {
   router.push(`/analysis/${m.module_id}`)
 }
-function kpiCls(v: number | null): string {
-  return v == null ? 'color:#909399' : v > 0 ? 'color:#EF232A' : v < 0 ? 'color:#14B143' : 'color:#909399'
+// 与 KpiCards 一致：tone='neutral' 的指标（如大势位置分位）不是涨跌语义，用主色，禁止按符号染红绿
+function kpiCls(k: CardKpi): string {
+  if (k.value == null) return 'color:#909399'
+  if (k.tone === 'neutral') return 'color:#185FA5'
+  return k.value > 0 ? 'color:#EF232A' : k.value < 0 ? 'color:#14B143' : 'color:#909399'
+}
+function kpiText(k: CardKpi): string {
+  if (k.value == null) return '--'
+  const sign = k.tone !== 'neutral' && k.value > 0 ? '+' : ''
+  return `${sign}${k.value}${k.unit ?? ''}`
 }
 </script>
 
@@ -79,9 +94,7 @@ function kpiCls(v: number | null): string {
         <div class="ao-card-kpis" v-if="cardKpis[m.module_id]?.length">
           <div v-for="k in cardKpis[m.module_id]" :key="k.label" class="ao-kpi">
             <div class="ao-kpi-label">{{ k.label }}</div>
-            <div class="ao-kpi-value" :style="kpiCls(k.value)">
-              {{ k.value == null ? '--' : `${k.value > 0 && k.unit === 'pp' ? '+' : ''}${k.value}${k.unit ?? ''}` }}
-            </div>
+            <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
             <div class="ao-kpi-status">{{ k.status }}</div>
           </div>
         </div>

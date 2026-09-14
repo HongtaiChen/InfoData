@@ -17,7 +17,7 @@ import api from '../../api'
 
 const router = useRouter()
 
-interface Kpi { key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string }
+interface Kpi { key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string; tone?: string }
 interface GroupRow { group: string; ret_20: number | null; ret_60: number | null }
 interface GradRow { code: string; name: string; desc: string; ret_20: number | null; change_pct: number | null }
 interface DetailRow {
@@ -47,10 +47,8 @@ async function load() {
   try {
     const resp: any = await api.get('/analysis/market-wind', { params: { trend_days: trendDays.value } })
     asOf.value = resp.as_of ?? ''
-    kpis.value = (resp.kpis ?? []).map((k: Kpi) => ({
-      ...k,
-      tone: k.key === 'bench_pos' ? 'neutral' : 'updown',
-    }))
+    // tone 由后端 KPI payload 给出（分位数类指标 = neutral，不按红涨绿跌染色）
+    kpis.value = (resp.kpis ?? []).map((k: Kpi) => ({ ...k, tone: k.tone ?? 'updown' }))
     groups.value = resp.groups ?? []
     gradient.value = resp.size_gradient ?? []
     trend.value = resp.trend ?? { dates: [], scissors: [], risk_appetite: [] }
@@ -108,7 +106,9 @@ const detailColumns: DataTableColumns<DetailRow> = [
 
     <div class="mw-two-col">
       <NCard size="small" class="mw-card" title="市值风格五档（20 日收益）">
-        <SizeGradient :items="gradient" />
+        <SizeGradient
+          :items="gradient.map((g) => ({ name: g.name, desc: g.desc, value: g.ret_20, change_pct: g.change_pct }))"
+        />
       </NCard>
       <NCard size="small" class="mw-card" title="风格轮动时序（剪刀差 & 风偏分数）">
         <DualLineTrend

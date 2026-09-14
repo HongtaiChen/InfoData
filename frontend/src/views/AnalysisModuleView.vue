@@ -4,7 +4,7 @@
  * 路由 /analysis/:moduleId；标题区（名称/口径/分组/截至）由容器统一渲染，主视图由模块组件注入
  * 模块注册：后端 app/analysis/registry.py；前端组件映射 src/analysis/modules.ts
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NCard, NEmpty, NSpin, NTag } from 'naive-ui'
 import api from '../api'
@@ -16,8 +16,11 @@ const moduleId = computed(() => String(route.params.moduleId ?? ''))
 const loading = ref(false)
 const moduleMeta = ref<any>(null)
 
+// moduleId → 视图组件映射（新增分析模块在此登记一行；后端元数据在 app/analysis/registry.py）
+// ⚠️ 必须用 defineAsyncComponent 包装：裸 () => import() 会被 Vue 当作「函数式组件」调用，
+//    返回的 Promise 会被直接渲染成 "[object Promise]"，模块主体不渲染（2026-09-14 实测踩坑）
 const moduleViews: Record<string, any> = {
-  'market-wind': () => import('./analysis/MarketWindView.vue'),
+  'market-wind': defineAsyncComponent(() => import('./analysis/MarketWindView.vue')),
 }
 const viewComp = computed(() => moduleViews[moduleId.value])
 
