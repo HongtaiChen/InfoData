@@ -18,6 +18,14 @@ KPI 结论规则：
 滞后检测：
 - `stale_sessions` = 本表 as_of 之后还走出了几个交易日（用 stock_market_daily 当日历）。
   0 = 最新；>0 说明风格表落后于行情，前端把「数据截至」标成琥珀色（设计规范 §2.2）。
+
+市场宽度（2026-09-14 新增）：
+- `breadth`：个股涨跌家数/涨停跌停/站上 MA20·MA60 占比/60 日新高新低/腾落线 ADL，
+  以及 `score`（三个占比型指标的均值，0~100）与 `pct`（上涨占比的近一年分位）。
+- `breadth_trend`：上述指标的近 N 日序列，供前端画宽度走势。
+- 为什么需要：原有 19 列全是「指数之间比收益」，测不到「上涨是否普遍」——
+  指数被权重股主导，指数涨而多数个股跌即为虚涨。
+- 列由 market_style_sync 计算；首次采集前不存在，本模块用 `_breadth_ready()` 优雅降级为 None。
 """
 from __future__ import annotations
 
@@ -46,36 +54,55 @@ def _num(v) -> float | None:
     return None if v is None else round(float(v), 2)
 
 
-def _latest_style_row() -> dict | None:
-    rows = query_all("SELECT * FROM market_style_daily ORDER BY trade_date DESC LIMIT 1")
+def _latest_style_row(as_of: str | None = None) -> dict | None:
+    if as_of:
+        rows = query_all(
+            "SELECT * FROM market_style_daily WHERE trade_date <= %s "
+            "ORDER BY trade_date DESC LIMIT 1", [as_of]
+        )
+    else:
+        rows = query_all("SELECT * FROM market_style_daily ORDER BY trade_date DESC LIMIT 1")
     return rows[0] if rows else None
 
 
-def _style_history(days: int) -> list[dict]:
+def _style_history(days: int, as_of: str | None = None) -> list[dict]:
+    """近 days 个交易日的风格序列（含六组收益，供轮动时序与热力矩阵共用一次查询）"""
+    sel = ("SELECT trade_date, scissors_20, risk_appetite_20, "
+           + ", ".join(f"ret_{g}_20" for g, _ in GROUP_LABELS))
+    if as_of:
+        return query_all(
+            f"{sel} FROM market_style_daily WHERE trade_date <= %s "
+            "ORDER BY trade_date DESC LIMIT %s", [as_of, days]
+        )
     return query_all(
-        "SELECT trade_date, scissors_20, risk_appetite_20 FROM market_style_daily "
-        "ORDER BY trade_date DESC LIMIT %s",
-        [days],
+        f"{sel} FROM market_style_daily ORDER BY trade_date DESC LIMIT %s", [days]
     )
 
 
-def _offset_style_row(offset: int) -> dict | None:
-    rows = query_all(
-        "SELECT * FROM market_style_daily ORDER BY trade_date DESC LIMIT 1 OFFSET %s",
-        [offset],
-    )
+def _offset_style_row(offset: int, as_of: str | None = None) -> dict | None:
+    if as_of:
+        rows = query_all(
+            "SELECT * FROM market_style_daily WHERE trade_date <= %s "
+            "ORDER BY trade_date DESC LIMIT 1 OFFSET %s", [as_of, offset]
+        )
+    else:
+        rows = query_all(
+            "SELECT * FROM market_style_daily ORDER BY trade_date DESC LIMIT 1 OFFSET %s",
+            [offset],
+        )
     return rows[0] if rows else None
 
 
-def _latest_indices() -> list[dict]:
-    """21 只指数最新快照 + 20 日收益
+def _latest_indices(as_of: str | None = None) -> list[dict]:
+    """21 只指数快照 + 20 日收益（as_of 非空时取该日及之前，用于历史回放）
 
     2026-09-14：由「逐行相关子查询 + OFFSET 19」改为窗口函数。原写法每行都要重跑一次
     子查询取「当日之前第 20 个交易日收盘」，SQL 又脆又难读；LAG(close, 20) 与之等价
     （当前行往前数 20 行 = 当日之前第 20 个交易日），MySQL 8.2 支持。
     """
+    cond = "WHERE i.trade_date <= %s" if as_of else ""
     return query_all(
-        """
+        f"""
         SELECT t.index_code, t.index_name, t.index_group, t.group_desc,
                t.trade_date, t.close, t.change_pct,
                CASE WHEN t.c20 > 0 THEN (t.close / t.c20 - 1) * 100 END AS ret_20
@@ -85,39 +112,139 @@ def _latest_indices() -> list[dict]:
                    LAG(i.close, 20) OVER (PARTITION BY i.index_code ORDER BY i.trade_date) AS c20,
                    ROW_NUMBER() OVER (PARTITION BY i.index_code ORDER BY i.trade_date DESC) AS rn
             FROM dc_index_market i
+            {cond}
         ) t
         WHERE t.rn = 1
         ORDER BY t.index_group, t.index_code
-        """
+        """,
+        [as_of] if as_of else None,
     )
 
 
-def _pctile(col: str, window: int = 250) -> float | None:
+BREADTH_COLS = [
+    "breadth_total", "breadth_up", "breadth_down", "breadth_up_ratio",
+    "breadth_adl", "limit_up", "limit_down",
+    "above_ma20_pct", "above_ma60_pct", "new_high60", "new_low60", "hl_diff60",
+]
+
+
+def _breadth_ready() -> bool:
+    """market_style_daily 是否已具备宽度列（首次采集前不存在，须优雅降级）"""
+    rows = query_all(
+        "SELECT COUNT(*) AS n FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'market_style_daily' "
+        "AND COLUMN_NAME = 'breadth_up_ratio'"
+    )
+    return bool(rows and rows[0]["n"])
+
+
+def _breadth_history(days: int, as_of: str | None = None) -> list[dict]:
+    """宽度与量能的近 N 日序列（供宽度走势图）。
+
+    as_of 非空时只取该日及之前（历史回放）；否则取全表最新。
+    amount_ratio_20 亦在此取，与宽度同图展示「放量下跌 / 缩量止跌」的区别。
+    """
+    cond = "breadth_up_ratio IS NOT NULL"
+    args: list = []
+    if as_of:
+        cond += " AND trade_date <= %s"
+        args.append(as_of)
+    args.append(days)
+    return query_all(
+        "SELECT trade_date, breadth_up_ratio, breadth_adl, above_ma20_pct, "
+        "       above_ma60_pct, hl_diff60, market_amount, amount_ratio_20 "
+        f"FROM market_style_daily WHERE {cond} "
+        "ORDER BY trade_date DESC LIMIT %s",
+        args,
+    )
+
+
+def _standardize(cols: list[str], window: int = 250, as_of: str | None = None) -> dict:
+    """对若干列做「近 window 日」标准化：分位(%) 与 z-score。
+
+    为什么需要：绝对 pp / % 跨时间不可比 —— 2005 年的 5pp 与现在的 5pp 意义完全不同。
+    只有分位（「现在处于近一年的什么位置」）和 z-score（「偏离均值几个标准差」）才能判断极端。
+    cols 由本模块内部白名单传入，不接受外部输入，故列名可拼接。
+    """
+    existing = {
+        r["COLUMN_NAME"] for r in query_all(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'market_style_daily'"
+        )
+    }
+    usable = [c for c in cols if c in existing]
+    if not usable:
+        return {}
+    sel = ", ".join(usable)
+    cond = "trade_date <= %s" if as_of else "trade_date IS NOT NULL"
+    cond += " AND trade_date <= (SELECT MAX(trade_date) FROM market_style_daily)"
+    args: list = [as_of] if as_of else []
+    args.append(window)
+    rows = query_all(
+        f"SELECT {sel} FROM market_style_daily "
+        f"WHERE {cond} ORDER BY trade_date DESC LIMIT %s",
+        args,
+    )
+    out: dict = {}
+    for c in usable:
+        vals = [float(r[c]) for r in rows if r[c] is not None]
+        if len(vals) < 20:
+            out[c] = {"pct": None, "z": None}
+            continue
+        cur_v = vals[0]                       # 行是按日期倒序取的，第 0 行即最新
+        le = sum(1 for v in vals if v <= cur_v)
+        mean = sum(vals) / len(vals)
+        var = sum((v - mean) ** 2 for v in vals) / len(vals)
+        std = var ** 0.5
+        out[c] = {
+            "pct": round(le / len(vals) * 100, 1),
+            "z": round((cur_v - mean) / std, 2) if std > 1e-12 else None,
+        }
+    return out
+
+
+def _breadth_status(up_ratio: float | None) -> str:
+    """上涨家数占比 → 市场宽度结论词"""
+    if up_ratio is None:
+        return "--"
+    if up_ratio >= 70:
+        return "普涨"
+    if up_ratio >= 55:
+        return "偏多"
+    if up_ratio >= 45:
+        return "分化"
+    if up_ratio >= 30:
+        return "偏空"
+    return "普跌"
+
+
+def _pctile(col: str, window: int = 250, as_of: str | None = None) -> float | None:
     """当前值在近 window 个交易日中的分位（0~100）
 
     ⚠️ col 由本模块内部以字面量传入（白名单列名），不接受外部输入，故可用 f-string 拼接。
+
+    2026-09-15 修复：原实现把同一个 {cond} 在 SQL 里拼了 3 处（子查询 a / 取当日值 /
+    子查询 b），带 as_of 时每处各产生 1 个 %s，共 5 个占位符，而只传了 4 个参数 →
+    历史回放必抛 `TypeError: not enough arguments for format string`（不带 as_of 时
+    cond 无 %s 恰好凑巧能跑，属典型的「只在某个分支炸」）。
+    现改为「取窗口序列 → Python 内算分位」，占位符数量与参数一一对应，不再随 cond 复用而漂移。
     """
+    cond = f"{col} IS NOT NULL"
+    args: list = []
+    if as_of:
+        cond += " AND trade_date <= %s"
+        args.append(as_of)
     rows = query_all(
-        f"""
-        SELECT
-          (SELECT COUNT(*) FROM (
-             SELECT {col} AS v FROM market_style_daily
-             WHERE {col} IS NOT NULL ORDER BY trade_date DESC LIMIT %s
-           ) a WHERE a.v <= (SELECT {col} FROM market_style_daily
-                             WHERE {col} IS NOT NULL ORDER BY trade_date DESC LIMIT 1)) AS le,
-          (SELECT COUNT(*) FROM (
-             SELECT {col} AS v FROM market_style_daily
-             WHERE {col} IS NOT NULL ORDER BY trade_date DESC LIMIT %s
-           ) b) AS n
-        """,
-        [window, window],
+        f"SELECT {col} AS v FROM market_style_daily WHERE {cond} "
+        "ORDER BY trade_date DESC LIMIT %s",
+        args + [window],
     )
-    if not rows:
+    vals = [float(r["v"]) for r in rows if r["v"] is not None]
+    if not vals:
         return None
-    le, n = rows[0]["le"], rows[0]["n"]
-    if not n:
-        return None
-    return round(float(le) / float(n) * 100, 1)
+    cur_v = vals[0]  # ORDER BY trade_date DESC → 首行即最新（或 as_of 当日）
+    le = sum(1 for v in vals if v <= cur_v)
+    return round(le / len(vals) * 100, 1)
 
 
 def _is_extreme(pct: float | None) -> bool:
@@ -183,69 +310,166 @@ def _sent_status(cur: float | None, prev: float | None) -> str:
 
 
 def _policy_status(cur: float | None, prev: float | None) -> str:
-    """政策敏感（中证全指房地产 − 中证全指 20 日超额）：正 = 政策敏感板块占优"""
+    """政策敏感（中证全指房地产 − 中证全指 20 日超额）：正 = 政策敏感板块占优
+
+    用词注意：「政策降温」易被读成「政策收紧」，而此处描述的是**政策敏感板块的相对超额在收窄**，
+    故改用「政策退潮」，与 _sent_status 的「热度回落」保持同一层语义。
+    """
     if cur is None:
         return "--"
     if prev is None:
         return "政策占优" if cur > 0 else "政策拖累"
     rising = cur - prev > 0
     if cur > 0:
-        return "政策走强" if rising else "政策降温"
+        return "政策走强" if rising else "政策退潮"
     return "政策企稳" if rising else "政策拖累"
 
 
-def market_wind(trend_days: int = 250) -> dict:
-    """市场风向模块数据装配（/api/analysis/market-wind）"""
-    cur_row = _latest_style_row()
-    prev_row = _offset_style_row(5)
+def _volume_status(r: float | None) -> str:
+    """成交额 / 20 日均值（%）→ 量能结论词"""
+    if r is None:
+        return "--"
+    if r >= 130:
+        return "显著放量"
+    if r >= 110:
+        return "温和放量"
+    if r >= 90:
+        return "量能平稳"
+    if r >= 70:
+        return "温和缩量"
+    return "显著缩量"
+
+
+def _heat_matrix(hist: list[dict], buckets: int = 12) -> dict:
+    """六组 × 时间 热力矩阵（批次 4）
+
+    只有一个时点的六条横条看不出「哪一组在持续走强/走弱」。把 trend_days 等分成 buckets 段，
+    每段取组内 20 日收益的均值，就能读出趋势的持续性（单时点条 → 时间×分组矩阵）。
+    hist 须为按日期升序的列表。
+    """
+    n = len(hist)
+    if n < buckets * 2:
+        return {"cols": [], "rows": []}
+    size = n / buckets
+    spans = []
+    for b in range(buckets):
+        s = int(round(b * size))
+        e = max(int(round((b + 1) * size)), s + 1)
+        e = min(e, n)
+        spans.append((s, e))
+    cols = [f"{hist[s]['trade_date']}~{hist[e - 1]['trade_date']}" for s, e in spans]
+    rows = []
+    for g, label in GROUP_LABELS:
+        vals = []
+        for s, e in spans:
+            seg = [float(r[f"ret_{g}_20"]) for r in hist[s:e] if r.get(f"ret_{g}_20") is not None]
+            vals.append(round(sum(seg) / len(seg), 2) if seg else None)
+        rows.append({"group": label, "values": vals})
+    return {"cols": cols, "rows": rows}
+
+
+def _sign_bands(dates: list[str], values: list, min_len: int = 3) -> list[dict]:
+    """把「剪刀差正负」转成连续区间带（批次 4）
+
+    双线图上只看曲线很难一眼数出「小盘占优持续了多久」。转成区间后可以直接铺底色。
+    短于 min_len 的翻转视为噪声丢弃（否则 250 日会有几十段碎带，反而看不清）。
+    """
+    bands: list[dict] = []
+    cur: dict | None = None
+    for d, v in zip(dates, values):
+        if v is None:
+            if cur:
+                bands.append(cur); cur = None
+            continue
+        side = 1 if v > 0 else -1
+        if cur and cur["side"] == side:
+            cur["end"] = d
+            cur["days"] += 1
+        else:
+            if cur:
+                bands.append(cur)
+            cur = {"side": side, "start": d, "end": d, "days": 1}
+    if cur:
+        bands.append(cur)
+    out = [b for b in bands if b["days"] >= min_len]
+    for b in out:
+        b["label"] = "小盘占优" if b["side"] > 0 else "大盘占优"
+    return out
+
+
+def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
+    """市场风向模块数据装配（/api/analysis/market-wind）
+
+    参数
+    - trend_days：轮动时序 / 宽度走势 / 热力矩阵的回看交易日数
+    - as_of：**历史回放锚点**（YYYY-MM-DD）。非空时全部查询只取该日及之前的数据，
+      用于复盘「那一天风格与宽度长什么样」；为空则取全表最新。回放模式下不再报滞后。
+    """
+    cur_row = _latest_style_row(as_of)
+    prev_row = _offset_style_row(5, as_of)
     if not cur_row:
         return {"as_of": None, "note": "market_style_daily 尚无数据，等待 market_style_sync 首跑"}
 
-    as_of = str(cur_row["trade_date"])
+    data_as_of = str(cur_row["trade_date"])
+    is_replay = bool(as_of)
     prev5 = {k: _num(prev_row.get(k)) if prev_row else None
              for k in ("risk_appetite_20", "scissors_20", "sentiment_20", "policy_excess_20")}
 
+    # ---- 标准化（批次 3）：近 250 日分位 + z-score ----
+    # 绝对 pp 跨期不可比（2005 年的 5pp 与现在的 5pp 意义不同），只有分位/z-score 能判断极端。
+    std_cols = ([f"ret_{g}_20" for g, _ in GROUP_LABELS]
+                + ["scissors_20", "risk_appetite_20", "sentiment_20", "policy_excess_20"]
+                + (["breadth_up_ratio", "amount_ratio_20"] if _breadth_ready() else []))
+    std = _standardize(std_cols, 250, as_of)
+
+    def z_of(k: str):
+        return (std.get(k) or {}).get("z")
+
+    def p_of(k: str):
+        return (std.get(k) or {}).get("pct")
+
     # KPI 结论区
     # 2026-09-14：3 → 5 项。补入 sentiment_20（情绪温度）与 policy_excess_20（政策敏感）——
-    # 这两列 market_style_sync 每个交易日都在算（见该文件 120-123 行）与设计规范 §4.1 的口径表，
-    # 但视图层一直没接入，属「白算」。同时每项附近 250 日分位与极值标记。
+    # 这两列 market_style_sync 每个交易日都在算（见该文件口径表）与设计规范 §4.1 的口径表，
+    # 但视图层一直没接入，属「白算」。同时每项附近 250 日分位、z-score 与极值标记。
     ra, sc = _num(cur_row.get("risk_appetite_20")), _num(cur_row.get("scissors_20"))
     se, po = _num(cur_row.get("sentiment_20")), _num(cur_row.get("policy_excess_20"))
     bp = _num(cur_row.get("bench_pos_pct"))
-    pct_ra, pct_sc = _pctile("risk_appetite_20"), _pctile("scissors_20")
-    pct_se, pct_po = _pctile("sentiment_20"), _pctile("policy_excess_20")
+    pct_ra, pct_sc = _pctile("risk_appetite_20", 250, as_of), _pctile("scissors_20", 250, as_of)
+    pct_se, pct_po = _pctile("sentiment_20", 250, as_of), _pctile("policy_excess_20", 250, as_of)
 
     kpis = [
         {"key": "risk_appetite", "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
-         "pct": pct_ra, "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
+         "pct": pct_ra, "z": z_of("risk_appetite_20"), "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
          "hint": "科技成长组 − 股息防守组 等权20日收益差；正=偏进攻，负=偏防守"},
         {"key": "scissors", "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "updown",
          "status": _scissors_status(sc, prev5.get("scissors_20")),
-         "pct": pct_sc, "highlight": _is_extreme(pct_sc), "anchor": "mw-gradient",
+         "pct": pct_sc, "z": z_of("scissors_20"), "highlight": _is_extreme(pct_sc), "anchor": "mw-gradient",
          "hint": "(中证1000+中证2000) − (上证50+沪深300) 等权20日收益差；正=小盘占优"},
         {"key": "sentiment", "label": "情绪温度（20日超额）", "value": se, "unit": "pp", "tone": "updown",
          "status": _sent_status(se, prev5.get("sentiment_20")),
-         "pct": pct_se, "highlight": _is_extreme(pct_se), "anchor": "mw-heat",
+         "pct": pct_se, "z": z_of("sentiment_20"), "highlight": _is_extreme(pct_se), "anchor": "mw-heat",
          "hint": "证券公司 − 中证全指 20 日超额；正=券商跑赢，视为市场情绪偏暖"},
         {"key": "policy", "label": "政策敏感（20日超额）", "value": po, "unit": "pp", "tone": "updown",
          "status": _policy_status(po, prev5.get("policy_excess_20")),
-         "pct": pct_po, "highlight": _is_extreme(pct_po), "anchor": "mw-heat",
+         "pct": pct_po, "z": z_of("policy_excess_20"), "highlight": _is_extreme(pct_po), "anchor": "mw-heat",
          "hint": "中证全指房地产 − 中证全指 20 日超额；正=政策敏感板块占优"},
         {"key": "bench_pos", "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
-         "status": _pos_status(bp), "pct": None, "highlight": False, "anchor": "mw-detail",
+         "status": _pos_status(bp), "pct": None, "z": None, "highlight": False, "anchor": "mw-detail",
          "hint": "中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位（本身即分位，不再二次求分位）"},
     ]
 
-    # 六组收益热力条
+    # 六组收益热力条（附各自的近 250 日分位与 z-score —— 让「+3.5%」有可比基准）
     groups = [
         {"group": label, "ret_20": _num(cur_row.get(f"ret_{g}_20")),
-         "ret_60": _num(cur_row.get(f"ret_{g}_60"))}
+         "ret_60": _num(cur_row.get(f"ret_{g}_60")),
+         "ret_20_pct": p_of(f"ret_{g}_20"), "ret_20_z": z_of(f"ret_{g}_20")}
         for g, label in GROUP_LABELS
     ]
 
     # 大小盘五档梯度（最新收盘 + 当日涨跌 + 20 日收益）
-    idx = _latest_indices()
+    idx = _latest_indices(as_of)
     by_code = {r["index_code"]: r for r in idx}
     size_gradient = [
         {"code": c, "name": n, "desc": d,
@@ -254,13 +478,15 @@ def market_wind(trend_days: int = 250) -> dict:
         for c, n, d in SIZE_INDICES
     ]
 
-    # 轮动时序（近 trend_days 个交易日）
-    hist = _style_history(trend_days)
+    # 轮动时序（近 trend_days 个交易日）+ 区间底色带 + 六组热力矩阵（共用同一次查询）
+    hist = _style_history(trend_days, as_of)
     hist.reverse()
+    trend_dates = [str(r["trade_date"]) for r in hist]
     trend = {
-        "dates": [str(r["trade_date"]) for r in hist],
+        "dates": trend_dates,
         "scissors": [_num(r.get("scissors_20")) for r in hist],
         "risk_appetite": [_num(r.get("risk_appetite_20")) for r in hist],
+        "bands": _sign_bands(trend_dates, [_num(r.get("scissors_20")) for r in hist]),
     }
 
     # 明细：21 只指数
@@ -274,6 +500,67 @@ def market_wind(trend_days: int = 250) -> dict:
         for r in idx
     ]
 
-    return {"as_of": as_of, "stale_sessions": _stale_sessions(as_of),
+    # 市场宽度（2026-09-14 新增）：回答「上涨有没有普遍性」——指数由权重股主导，
+    # 指数涨但 3000 只跌 = 虚涨，这是原 19 列纯「指数间收益差」完全测不到的维度。
+    breadth = None
+    volume = None
+    breadth_trend = {"dates": [], "up_ratio": [], "adl": [], "above_ma20_pct": [], "hl_diff60": [],
+                     "amount": [], "amount_ratio": []}
+    if _breadth_ready():
+        up_r = _num(cur_row.get("breadth_up_ratio"))
+        a20 = _num(cur_row.get("above_ma20_pct"))
+        a60 = _num(cur_row.get("above_ma60_pct"))
+        # 宽度健康度：三个「占比型」指标的简单均值（0~100）。
+        # 语义直观且可解释：多少股票在涨 / 站在 MA20 / MA60 上方，不做加权避免「看起来很深奥但说不清」。
+        parts = [v for v in (up_r, a20, a60) if v is not None]
+        breadth = {
+            "total": cur_row.get("breadth_total"),
+            "up": cur_row.get("breadth_up"),
+            "down": cur_row.get("breadth_down"),
+            "up_ratio": up_r,
+            "adl": cur_row.get("breadth_adl"),
+            "limit_up": cur_row.get("limit_up"),
+            "limit_down": cur_row.get("limit_down"),
+            "above_ma20_pct": a20,
+            "above_ma60_pct": a60,
+            "new_high60": cur_row.get("new_high60"),
+            "new_low60": cur_row.get("new_low60"),
+            "hl_diff60": cur_row.get("hl_diff60"),
+            "status": _breadth_status(up_r),
+            "score": round(sum(parts) / len(parts), 1) if parts else None,
+            "pct": _pctile("breadth_up_ratio", 250, as_of),
+            "z": z_of("breadth_up_ratio"),
+            "highlight": False,
+            "anchor": "mw-breadth",
+            "hint": "上涨家数占比 / 站上均线占比；指数涨但宽度差 = 少数权重股拉抬的虚涨",
+        }
+        breadth["highlight"] = _is_extreme(breadth["pct"])
+
+        # 量能（批次 3）：与宽度同源，配合能区分「放量下跌」与「缩量止跌」
+        volume = {
+            "amount": _num(cur_row.get("market_amount")),
+            "ratio_20": _num(cur_row.get("amount_ratio_20")),
+            "status": _volume_status(_num(cur_row.get("amount_ratio_20"))),
+            "pct": _pctile("amount_ratio_20", 250, as_of),
+            "hint": "全市场成交额（个股 amount 求和，亿元）及其与 20 日均值之比；>100 放量 / <100 缩量",
+        }
+
+        bh = _breadth_history(trend_days, as_of)
+        bh.reverse()
+        breadth_trend = {
+            "dates": [str(r["trade_date"]) for r in bh],
+            "up_ratio": [_num(r.get("breadth_up_ratio")) for r in bh],
+            "adl": [None if r.get("breadth_adl") is None else int(r["breadth_adl"]) for r in bh],
+            "above_ma20_pct": [_num(r.get("above_ma20_pct")) for r in bh],
+            "hl_diff60": [None if r.get("hl_diff60") is None else int(r["hl_diff60"]) for r in bh],
+            "amount": [_num(r.get("market_amount")) for r in bh],
+            "amount_ratio": [_num(r.get("amount_ratio_20")) for r in bh],
+        }
+
+    return {"as_of": data_as_of, "is_replay": is_replay,
+            # 回放模式下滞后无意义（数据天然落后于今天），固定报 0 避免误标琥珀
+            "stale_sessions": 0 if is_replay else _stale_sessions(data_as_of),
             "kpis": kpis, "groups": groups,
-            "size_gradient": size_gradient, "trend": trend, "detail": detail}
+            "size_gradient": size_gradient, "trend": trend, "detail": detail,
+            "heat_matrix": _heat_matrix(hist),
+            "breadth": breadth, "volume": volume, "breadth_trend": breadth_trend}

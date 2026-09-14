@@ -22,6 +22,8 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
                    （期货现货 / 申万行业 / 财务摘要 / 股本变动）从 FROZEN 升级为完整规则。
                    资金流向（东财域不可达）仍留 FROZEN。
                    注：futures_spot_price 无唯一索引（同日多快照），刻意不配 unique_index。
+- 市场宽度规则     ：2026-09-14 市场风向模块新增宽度维度（涨跌家数/均线参与度/新高新低）
+                   配套 3 条规则（非空 / 占比越界 / 派生列自洽），见 RULES 中 market_style_daily 段。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -83,6 +85,17 @@ RULES = [
      {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "风格物化表对齐交易日历（18:45 挂指数同步后）"),
     ("style_rows", "market_style_daily", "row_count_total",
      {"min_rows": 1000}, "warning", 1, "风格物化表行数下限（全史约 5,300 行，防清空）"),
+    # 市场宽度（2026-09-14 新增，来源 stock_market_daily 全市场个股）
+    ("style_breadth_notnull", "market_style_daily", "null_rate_slice",
+     {"col": "breadth_up_ratio", "max_pct": 0}, "warning", 1,
+     "最新日宽度非空（宽度列缺失 = 宽度面板静默降级为「--」，须报警）"),
+    ("style_breadth_range", "market_style_daily", "violation_count",
+     {"where": "breadth_up_ratio > 100 OR above_ma20_pct > 100 OR above_ma60_pct > 100 "
+               "OR (breadth_up + breadth_down) > breadth_total"},
+     "critical", 1, "宽度占比越界（占比 >100% 或 涨+跌家数 > 总家数 = 计算口径错）"),
+    ("style_breadth_hl", "market_style_daily", "where_count",
+     {"where": "breadth_up_ratio IS NOT NULL AND hl_diff60 <> new_high60 - new_low60"},
+     "warning", 1, "新高新低差派生列自洽（hl_diff60 必须等于 new_high60 − new_low60）"),
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),

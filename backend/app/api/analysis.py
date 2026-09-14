@@ -20,6 +20,10 @@ def analysis_registry():
 @router.get("/market-wind")
 def market_wind(
     trend_days: int = Query(250, ge=60, le=1000, description="轮动时序窗口（交易日）"),
+    as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
 ):
-    """市场风向：六组收益热力 + 大小盘剪刀差 + 风偏分数 + 轮动时序"""
-    return market_wind_mod.market_wind(trend_days)
+    """市场风向：六组收益热力 + 大小盘剪刀差 + 风偏分数 + 市场宽度/量能 + 轮动时序
+
+    as_of 非空时按该日回放（复盘用），全部查询只取该日及之前。
+    """
+    return market_wind_mod.market_wind(trend_days, as_of)

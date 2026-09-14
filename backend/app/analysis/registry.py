@@ -30,7 +30,7 @@ REGISTRY: list[dict] = [
         "group": "市场风向",
         "kind": "track",
         "icon": "🧭",
-        "desc": "六组收益热力 + 风偏/剪刀差/情绪温度/政策敏感/大势位置 5 项 KPI（附近一年分位）+ 大小盘梯度 + 轮动时序",
+        "desc": "六组收益热力 + 风偏/剪刀差/情绪温度/政策敏感/大势位置 5 项 KPI（附近一年分位）+ 大小盘梯度 + 轮动时序 + 市场宽度（涨跌家数/均线参与度/60日新高新低）",
         "as_of_source": "market_style_daily.MAX(trade_date)",
         "updated_cron": "45 18 * * 0-4",
         "schedule_text": "每工作日 18:45（指数行情同步后）",

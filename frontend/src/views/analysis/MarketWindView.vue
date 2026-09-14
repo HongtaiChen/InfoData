@@ -2,17 +2,30 @@
 /**
  * MarketWindView —— 市场风向模块（分析研究首个跟踪型模块）
  * 数据：GET /api/analysis/market-wind
- * 布局（AnalysisShell 五段）：标题区(容器) / 参数区 / KPI 结论区 / 主视图(热力条+梯度条+轮动时序) / 明细下钻区
+ * 布局（AnalysisShell 五段）：标题区(容器) / 参数区 / KPI 结论区 / 主视图 / 明细下钻区
+ *
+ * 2026-09-14 增强：
+ * - 市场宽度：补「多少只股票在涨」这一维（原指标全是指数间收益差）
+ * - 量能：全市场成交额与 20 日均量比，配合宽度区分「放量下跌 / 缩量止跌」
+ * - 标准化：六组收益与各 KPI 附「近一年分位 + z-score」，让绝对 pp 有可比基准
+ * - 热力矩阵：六组 × 时间，读趋势持续性（单时点横条看不出谁在持续走强）
+ * - 区间底色带：把剪刀差正负渲染成「小盘/大盘占优」区间
+ * - 历史回放：as_of 锚点，复盘任意历史交易日的全貌
+ * - 下钻：点六组热力条 → 明细表过滤到该组（结论 → 论据）
  */
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { NButton, NCard, NSelect, NSpin, NTabPane, NTabs, type DataTableColumns } from 'naive-ui'
+import {
+  NButton, NCard, NDatePicker, NSelect, NSpin, NTabPane, NTabs, type DataTableColumns,
+} from 'naive-ui'
 import KpiCards from '../../components/analysis/KpiCards.vue'
 import GroupHeatBars from '../../components/analysis/GroupHeatBars.vue'
 import SizeGradient from '../../components/analysis/SizeGradient.vue'
-import DualLineTrend from '../../components/analysis/DualLineTrend.vue'
+import DualLineTrend, { type TrendBand } from '../../components/analysis/DualLineTrend.vue'
 import RankTable from '../../components/analysis/RankTable.vue'
 import DrillLink from '../../components/analysis/DrillLink.vue'
+import BreadthPanel, { type Breadth } from '../../components/analysis/BreadthPanel.vue'
+import HeatMatrix, { type MatrixRow } from '../../components/analysis/HeatMatrix.vue'
 import api from '../../api'
 
 const router = useRouter()
@@ -21,11 +34,18 @@ interface Kpi {
   key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string
   tone?: 'updown' | 'neutral'
   pct?: number | null   // 近 250 日分位（0~100）
+  z?: number | null     // 近 250 日 z-score
   highlight?: boolean   // 分位进极值区 → 金色标记
   anchor?: string       // 点 KPI 卡滚动到的页内锚点
 }
-interface GroupRow { group: string; ret_20: number | null; ret_60: number | null }
+interface GroupRow {
+  group: string; ret_20: number | null; ret_60: number | null
+  ret_20_pct?: number | null; ret_20_z?: number | null
+}
 interface GradRow { code: string; name: string; desc: string; ret_20: number | null; change_pct: number | null }
+interface VolumeRow {
+  amount: number | null; ratio_20: number | null; status: string; pct: number | null; hint?: string
+}
 interface DetailRow {
   index_code: string; index_name: string; index_group: string; group_desc: string
   close: number | null; change_pct: number | null; ret_20: number | null
@@ -34,13 +54,24 @@ interface DetailRow {
 const loading = ref(false)
 const asOf = ref('')
 const staleSessions = ref(0)   // as_of 之后已走过的交易日数（0=最新）
+const isReplay = ref(false)
 const kpis = ref<Kpi[]>([])
 const groups = ref<GroupRow[]>([])
 const gradient = ref<GradRow[]>([])
-const trend = ref<{ dates: string[]; scissors: (number | null)[]; risk_appetite: (number | null)[] }>({
-  dates: [], scissors: [], risk_appetite: [],
-})
+const trend = ref<{
+  dates: string[]; scissors: (number | null)[]; risk_appetite: (number | null)[]
+  bands: TrendBand[]
+}>({ dates: [], scissors: [], risk_appetite: [], bands: [] })
 const detail = ref<DetailRow[]>([])
+// 市场宽度（2026-09-14 新增）：指数由权重股主导，只有宽度能回答「上涨是否普遍」
+const breadth = ref<Breadth | null>(null)
+const volume = ref<VolumeRow | null>(null)
+const breadthTrend = ref<{
+  dates: string[]; up_ratio: (number | null)[]; adl: (number | null)[]
+  above_ma20_pct: (number | null)[]; hl_diff60: (number | null)[]
+  amount: (number | null)[]; amount_ratio: (number | null)[]
+}>({ dates: [], up_ratio: [], adl: [], above_ma20_pct: [], hl_diff60: [], amount: [], amount_ratio: [] })
+const heatMatrix = ref<{ cols: string[]; rows: MatrixRow[] }>({ cols: [], rows: [] })
 
 const trendDays = ref(250)
 const trendDaysOptions = [
@@ -48,19 +79,37 @@ const trendDaysOptions = [
   { label: '近一年', value: 250 },
   { label: '近两年', value: 500 },
 ]
+// 历史回放：null = 最新
+const replayTs = ref<number | null>(null)
+
+/** 下钻：明细表按组过滤（点热力条 → 只看该组指数） */
+const detailFilter = ref<string>('全部')
 
 async function load() {
   loading.value = true
   try {
-    const resp: any = await api.get('/analysis/market-wind', { params: { trend_days: trendDays.value } })
+    const params: Record<string, unknown> = { trend_days: trendDays.value }
+    if (replayTs.value) {
+      const d = new Date(replayTs.value)
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      params.as_of = iso
+    }
+    const resp: any = await api.get('/analysis/market-wind', { params })
     asOf.value = resp.as_of ?? ''
     staleSessions.value = resp.stale_sessions ?? 0
+    isReplay.value = !!resp.is_replay
     // tone 由后端 KPI payload 给出（分位数类指标 = neutral，不按红涨绿跌染色）
     kpis.value = (resp.kpis ?? []).map((k: Kpi) => ({ ...k, tone: k.tone ?? 'updown' }))
     groups.value = resp.groups ?? []
     gradient.value = resp.size_gradient ?? []
-    trend.value = resp.trend ?? { dates: [], scissors: [], risk_appetite: [] }
+    trend.value = resp.trend ?? { dates: [], scissors: [], risk_appetite: [], bands: [] }
     detail.value = resp.detail ?? []
+    breadth.value = resp.breadth ?? null
+    volume.value = resp.volume ?? null
+    breadthTrend.value = resp.breadth_trend ?? {
+      dates: [], up_ratio: [], adl: [], above_ma20_pct: [], hl_diff60: [], amount: [], amount_ratio: [],
+    }
+    heatMatrix.value = resp.heat_matrix ?? { cols: [], rows: [] }
   } catch (e) {
     console.error('[market-wind]', e)
   } finally {
@@ -68,6 +117,20 @@ async function load() {
   }
 }
 onMounted(load)
+
+function onReplayChange() {
+  detailFilter.value = '全部'
+  load()
+}
+/** 点热力条某组 → 明细表切到该组并滚到明细区 */
+function onGroupSelect(label: string) {
+  detailFilter.value = label
+  document.getElementById('mw-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+/** 点热力矩阵某行 → 同上 */
+function onMatrixSelect(label: string) {
+  onGroupSelect(label)
+}
 
 // ---- 明细表 ----
 const pctRender = (v: any) =>
@@ -92,6 +155,11 @@ const detailColumns: DataTableColumns<DetailRow> = [
     }, { default: () => 'K线' }),
   },
 ]
+
+const detailFiltered = computed(() =>
+  detailFilter.value === '全部' ? detail.value : detail.value.filter((d) => d.index_group === detailFilter.value)
+)
+const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => d.index_group))])
 </script>
 
 <template>
@@ -100,19 +168,65 @@ const detailColumns: DataTableColumns<DetailRow> = [
     <div class="mw-params">
       <span class="mw-asof">
         数据截至 <b :class="{ stale: staleSessions > 0 }">{{ asOf || '--' }}</b>
-        <span v-if="staleSessions > 0" class="mw-stale">· 已落后 {{ staleSessions }} 个交易日</span>
+        <span v-if="isReplay" class="mw-replay-tag">历史回放</span>
+        <span v-else-if="staleSessions > 0" class="mw-stale">· 已落后 {{ staleSessions }} 个交易日</span>
       </span>
-      <NSelect v-model:value="trendDays" :options="trendDaysOptions" size="tiny" style="width: 100px" @update:value="load" />
+      <div class="mw-params-right">
+        <NDatePicker
+          v-model:value="replayTs"
+          type="date"
+          size="small"
+          clearable
+          placeholder="回放某交易日"
+          style="width: 148px"
+          @update:value="onReplayChange"
+        />
+        <NSelect v-model:value="trendDays" :options="trendDaysOptions" size="tiny" style="width: 100px" @update:value="load" />
+      </div>
     </div>
 
     <!-- ③ 结论区 -->
     <KpiCards :items="kpis" />
 
     <!-- ④ 主视图 -->
-    <NCard id="mw-heat" size="small" class="mw-card" title="六组等权收益（20 日，副标为 60 日，红涨绿跌）">
+    <NCard id="mw-heat" size="small" class="mw-card" title="六组等权收益（20 日；副标为 60 日与近一年分位，点行下钻该组）">
       <GroupHeatBars
-        :rows="groups.map((g) => ({ label: g.group, value: g.ret_20, sub: g.ret_60 == null ? '' : `60日 ${g.ret_60 > 0 ? '+' : ''}${g.ret_60.toFixed(2)}%` }))"
+        clickable
+        @select="onGroupSelect"
+        :rows="groups.map((g) => ({
+          label: g.group,
+          value: g.ret_20,
+          sub: g.ret_60 == null ? '' : `60日 ${g.ret_60 > 0 ? '+' : ''}${g.ret_60.toFixed(2)}%`,
+          pctLabel: g.ret_20_pct == null ? '' : `近一年 ${g.ret_20_pct}% 分位`,
+          desc: g.ret_20_z == null ? g.group : `${g.group} · z=${g.ret_20_z}`,
+        }))"
       />
+    </NCard>
+
+    <!-- 市场宽度：补「多少只股票在涨」这一维（原指标全是指数间收益差） -->
+    <NCard id="mw-breadth" size="small" class="mw-card" title="市场宽度与量能（个股涨跌家数 / 均线参与度 / 新高新低 / 成交额）">
+      <BreadthPanel :data="breadth" />
+      <div v-if="volume" class="mw-volume">
+        <span class="mw-volume-k">全市场成交额</span>
+        <b class="mw-volume-v">{{ volume.amount == null ? '--' : volume.amount.toLocaleString() }} 亿元</b>
+        <span class="mw-volume-k">/ 20日均量</span>
+        <b class="mw-volume-r">{{ volume.ratio_20 == null ? '--' : volume.ratio_20.toFixed(1) + '%' }}</b>
+        <span class="mw-volume-s">{{ volume.status }}</span>
+        <span v-if="volume.pct != null" class="mw-volume-p">近一年 {{ volume.pct }}% 分位</span>
+      </div>
+      <div v-if="breadthTrend.dates.length" class="mw-breadth-trend">
+        <!-- 取色纪律：涨跌语义（上涨家数占比）用红；结构性占比用主色蓝；量能用蓝色 ramp 深蓝。
+             金色只留给「≤10% 的亮点强调」，不做整条折线色，故此处不用 #C9A227。 -->
+        <DualLineTrend
+          :dates="breadthTrend.dates"
+          :series="[
+            { name: '上涨家数占比(%)', values: breadthTrend.up_ratio, color: '#EF232A' },
+            { name: '站上MA20占比(%)', values: breadthTrend.above_ma20_pct, color: '#185FA5' },
+            { name: '成交额/20日均量(%)', values: breadthTrend.amount_ratio, color: '#0C447C' },
+          ]"
+          height="230px"
+        />
+      </div>
     </NCard>
 
     <div class="mw-two-col">
@@ -121,9 +235,10 @@ const detailColumns: DataTableColumns<DetailRow> = [
           :items="gradient.map((g) => ({ name: g.name, desc: g.desc, value: g.ret_20, change_pct: g.change_pct }))"
         />
       </NCard>
-      <NCard id="mw-trend" size="small" class="mw-card" title="风格轮动时序（剪刀差 & 风偏分数）">
+      <NCard id="mw-trend" size="small" class="mw-card" title="风格轮动时序（剪刀差 & 风偏分数；底色带 = 大小盘占优区间）">
         <DualLineTrend
           :dates="trend.dates"
+          :bands="trend.bands"
           :series="[
             { name: '大小盘剪刀差(20日)', values: trend.scissors, color: '#185FA5' },
             { name: '风偏分数(20日)', values: trend.risk_appetite, color: '#C9A227' },
@@ -133,19 +248,22 @@ const detailColumns: DataTableColumns<DetailRow> = [
       </NCard>
     </div>
 
+    <!-- 六组 × 时间 热力矩阵：看「哪一组在持续走强」，单时点横条做不到 -->
+    <NCard id="mw-matrix" size="small" class="mw-card" title="六组风格热力矩阵（时间 × 分组；点行下钻该组）">
+      <HeatMatrix :cols="heatMatrix.cols" :rows="heatMatrix.rows" @select="onMatrixSelect" />
+    </NCard>
+
     <!-- ⑤ 明细下钻区 -->
-    <NCard id="mw-detail" size="small" class="mw-card" title="指数明细（21 只）">
+    <NCard id="mw-detail" size="small" class="mw-card" :title="`指数明细（${detailFiltered.length} 只${detailFilter === '全部' ? '' : ' · ' + detailFilter}）`">
       <template #header-extra>
         <DrillLink :items="[{ label: '行情看板看K线', to: '/market' }]" />
       </template>
-      <NTabs type="segment" size="small" default-value="全部">
-        <NTabPane name="全部" tab="全部">
-          <RankTable :columns="detailColumns" :rows="detail" :max-height="'360px'" />
-        </NTabPane>
-        <NTabPane v-for="grp in [...new Set(detail.map((d) => d.index_group))]" :key="grp" :name="grp" :tab="grp">
-          <RankTable :columns="detailColumns" :rows="detail.filter((d) => d.index_group === grp)" :max-height="'360px'" />
-        </NTabPane>
+      <NTabs v-model:value="detailFilter" type="segment" size="small">
+        <NTabPane v-for="grp in detailTabs" :key="grp" :name="grp" :tab="grp" />
       </NTabs>
+      <div class="mw-detail-table">
+        <RankTable :columns="detailColumns" :rows="detailFiltered" :max-height="'360px'" />
+      </div>
     </NCard>
   </NSpin>
 </template>
@@ -155,8 +273,24 @@ const detailColumns: DataTableColumns<DetailRow> = [
 .mw-asof { font-size: 13px; color: #6B7280; }
 /* 滞后提示（设计规范 §2.2）：数据落后于最新交易日时标琥珀，避免静默展示旧数据 */
 .mw-asof b.stale, .mw-asof .mw-stale { color: #B45309; }
+.mw-replay-tag {
+  margin-left: 6px; font-size: 11px; color: #185FA5;
+  background: #E6F1FB; border-radius: 3px; padding: 1px 5px;
+}
+.mw-params-right { display: flex; gap: 8px; align-items: center; }
 /* scroll-margin-top：KPI 卡点击滚到锚点时留出顶栏高度，避免卡片标题被顶栏遮住 */
 .mw-card { margin-bottom: 12px; scroll-margin-top: 12px; }
+.mw-breadth-trend { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #EDEFF2; }
+.mw-volume {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 10px; border-top: 1px dashed #EDEFF2; font-size: 13px;
+}
+.mw-volume-k { color: #6B7280; }
+.mw-volume-v { color: #185FA5; font-size: 15px; font-variant-numeric: tabular-nums; }
+.mw-volume-r { color: #1F2937; font-variant-numeric: tabular-nums; }
+.mw-volume-s { color: #185FA5; background: #E6F1FB; border-radius: 3px; padding: 0 5px; font-size: 12px; }
+.mw-volume-p { color: #9CA3AF; font-size: 12px; }
 .mw-two-col { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; }
+.mw-detail-table { margin-top: 8px; }
 @media (max-width: 900px) { .mw-two-col { grid-template-columns: 1fr; } }
 </style>

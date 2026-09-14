@@ -2,6 +2,10 @@
 /**
  * GroupHeatBars —— 分组水平热力条（红涨绿跌，零轴居中）
  * 适用：六组等权收益、行业/板块对比等"空间对比"场景
+ *
+ * clickable（2026-09-14 新增）：点某一行 emit select(label)，
+ * 用于「结论 → 论据」的下钻（如点「科技成长」→ 明细表过滤到该组指数）。
+ * pctLabel：该行自身的近 250 日分位文案（让 "+3.5%" 有可比基准）。
  */
 import { computed } from 'vue'
 
@@ -9,6 +13,7 @@ export interface HeatRow {
   label: string
   value: number | null
   sub?: string        // 次级数值展示（如 60 日收益）
+  pctLabel?: string   // 分位副标（如 "近一年 82% 分位"）
   desc?: string       // 说明（tooltip）
 }
 
@@ -16,7 +21,10 @@ const props = defineProps<{
   rows: HeatRow[]
   title?: string
   unit?: string       // 数值后缀，默认 %
+  clickable?: boolean
 }>()
+
+const emit = defineEmits<{ (e: 'select', label: string): void }>()
 
 const maxAbs = computed(() =>
   Math.max(0.0001, ...props.rows.map((r) => Math.abs(r.value ?? 0)))
@@ -36,7 +44,10 @@ function fmt(v: number | null): string {
 <template>
   <div class="ghb">
     <div class="ghb-title" v-if="title">{{ title }}</div>
-    <div v-for="r in props.rows" :key="r.label" class="ghb-row" :title="r.desc ?? r.label">
+    <div v-for="r in props.rows" :key="r.label"
+         class="ghb-row" :class="{ 'ghb-row--link': props.clickable }"
+         :title="r.desc ?? r.label"
+         @click="props.clickable && emit('select', r.label)">
       <div class="ghb-label">{{ r.label }}</div>
       <div class="ghb-track">
         <div class="ghb-zero"></div>
@@ -48,6 +59,7 @@ function fmt(v: number | null): string {
       <div class="ghb-value" :class="'v-' + cls(r.value)">
         {{ fmt(r.value) }}
         <span class="ghb-sub" v-if="r.sub">{{ r.sub }}</span>
+        <span class="ghb-sub" v-if="r.pctLabel">{{ r.pctLabel }}</span>
       </div>
     </div>
   </div>
@@ -56,7 +68,9 @@ function fmt(v: number | null): string {
 <style scoped>
 .ghb { display: flex; flex-direction: column; gap: 10px; }
 .ghb-title { font-size: 13px; font-weight: 600; color: #1F2937; }
-.ghb-row { display: grid; grid-template-columns: 76px 1fr 128px; align-items: center; gap: 10px; }
+.ghb-row { display: grid; grid-template-columns: 76px 1fr 200px; align-items: center; gap: 10px; }
+.ghb-row--link { cursor: pointer; border-radius: 4px; }
+.ghb-row--link:hover { background: #F5F8FC; }
 .ghb-label { font-size: 13px; color: #1F2937; text-align: right; }
 .ghb-track {
   position: relative; height: 16px; background: #F5F7FA;
