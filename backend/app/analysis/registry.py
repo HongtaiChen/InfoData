@@ -12,7 +12,12 @@
   1) app/analysis/ 加计算/装配模块
   2) app/api/analysis.py 加路由
   3) 本文件注册一条元数据
-  4) 前端 src/analysis/modules.ts 把 module_id 映射到视图组件（复用内置视图库）
+  4) 前端 views/AnalysisModuleView.vue 的 moduleViews 里用 defineAsyncComponent 映射视图组件
+     （⚠️ 必须 defineAsyncComponent 包装，裸 () => import() 会被 Vue 当函数式组件、渲染成 [object Promise]）
+
+展示约定：
+  - updated_cron = 原始 cron（供运维/调试核对，勿直接面向用户展示）
+  - schedule_text = 人话化的更新节奏（面向用户；缺省时前端回退显示 updated_cron）
 """
 from __future__ import annotations
 
@@ -28,6 +33,7 @@ REGISTRY: list[dict] = [
         "desc": "六组指数等权收益热力 + 大小盘剪刀差 + 风偏分数 + 情绪温度",
         "as_of_source": "market_style_daily.MAX(trade_date)",
         "updated_cron": "45 18 * * 0-4",
+        "schedule_text": "每工作日 18:45（指数行情同步后）",
         "params": [
             {"key": "trend_days", "type": "select", "label": "时序窗口",
              "options": [120, 250, 500], "default": 250},

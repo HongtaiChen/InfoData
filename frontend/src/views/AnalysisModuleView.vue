@@ -47,7 +47,11 @@ onMounted(async () => {
           <NTag size="small" :bordered="false" type="info">{{ moduleMeta.group }}</NTag>
           <NTag size="small" :bordered="false">{{ moduleMeta.kind === 'track' ? '跟踪' : '研究' }}</NTag>
         </div>
-        <div class="am-desc">{{ moduleMeta.desc }}<span v-if="moduleMeta.updated_cron"> · 更新：{{ moduleMeta.updated_cron }}</span></div>
+        <div class="am-desc">
+          {{ moduleMeta.desc }}
+          <span v-if="moduleMeta.schedule_text || moduleMeta.updated_cron">
+            · 更新：{{ moduleMeta.schedule_text || moduleMeta.updated_cron }}</span>
+        </div>
       </div>
       <component v-if="viewComp" :is="viewComp" />
       <NEmpty v-else description="模块视图开发中…" style="padding: 40px 0" />
