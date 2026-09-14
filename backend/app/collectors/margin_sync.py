@@ -105,11 +105,20 @@ class MarginSyncCollector:
     # ---------- 三市 ----------
 
     def _fetch_sse(self, start: date, end: date) -> dict[str, tuple[float, float]]:
-        """上交所（元）：{YYYYMMDD: (融资余额, 融券余量金额)}"""
-        df = call_with_timeout(
-            ak.stock_margin_sse, self.timeout_sec,
-            start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"),
-        )
+        """上交所（元）：{YYYYMMDD: (融资余额, 融券余量金额)}
+
+        无数据时 akshare 内部会抛 ValueError（'Length mismatch: Expected axis has 0
+        elements, new values have 13 elements'，因响应 0 行但代码仍尝试赋列名）——
+        语义等同「未发布/无数据」（两融 T+1，当日数据次日才发布），归一为 {}，
+        不计入 errors，留待下轮自动补。
+        """
+        try:
+            df = call_with_timeout(
+                ak.stock_margin_sse, self.timeout_sec,
+                start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"),
+            )
+        except ValueError:
+            return {}
         if df is None or df.empty:
             return {}
         out = {}
