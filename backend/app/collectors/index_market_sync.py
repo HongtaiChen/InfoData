@@ -134,6 +134,11 @@ def _today_str() -> str:
     return date.today().isoformat()
 
 
+def _dstr(v) -> str:
+    """日期归一化为 'YYYY-MM-DD'（date/datetime/str 通吃，用于跨源比较）"""
+    return v.isoformat()[:10] if hasattr(v, "isoformat") else str(v)[:10]
+
+
 def _num(v):
     """安全转 float：失败或 NaN 返回 None"""
     try:
@@ -503,6 +508,22 @@ class IndexMarketSyncCollector:
                         continue
                     if not rows:
                         skipped += 1
+                        continue
+
+                    # ⚠️ 防「源退步」丢数据：下面按窗口 DELETE 旧行再 INSERT，
+                    #    若源端只回了更旧的一段（CDN 缓存 / 上游分段发布），DELETE 会删掉
+                    #    库内较新的行而 INSERT 补不回来 → 静默缩水。
+                    #    2026-09-15 实测：000001 上证指数 9-14 行被这样删掉，连锁导致
+                    #    市场基准组 ret_20 = NULL → 情绪温度 / 政策敏感 2 个 KPI 变 NULL。
+                    farthest = max(_dstr(r["trade_date"]) for r in rows)
+                    if max_d is not None and farthest < _dstr(max_d):
+                        errors.append(
+                            f"{code} {name} 源返回仅到 {farthest}，落后库内 {max_d}，本轮跳过（防删数据）"
+                        )
+                        logger.warning(
+                            f"⚠️ 指数 {code} {name} 源仅回到 {farthest}，落后库内 {max_d} → "
+                            f"拒绝执行窗口覆盖（防误删库内较新行）"
+                        )
                         continue
 
                     rows.sort(key=lambda x: x["trade_date"])
