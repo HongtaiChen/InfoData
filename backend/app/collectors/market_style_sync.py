@@ -12,6 +12,12 @@
   · 情绪温度 sentiment_20：证券公司 − 中证全指（20 日超额）
   · 政策敏感 policy_excess_20：中证全指房地产 − 中证全指（20 日超额）
   · 大势位置 bench_pos_pct：中证全指收盘在近 250 日高低区间的分位(%)
+  · 风险调整 scissors_adj20 / risk_appetite_adj20（2026-09-15 新增）：上面两个「收益差」
+    分别 ÷ 其自身近 250 日滚动标准差。**为什么需要**：两条腿的波动率并不对称（实测
+    σ(科技成长)/σ(股息防守) 中位 **2.21 倍**），差值波动被高波动腿主导，于是「同样 -12pp」
+    在高波动期与低波动期含义完全不同——低波动期的小差价反而是更强的信号。
+    2024 初小盘股灾 diff -16.12 / σ 4.89 → adj -3.26（极罕见）；当前 diff -13.49 / σ 12.16
+    → adj -1.12（常规）。除以自身波动率后即可跨期比较。**不减均值**：0 仍代表「两腿同收益」
 
 二、市场宽度指标（数据源 stock_market_daily 全市场个股日线）
 - 为什么需要：上面 19 列全部是「指数之间比收益」，**完全没有「多少只股票在涨」**这一维。
@@ -59,7 +65,7 @@ logger = logging.getLogger(__name__)
 RUN_STEPS = [
     {"no": 1, "name": "加载指数收盘矩阵", "params": "dc_index_market 全史 close → pivot(index_code×trade_date)"},
     {"no": 2, "name": "计算 N 日收益", "params": "N=20/60；六组等权（要求组内全员有值）"},
-    {"no": 3, "name": "派生风格指标", "params": "剪刀差 / 风偏分数 / 情绪温度 / 政策敏感 / 大势位置(250日分位)"},
+    {"no": 3, "name": "派生风格指标", "params": "剪刀差 / 风偏分数 / 情绪温度 / 政策敏感 / 大势位置(250日分位) / 风险调整(差值÷自身滚动σ)"},
     {"no": 4, "name": "计算市场宽度与量能", "params": "个股涨跌家数/涨停跌停/站上MA20·MA60占比/60日新高新低/成交额放缩量；pandas 增量重算"},
     {"no": 5, "name": "全量重建写入", "params": "market_style_daily DELETE + INSERT 单事务"},
 ]
@@ -110,6 +116,21 @@ BREADTH_DDL = """
 # 宽度覆盖索引（优化取数路径：全索引覆盖免回表）；由 scripts/seed_indexes.py 创建
 BREADTH_INDEX = "idx_breadth_cover"
 
+# 风险调整列（2026-09-15 新增）：把「两组收益差」除以其自身滚动波动率。
+# 动机：两条腿的波动率并不对称——实测 σ(科技成长) / σ(股息防守) 中位 **2.21 倍**，
+# 差值波动被高波动腿主导，于是「同样的 -12pp」在高波动期与低波动期含义完全不同：
+#   2024 初小盘股灾：diff -16.12 但 σ_diff 仅 4.89 → 风险调整后 -3.26（极罕见）
+#   2026-09 当前   ：diff -13.49 但 σ_diff 达 12.16 → 风险调整后 -1.12（属常规波动）
+# 口径：`adj = 差值 ÷ 该差值近 N 日滚动标准差`，**不减均值**——保留 0 = 两腿同收益的中性语义；
+# 若减滚动均值就退化成「250 日排位」，与已有的 `pct` 分位重复。
+STYLE_ADJ_COLS = ["scissors_adj20", "risk_appetite_adj20"]
+STYLE_ADJ_DDL = """
+  scissors_adj20 DECIMAL(10,4) NULL COMMENT '剪刀差风险调整：scissors_20 ÷ 其近250日滚动标准差（0=两腿同收益）',
+  risk_appetite_adj20 DECIMAL(10,4) NULL COMMENT '风偏风险调整：risk_appetite_20 ÷ 其近250日滚动标准差（0=两腿同收益）',"""
+# 风险调整的波动率观察窗口（与 pct 分位窗口一致，口径统一）与最小样本数
+STYLE_ADJ_LOOKBACK = 250
+STYLE_ADJ_MIN_PERIODS = 60
+
 # 预热天数：MA60 需要 60 个交易日 ≈ 84 自然日，取 200 天留足冗余（含长假/停牌）
 BREADTH_WARMUP_DAYS = 200
 # 增量重算的重叠天数：从「表内最新日 − N 天」起算，便于自愈补上漏跑的日子
@@ -141,6 +162,7 @@ CREATE TABLE IF NOT EXISTS market_style_daily (
   sentiment_20 DECIMAL(10,4) NULL COMMENT '情绪温度：券商-中证全指(20日超额)',
   policy_excess_20 DECIMAL(10,4) NULL COMMENT '政策敏感：地产-中证全指(20日超额)',
   bench_pos_pct DECIMAL(6,2) NULL COMMENT '大势位置：中证全指近250日高低区间分位%',
+{style_adj_ddl}
   {breadth_ddl}
   update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (trade_date)
@@ -153,9 +175,10 @@ class MarketStyleSyncCollector:
     """市场风格日频物化表计算（纯库内，无外部源）"""
 
     def __init__(self, windows: tuple[int, ...] = (20, 60), bench_lookback: int = 250,
-                 full_refresh: bool = False):
+                 full_refresh: bool = False, adj_lookback: int = STYLE_ADJ_LOOKBACK):
         self.windows = windows
         self.bench_lookback = bench_lookback
+        self.adj_lookback = adj_lookback
         # full_refresh=True 强制走全史回填：新增派生列（如批次 3 的 market_amount）后，
         # 表内旧行的新列为 NULL，而增量门控只看 breadth_up_ratio，会误判为「已有数据」，
         # 导致历史新列永远为空 —— 此时必须显式全量重算一次。
@@ -165,10 +188,13 @@ class MarketStyleSyncCollector:
 
     def _ensure_table(self, conn) -> None:
         with conn.cursor() as cur:
-            cur.execute(DDL.format(breadth_ddl=BREADTH_DDL))
+            cur.execute(DDL.format(breadth_ddl=BREADTH_DDL, style_adj_ddl=STYLE_ADJ_DDL))
 
     def _ensure_columns(self, conn) -> list[str]:
-        """对已存在的表补齐缺失的宽度列（MySQL 无 ADD COLUMN IF NOT EXISTS，须查 information_schema）"""
+        """对已存在的表补齐缺失的宽度列 / 风险调整列
+
+        MySQL 无 ADD COLUMN IF NOT EXISTS，须查 information_schema。
+        """
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT COLUMN_NAME FROM information_schema.COLUMNS "
@@ -176,11 +202,12 @@ class MarketStyleSyncCollector:
             )
             have = {r[0] for r in cur.fetchall()}
             added = []
-            for col in MARKET_COLS:
+            all_ddl = BREADTH_DDL + STYLE_ADJ_DDL
+            for col in MARKET_COLS + STYLE_ADJ_COLS:
                 if col in have:
                     continue
                 ddl_line = next(
-                    (ln.strip().rstrip(",") for ln in BREADTH_DDL.strip().splitlines()
+                    (ln.strip().rstrip(",") for ln in all_ddl.splitlines()
                      if ln.strip().startswith(col + " ")),
                     None,
                 )
@@ -189,7 +216,7 @@ class MarketStyleSyncCollector:
                 cur.execute(f"ALTER TABLE market_style_daily ADD COLUMN {ddl_line}")
                 added.append(col)
         if added:
-            logger.info(f"market_style_daily 补齐宽度列：{added}")
+            logger.info(f"market_style_daily 补齐列：{added}")
         return added
 
     def _has_breadth_index(self, conn) -> bool:
@@ -419,6 +446,11 @@ class MarketStyleSyncCollector:
             out["sentiment_20"] = out["ret_sent_20"] - out["ret_bench_20"]
             out["policy_excess_20"] = out["ret_pol_20"] - out["ret_bench_20"]
 
+            # 5) 风险调整（2026-09-15 新增）：差值 ÷ 其自身滚动波动率，消除两腿波动率不对称
+            #    见 STYLE_ADJ_DDL 上方注释（σ 比中位 2.21，高波动腿主导差值 → 虚假极端信号）
+            out["scissors_adj20"] = self._risk_adj(out["scissors_20"])
+            out["risk_appetite_adj20"] = self._risk_adj(out["risk_appetite_20"])
+
             bench = pivot["000985"].dropna()
             roll_min = bench.rolling(self.bench_lookback, min_periods=60).min()
             roll_max = bench.rolling(self.bench_lookback, min_periods=60).max()
@@ -466,7 +498,7 @@ class MarketStyleSyncCollector:
                 {
                     1: f"{len(pivot.columns)} 个指数 / {len(pivot)} 个交易日",
                     2: f"N={self.windows}",
-                    3: "剪刀差/风偏/情绪/政策/大势位置",
+                    3: "剪刀差/风偏/情绪/政策/大势位置 + 风险调整 2 列",
                     4: f"宽度/量能 {n_breadth} 行（{len(MARKET_COLS)} 列，pandas 增量）",
                     5: f"重建 {len(payload)} 行",
                 },
@@ -476,6 +508,16 @@ class MarketStyleSyncCollector:
             raise
         finally:
             conn.close()
+
+    def _risk_adj(self, series: pd.Series) -> pd.Series:
+        """差值 ÷ 其自身近 adj_lookback 日滚动标准差（风险调整）
+
+        0 = 两腿同收益（中性语义保留）；±1 = 偏离自身一个典型波动单位。
+        **刻意不减滚动均值**——减了会退化成「250 日排位」，与 market_wind 的 `pct` 分位
+        重复，且会把「近一年是牛是熊」的趋势误当成偏离。
+        """
+        sd = series.rolling(self.adj_lookback, min_periods=STYLE_ADJ_MIN_PERIODS).std()
+        return series / sd.replace(0, np.nan)
 
     @staticmethod
     def _round(v) -> float:

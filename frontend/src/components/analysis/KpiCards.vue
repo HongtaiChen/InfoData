@@ -9,6 +9,12 @@
  * - highlight = 分位进入极值区（<=10 / >=90）→ 左侧金色竖条 + 分位文字金色。
  *   ⚠️ 金色只做「极值标记」，数值颜色仍严格走红涨绿跌——不拿金色去染涨跌数字，避免破坏 A 股铁律。
  * - anchor = 页内锚点 id：点卡片平滑滚到对应图表（结论 → 论据的下钻）。
+ *
+ * 风险调整（2026-09-15 新增）：
+ * - adj = 收益差 ÷ 其自身近 250 日滚动标准差（σ 倍数）。与 pct 分工不同：
+ *   pct 答「在近一年排第几」（纯相对排位，受区间选择影响），adj 答「偏离自身风险尺度几个单位」
+ *   （含幅度、可跨期比较）。两者并列展示，互为参照。
+ * - 配色：adj 不是涨跌语义 → 用次要文字色，绝不走红绿。
  */
 import { NTooltip } from 'naive-ui'
 
@@ -25,9 +31,11 @@ interface Kpi {
   pct?: number | null
   highlight?: boolean
   anchor?: string
+  // 风险调整值（σ 倍数）：仅风偏分数与大小盘剪刀差有，其余为 undefined
+  adj?: number | null
 }
 
-const props = defineProps<{ items: Kpi[] }>()
+const props = defineProps<{ items: Kpi[]; adjNote?: string }>()
 
 function valueClass(k: Kpi): string {
   if (k.value == null) return 'c-neutral'
@@ -41,6 +49,10 @@ function fmt(k: Kpi): string {
   if (k.value == null) return '--'
   const sign = !isNeutral(k) && k.value > 0 ? '+' : ''
   return `${sign}${k.value}${k.unit ?? ''}`
+}
+/** 风险调整值：以「σ（标准差）」为单位，正负号显式给出，便于与主值对照方向 */
+function fmtAdj(v: number): string {
+  return `${v > 0 ? '+' : ''}${v}σ`
 }
 function goAnchor(k: Kpi) {
   if (!k.anchor) return
@@ -66,9 +78,13 @@ function goAnchor(k: Kpi) {
           <div v-if="k.pct != null" class="kpi-pct" :class="{ hl: k.highlight }">
             近一年 {{ k.pct }}% 分位
           </div>
+          <div v-if="k.adj != null" class="kpi-adj">风险调整 {{ fmtAdj(k.adj) }}</div>
         </div>
       </template>
       {{ k.hint }}
+      <template v-if="k.adj != null && props.adjNote">
+        <br /><br />{{ props.adjNote }}
+      </template>
     </NTooltip>
   </div>
 </template>
@@ -95,6 +111,8 @@ function goAnchor(k: Kpi) {
 .kpi-status { font-size: 12px; color: #6B7280; }
 .kpi-pct { font-size: 11px; color: #9CA3AF; margin-top: 4px; }
 .kpi-pct.hl { color: #C9A227; font-weight: 500; }
+/* 风险调整（σ 倍数）：非涨跌语义 → 次要文字色，不用红绿；与分位同为辅助读数 */
+.kpi-adj { font-size: 11px; color: #6B7280; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .c-up { color: #EF232A; }
 .c-down { color: #14B143; }
 .c-primary { color: #185FA5; }

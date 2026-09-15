@@ -15,6 +15,12 @@ KPI 结论规则：
 - `highlight` = 分位进入极值区（<=10 或 >=90），前端用金色渲染（「蓝骨金魂」体系里金色专供亮点信号）。
 - `bench_pos_pct` 自身即 250 日分位，不再二次求分位（否则是重复信息）。
 
+风险调整（2026-09-15 新增）：
+- 「风偏分数」与「大小盘剪刀差」两个 KPI 另附 `adj` = 收益差 ÷ 其自身近 250 日滚动标准差。
+- 与 `pct` 分工不同：`pct` 答「在近一年排第几」（纯相对排位，会被区间选择影响），
+  `adj` 答「偏离自身风险尺度几个单位」（含幅度、可跨期比较）。口径见 ADJ_NOTE。
+- 数据来自 market_style_daily 的 `risk_appetite_adj20` / `scissors_adj20`。
+
 滞后检测：
 - `stale_sessions` = 本表 as_of 之后还走出了几个交易日（用 stock_market_daily 当日历）。
   0 = 最新；>0 说明风格表落后于行情，前端把「数据截至」标成琥珀色（设计规范 §2.2）。
@@ -30,6 +36,14 @@ KPI 结论规则：
 from __future__ import annotations
 
 from ..db import query_all
+
+# 风险调整口径说明（随响应下发给前端做 tooltip，避免前后端各抄一份口径）
+ADJ_NOTE = (
+    "风险调整 = 收益差 ÷ 其自身近 250 日滚动标准差（0 = 两腿同收益，±1 = 偏离自身一个典型波动单位）。"
+    "两条腿波动率并不对称——实测 σ(科技成长)/σ(股息防守) 中位约 2.2 倍，差值波动被高波动腿主导，"
+    "故绝对 pp 跨期不可比：2024 初小盘股灾 diff −16.1（σ 4.9）与当前 diff −12.0（σ 12.1）看似相当，"
+    "风险调整后分别为 −3.26 与 −0.99，信号强度差 3 倍。"
+)
 
 # 六组展示顺序与中文名
 GROUP_LABELS = [
@@ -435,6 +449,10 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     ra, sc = _num(cur_row.get("risk_appetite_20")), _num(cur_row.get("scissors_20"))
     se, po = _num(cur_row.get("sentiment_20")), _num(cur_row.get("policy_excess_20"))
     bp = _num(cur_row.get("bench_pos_pct"))
+    # 风险调整版（2026-09-15）：差值 ÷ 其自身近 250 日滚动标准差。
+    # 与 `pct` 分工不同——`pct` 答「在近一年排第几」，`adj` 答「偏离自身风险尺度几个单位」，
+    # 后者不受「近一年恰好是牛是熊」影响（实测：原始值相关的分位 7.6% ↔ adj -0.99）。
+    ra_adj, sc_adj = _num(cur_row.get("risk_appetite_adj20")), _num(cur_row.get("scissors_adj20"))
     pct_ra, pct_sc = _pctile("risk_appetite_20", 250, as_of), _pctile("scissors_20", 250, as_of)
     pct_se, pct_po = _pctile("sentiment_20", 250, as_of), _pctile("policy_excess_20", 250, as_of)
 
@@ -442,10 +460,12 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
         {"key": "risk_appetite", "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
          "pct": pct_ra, "z": z_of("risk_appetite_20"), "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
+         "adj": ra_adj,
          "hint": "科技成长组 − 股息防守组 等权20日收益差；正=偏进攻，负=偏防守"},
         {"key": "scissors", "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "updown",
          "status": _scissors_status(sc, prev5.get("scissors_20")),
          "pct": pct_sc, "z": z_of("scissors_20"), "highlight": _is_extreme(pct_sc), "anchor": "mw-gradient",
+         "adj": sc_adj,
          "hint": "(中证1000+中证2000) − (上证50+沪深300) 等权20日收益差；正=小盘占优"},
         {"key": "sentiment", "label": "情绪温度（20日超额）", "value": se, "unit": "pp", "tone": "updown",
          "status": _sent_status(se, prev5.get("sentiment_20")),
@@ -563,4 +583,5 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
             "kpis": kpis, "groups": groups,
             "size_gradient": size_gradient, "trend": trend, "detail": detail,
             "heat_matrix": _heat_matrix(hist),
-            "breadth": breadth, "volume": volume, "breadth_trend": breadth_trend}
+            "breadth": breadth, "volume": volume, "breadth_trend": breadth_trend,
+            "adj_note": ADJ_NOTE}

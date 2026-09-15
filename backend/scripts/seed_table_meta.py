@@ -62,11 +62,13 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # 2026-09-14 补：分析研究·市场风向模块的物化表（此前漏登 table_meta）
     ("market_style_daily", "分析",
      "本地聚合（dc_index_market 派生 + stock_market_daily 个股聚合，无外部源）",
-     "市场风格日频物化表（5,251 行 / 2005-02-01~）：market_style_sync 每工作日 18:45（挂 index_market_sync 之后）"
+     "市场风格日频物化表（5,252 行 / 2005-02-01~2026-09-15）：market_style_sync 每工作日 18:45（挂 index_market_sync 之后）"
      "按 dc_index_market 的 index_group 六分类等权合成收益（20/60 日）、大小盘剪刀差、风险偏好分数、"
      "情绪温度、政策超额、250 日分位；2026-09-14 起增设**市场宽度** 12 列（个股涨跌家数/涨停跌停/"
      "站上 MA20·MA60 占比/60 日新高新低/腾落线 ADL），因为原 19 列全是指数间收益差、测不到"
-     "「上涨是否普遍」；纯库内计算，指数列全量重建 + 宽度列 pandas 增量重算；供「分析研究·市场风向」消费。",
+     "「上涨是否普遍」；2026-09-15 起增设**风险调整** 2 列（剪刀差/风偏 ÷ 其自身滚动σ），修正两条腿"
+     "波动率不对称（实测 σ 比约 2.2 倍）造成的「高波动腿主导差值」；纯库内计算，"
+     "指数列全量重建 + 宽度列 pandas 增量重算；供「分析研究·市场风向」消费。",
      ["market_style_sync"], ""),
     ("bond_profit_daily", "债券",
      "中债;美债(akshare bond_zh_us_rate)",
@@ -318,6 +320,8 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                      "ret_div_20", "ret_div_60", "ret_pol_20", "ret_pol_60",
                      "scissors_20", "scissors_60", "risk_appetite_20", "sentiment_20",
                      "policy_excess_20", "bench_pos_pct",
+                     # 风险调整（2026-09-15 新增，来源同指数列）
+                     "scissors_adj20", "risk_appetite_adj20",
                      # 市场宽度（2026-09-14 新增，来源 stock_market_daily 全市场个股）
                      "breadth_total", "breadth_up", "breadth_down", "breadth_up_ratio",
                      "breadth_adl", "limit_up", "limit_down",
@@ -327,16 +331,21 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                         "ret_div_20", "ret_div_60", "ret_pol_20", "ret_pol_60",
                         "scissors_20", "scissors_60", "risk_appetite_20", "sentiment_20",
                         "policy_excess_20", "bench_pos_pct",
+                        "scissors_adj20", "risk_appetite_adj20",
                         "breadth_total", "breadth_up", "breadth_down", "breadth_up_ratio",
                         "breadth_adl", "limit_up", "limit_down",
                         "above_ma20_pct", "above_ma60_pct", "new_high60", "new_low60", "hl_diff60"],
             "note": "全列为本地派生：六分类等权合成 20/60 日区间收益、大小盘剪刀差、风险偏好、情绪温度、"
-                    "政策超额、250 日分位；宽度 12 列为 stock_market_daily 全市场个股聚合"
+                    "政策超额、250 日分位；风险调整 2 列 = 差值 ÷ 其自身近 250 日滚动σ"
+                    "（0 = 两腿同收益，刻意不减均值以免与「250 日分位」重复）；"
+                    "宽度 12 列为 stock_market_daily 全市场个股聚合"
                     "（pandas 增量重算，取数依赖 stock_market_daily.idx_breadth_cover 覆盖索引）；"
                     "指数列全量重建 + 宽度列增量合并",
             "col_notes": {
                 "scissors_20": "大小盘剪刀差 = 小盘收益 − 大盘收益（20 日）",
                 "risk_appetite_20": "风险偏好分数（成长+情绪 相对 防守+政策）",
+                "risk_appetite_adj20": "风偏风险调整 = risk_appetite_20 ÷ 其自身近250日滚动σ；σ 恒正故与原值同号，0 = 两腿同收益",
+                "scissors_adj20": "剪刀差风险调整 = scissors_20 ÷ 其自身近250日滚动σ；消除「小盘波动大」造成的尺度漂移",
                 "bench_pos_pct": "市场基准 250 日分位（0~100，绝不对涨跌染色）",
                 "breadth_up_ratio": "上涨家数占比%；与站上均线占比、ADL 共同回答「上涨是否普遍」",
                 "breadth_adl": "腾落线 = Σ(上涨家数 − 下跌家数) 的全史累计，需拿全序列计算才连续",

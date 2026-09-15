@@ -96,6 +96,16 @@ RULES = [
     ("style_breadth_hl", "market_style_daily", "where_count",
      {"where": "breadth_up_ratio IS NOT NULL AND hl_diff60 <> new_high60 - new_low60"},
      "warning", 1, "新高新低差派生列自洽（hl_diff60 必须等于 new_high60 − new_low60）"),
+    # 2026-09-15 新增：风险调整列（risk_appetite_adj20 / scissors_adj20 = 收益差 ÷ 其自身滚动σ）
+    # 符号是数学必然（σ 恒正 → 除完必与原差值同号），异号只可能来自计算错或写入错位，故设 critical
+    ("style_adj_sign", "market_style_daily", "where_count",
+     {"where": "risk_appetite_adj20 IS NOT NULL AND risk_appetite_20 IS NOT NULL "
+               "AND risk_appetite_adj20 * risk_appetite_20 < 0"},
+     "critical", 1, "风险调整列符号自洽（adj=差值÷σ，σ 恒正 → 必须与原差值同号，异号=计算错）"),
+    # 参考：全史 risk_appetite_adj20 max 6.026 / scissors_adj20 max 3.276，取 10 作宽松上限
+    ("style_adj_range", "market_style_daily", "where_count",
+     {"where": "ABS(risk_appetite_adj20) > 10 OR ABS(scissors_adj20) > 10"},
+     "warning", 1, "风险调整值取值域（归一化量，全史实测 max 6.03；|adj|>10 说明 σ 被算得过小）"),
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),

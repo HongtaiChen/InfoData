@@ -37,6 +37,7 @@ interface Kpi {
   z?: number | null     // 近 250 日 z-score
   highlight?: boolean   // 分位进极值区 → 金色标记
   anchor?: string       // 点 KPI 卡滚动到的页内锚点
+  adj?: number | null   // 风险调整值（收益差 ÷ 自身近250日滚动σ，σ 倍数）；仅风偏与剪刀差有
 }
 interface GroupRow {
   group: string; ret_20: number | null; ret_60: number | null
@@ -56,6 +57,8 @@ const asOf = ref('')
 const staleSessions = ref(0)   // as_of 之后已走过的交易日数（0=最新）
 const isReplay = ref(false)
 const kpis = ref<Kpi[]>([])
+// 风险调整口径说明：后端随响应下发，前端只做透传展示（避免前后端各抄一份口径）
+const adjNote = ref('')
 const groups = ref<GroupRow[]>([])
 const gradient = ref<GradRow[]>([])
 const trend = ref<{
@@ -98,6 +101,7 @@ async function load() {
     asOf.value = resp.as_of ?? ''
     staleSessions.value = resp.stale_sessions ?? 0
     isReplay.value = !!resp.is_replay
+    adjNote.value = resp.adj_note ?? ''
     // tone 由后端 KPI payload 给出（分位数类指标 = neutral，不按红涨绿跌染色）
     kpis.value = (resp.kpis ?? []).map((k: Kpi) => ({ ...k, tone: k.tone ?? 'updown' }))
     groups.value = resp.groups ?? []
@@ -186,7 +190,7 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
     </div>
 
     <!-- ③ 结论区 -->
-    <KpiCards :items="kpis" />
+    <KpiCards :items="kpis" :adj-note="adjNote" />
 
     <!-- ④ 主视图 -->
     <NCard id="mw-heat" size="small" class="mw-card" title="六组等权收益（20 日；副标为 60 日与近一年分位，点行下钻该组）">
