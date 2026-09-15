@@ -24,6 +24,9 @@ dq_runs.err
 # 临时调试脚本与验收截图统一放 _scratch/，仅本地留存
 /_scratch/
 
+# WorkBuddy 会话本地数据（调试脚本 / 验收截图），非项目产物
+/.workbuddy/
+
 # ===== 系统 =====
 .DS_Store
 Thumbs.db

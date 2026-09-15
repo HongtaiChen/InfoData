@@ -24,6 +24,10 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
                    注：futures_spot_price 无唯一索引（同日多快照），刻意不配 unique_index。
 - 市场宽度规则     ：2026-09-14 市场风向模块新增宽度维度（涨跌家数/均线参与度/新高新低）
                    配套 3 条规则（非空 / 占比越界 / 派生列自洽），见 RULES 中 market_style_daily 段。
+- 交叉印证规则     ：2026-09-15 P1「交叉印证」落地 —— market_style_daily 新增换手率中位数
+                   turnover_med，配套 2 条规则（非空 / 取值域）。其中 range 一条兼作
+                   **单位漂移守护**：源列 turnover_ratio 的单位曾于 2025-09 中旬切换
+                   （百分数 → 小数，差 100 倍），源侧若再改口径而采集器未跟上，该规则立刻变红。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -106,6 +110,20 @@ RULES = [
     ("style_adj_range", "market_style_daily", "where_count",
      {"where": "ABS(risk_appetite_adj20) > 10 OR ABS(scissors_adj20) > 10"},
      "warning", 1, "风险调整值取值域（归一化量，全史实测 max 6.03；|adj|>10 说明 σ 被算得过小）"),
+    # 2026-09-15 新增：换手率结构列（交叉印证「微观结构」项所需）
+    # ⚠️ 这条 range 规则不只是数值越界检查，更是**单位漂移的守护**：源列
+    #    stock_market_daily.turnover_ratio 的单位在 2025-09 中旬从「百分数（2.0=2%）」
+    #    切换为「小数（0.02=2%）」，首次物化时被统一 ×100，导致历史段虚高 100 倍
+    #    （修正前该规则会命中 4,847 行、max 859%）。归一后全史落在 0.4%~10% 区间。
+    #    若日后源侧再改口径而采集器未跟上，这条会立刻变红——这就是它存在的意义。
+    ("style_turnover_notnull", "market_style_daily", "null_rate_slice",
+     {"col": "turnover_med", "max_pct": 0}, "warning", 1,
+     "最新日换手率中位数非空（缺失 = 交叉印证「微观结构」项静默降级为数据缺失）"),
+    ("style_turnover_range", "market_style_daily", "where_count",
+     {"where": "turnover_med IS NOT NULL AND (turnover_med <= 0 OR turnover_med > 30)"},
+     "critical", 1,
+     "换手率中位数取值域（应为 0~10% 量级；>30 几乎必然是「源列单位漂移」——"
+     "源列 2025-09 中旬由百分数改为小数，差 100 倍，见 market_style_sync 文件头）"),
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),

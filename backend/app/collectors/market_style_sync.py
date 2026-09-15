@@ -36,6 +36,25 @@
   · amount_ratio_20：成交额 ÷ 20 日均值 ×100%（>100 放量 / <100 缩量），
     与「站上均线占比」配合可区分「放量下跌」与「缩量止跌」
 
+二·再补、换手率结构（2026-09-15 新增，P1「交叉印证」所需）
+  · turnover_med：当日有收盘价个股的 **换手率中位数 ×100**（单位 %，如 3.02 表示 3.02%）
+  · **为什么必须物化、不能查询时现算**：`turnover_ratio` 不在任何索引里，而
+    `stock_market_daily` 是按 (stock_code, trade_date) 聚集的——按 trade_date 等值取该列
+    要回表读 5,119 行**物理位置完全随机**的行，实测**单日一次就要 15 秒**
+    （对照：同表按 stock_code 顺序取数 118 万行只要 6.5 秒，差 3 个数量级）。
+    取「近 250 日换手率序列」按此路径需 1 小时以上，故必须在采集时随宽度一次算好。
+  · **为什么用中位数而不是均值**：该列有极端异常值（实测全市场最大 20.27，
+    2026-09-14 均值被污染成 0.3538 而常态仅 0.0364，**虚高近 10 倍**）。
+    中位数天然抗异常，且「典型个股换手」本身就是中位数语义。
+  · ⚠️ **源列单位在 2025-09 中旬发生过切换，同一列混存两种口径**（2026-09-15 新发现）：
+    历史段是**百分数**（2.0 表示 2%），2025-09 中旬起变成**小数**（0.02 表示 2%），
+    两者相差 **100 倍**。证据：按日中位数在 2025-08 及以前为 155~447，2025-09 当月
+    同时出现 2.12 与 370（切换发生在月中），2025-10 起稳定在 1.7~4.0。
+    故本列**按日判断口径后统一归一为百分数**：当日源中位数 < 0.3 判为小数口径（×100），
+    否则判为百分数口径（不动）。阈值 0.3 的实测余量：百分数口径下日最小中位数 0.47、
+    小数口径下日最大中位数 0.04，两侧各留 1.5× / 7.5× 余量。
+  · 单位：归一后一律为**百分数**，与 `breadth_up_ratio`（存 %）口径一致。
+
 三、性能设计（2026-09-14 实测选型，重要）
 - stock_market_daily 有 1,800 万行 / 2.2GB。最初用单条 SQL 窗口函数（ROW_NUMBER/AVG/MAX/MIN
   OVER）计算宽度，实测在 1.2M 行窗口下就要 20~62 秒，且**窗口函数个数从 3 增到 4 时耗时从
@@ -46,6 +65,13 @@
   比 SQL 快 2~6 倍，且数值与 SQL 口径一致（仅临界等值处有 1 只股票的浮点舍入差）。
 - 取数依赖覆盖索引 idx_breadth_cover (stock_code, trade_date, close, change_pct)：
   EXPLAIN 确认优化器会走 `Using index for skip scan`，全索引覆盖免回表；缺索引只打警告。
+  ⚠️ **2026-09-15 订正（实测）**：上面这句「全索引覆盖免回表」**与实测不符**。
+  `_fetch_raw` 的 SELECT 含 `amount` / `turnover_ratio` 两列，而这两列都不在该索引里
+  → 优化器实际选的是 `idx_stock_date` 做索引扫描 + **回表**。之所以仍然快（118 万行 6.5s），
+  靠的不是「免回表」，而是 `ORDER BY stock_code, trade_date` 使回表**按聚集顺序进行**（顺序 IO）。
+  反面证据：按 `trade_date` 等值取同一列（5,119 行）要 **15 秒** —— 同样回表，但物理位置随机。
+  结论：**该表的取数必须按 stock_code 排序，且任何需要 scan 的列都应在采集时物化，
+  绝不能在查询时按 trade_date 现取**（换手率物化即由此决定，见文件头「二·再补」）。
 - **增量重算**：日常只重算「表内最新日 − 10 天」之后的目标区间（预热另取 200 天），
   旧行沿用表内既有宽度列，不重复扫全史。首次运行（表内无宽度数据）才分块回填全史。
 - 幂等：指数列每次全量重建（小表）；宽度列增量重算后与旧值合并，再随全表 DELETE + INSERT 落库
@@ -66,7 +92,7 @@ RUN_STEPS = [
     {"no": 1, "name": "加载指数收盘矩阵", "params": "dc_index_market 全史 close → pivot(index_code×trade_date)"},
     {"no": 2, "name": "计算 N 日收益", "params": "N=20/60；六组等权（要求组内全员有值）"},
     {"no": 3, "name": "派生风格指标", "params": "剪刀差 / 风偏分数 / 情绪温度 / 政策敏感 / 大势位置(250日分位) / 风险调整(差值÷自身滚动σ)"},
-    {"no": 4, "name": "计算市场宽度与量能", "params": "个股涨跌家数/涨停跌停/站上MA20·MA60占比/60日新高新低/成交额放缩量；pandas 增量重算"},
+    {"no": 4, "name": "计算市场宽度与量能", "params": "个股涨跌家数/涨停跌停/站上MA20·MA60占比/60日新高新低/成交额放缩量/换手率中位数；pandas 增量重算"},
     {"no": 5, "name": "全量重建写入", "params": "market_style_daily DELETE + INSERT 单事务"},
 ]
 
@@ -93,8 +119,19 @@ BREADTH_COLS = [
 # 只是把 amount 也带上按日求和，零额外取数成本。
 VOLUME_COLS = ["market_amount", "amount_ratio_20"]
 
+# 换手率结构列（2026-09-15 新增，P1「交叉印证」所需）：
+# 见文件头「二·再补」——换手率**必须物化**（按 trade_date 现查该列要随机回表，单日 15 秒），
+# 且必须用**中位数**而非均值（该列有极端异常值，均值会被污染近 10 倍）。
+TURNOVER_COLS = ["turnover_med"]
+
+# ⚠️ 源列 turnover_ratio 的单位切换阈值（2026-09-15 新发现的数据缺陷）：
+#    该列在 2025-09 中旬从「百分数（2.0=2%）」切换为「小数（0.02=2%）」，混存两种口径、相差 100 倍。
+#    归一规则：当日源中位数 < 本阈值 → 判为小数口径 → ×100；否则判为百分数口径 → 不动。
+#    实测余量：百分数口径下日最小中位数 0.47、小数口径下日最大中位数 0.04。
+TURNOVER_FRACTION_MAX = 0.3
+
 # 全部「个股派生」列：同一次抓数 → 同一次合并 → 同一次写入
-MARKET_COLS = BREADTH_COLS + VOLUME_COLS
+MARKET_COLS = BREADTH_COLS + VOLUME_COLS + TURNOVER_COLS
 
 BREADTH_DDL = """
   breadth_total INT NULL COMMENT '当日有效个股数（有收盘价）',
@@ -111,6 +148,7 @@ BREADTH_DDL = """
   hl_diff60 INT NULL COMMENT '创60日新高-新低家数差',
   market_amount DECIMAL(18,2) NULL COMMENT '全市场成交额（亿元，个股 amount 求和）',
   amount_ratio_20 DECIMAL(8,2) NULL COMMENT '成交额 / 20日均值 ×100%（>100 放量，<100 缩量）',
+  turnover_med DECIMAL(8,4) NULL COMMENT '个股换手率中位数%（源 turnover_ratio 小数×100；中位数抗异常值）',
 """
 
 # 宽度覆盖索引（优化取数路径：全索引覆盖免回表）；由 scripts/seed_indexes.py 创建
@@ -249,21 +287,28 @@ class MarketStyleSyncCollector:
             return row[0] if row else None
 
     def _fetch_raw(self, conn, start: date, end: date) -> pd.DataFrame:
-        """抓个股日线（5 列：含 amount 供量能派生）；走 idx_breadth_cover 覆盖索引"""
+        """抓个股日线（6 列：含 amount 供量能派生、turnover_ratio 供换手率结构）
+
+        ⚠️ 取数按 (stock_code, trade_date) 顺序 —— 这是**性能关键**，别改成按 trade_date 过滤：
+        该表按 stock_code 聚集，按此顺序回表是顺序 IO（118 万行 6.5s）；
+        反过来按 trade_date 取非索引列则是随机 IO（5 千行就要 15s，差 3 个数量级）。
+        """
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT stock_code, trade_date, close, change_pct, amount FROM stock_market_daily "
+                "SELECT stock_code, trade_date, close, change_pct, amount, turnover_ratio "
+                "FROM stock_market_daily "
                 "WHERE close IS NOT NULL AND trade_date BETWEEN %s AND %s "
                 "ORDER BY stock_code, trade_date",
                 (start, end),
             )
             rows = cur.fetchall()
         if not rows:
-            return pd.DataFrame(columns=["stock_code", "trade_date", "close", "change_pct", "amount"])
-        df = pd.DataFrame(rows, columns=["stock_code", "trade_date", "close", "change_pct", "amount"])
-        df["close"] = pd.to_numeric(df["close"], errors="coerce")
-        df["change_pct"] = pd.to_numeric(df["change_pct"], errors="coerce")
-        df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
+            return pd.DataFrame(columns=["stock_code", "trade_date", "close", "change_pct",
+                                         "amount", "turnover_ratio"])
+        df = pd.DataFrame(rows, columns=["stock_code", "trade_date", "close", "change_pct",
+                                         "amount", "turnover_ratio"])
+        for c in ("close", "change_pct", "amount", "turnover_ratio"):
+            df[c] = pd.to_numeric(df[c], errors="coerce")
         df["stock_code"] = df["stock_code"].astype(str)
         return df
 
@@ -308,6 +353,7 @@ class MarketStyleSyncCollector:
             new_high60=("_nh", "sum"),
             new_low60=("_nl", "sum"),
             _amount=("amount", "sum"),
+            _to=("turnover_ratio", "median"),
         )
         out = pd.DataFrame(index=agg.index)
         out["breadth_total"] = agg["breadth_total"].astype("Int64")
@@ -325,6 +371,15 @@ class MarketStyleSyncCollector:
         out["market_amount"] = (agg["_amount"] / 1e8).round(2)
         amt20 = agg["_amount"].rolling(20, min_periods=20).mean()
         out["amount_ratio_20"] = (agg["_amount"] / amt20 * 100).round(2)
+        # 换手率结构：全市场个股换手率**中位数**，归一为百分数（%）。
+        # 必须中位数：该列有极端异常值（全史 max 20.27），用均值会把 2026-09-14 那天
+        # 从常态 0.0364 拉到 0.3538（虚高近 10 倍），中位数天然免疫。
+        # 必须按日判口径：源列单位在 2025-09 中旬切换过（百分数 → 小数，差 100 倍），
+        # 见 TURNOVER_FRACTION_MAX 上方注释。
+        med_raw = agg["_to"]
+        out["turnover_med"] = (
+            med_raw * np.where(med_raw < TURNOVER_FRACTION_MAX, 100.0, 1.0)
+        ).round(4)
         # 最后才切目标区间（预热段只用于 MA / 均量计算）
         return out[out.index >= target_start]
 
@@ -499,7 +554,7 @@ class MarketStyleSyncCollector:
                     1: f"{len(pivot.columns)} 个指数 / {len(pivot)} 个交易日",
                     2: f"N={self.windows}",
                     3: "剪刀差/风偏/情绪/政策/大势位置 + 风险调整 2 列",
-                    4: f"宽度/量能 {n_breadth} 行（{len(MARKET_COLS)} 列，pandas 增量）",
+                    4: f"宽度/量能/换手率 {n_breadth} 行（{len(MARKET_COLS)} 列，pandas 增量）",
                     5: f"重建 {len(payload)} 行",
                 },
             )

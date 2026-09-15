@@ -7,6 +7,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { NCard, NEmpty, NSpin, NTag } from 'naive-ui'
 import { useRouter } from 'vue-router'
+import RichText from '../components/analysis/RichText.vue'
 import api from '../api'
 
 interface RegistryItem {
@@ -90,7 +91,7 @@ function kpiText(k: CardKpi): string {
           <span class="ao-card-name">{{ m.icon }} {{ m.name }}</span>
           <NTag size="tiny" :bordered="false" type="info">跟踪</NTag>
         </div>
-        <div class="ao-card-desc">{{ m.desc }}</div>
+        <div class="ao-card-desc"><RichText :text="m.desc" /></div>
         <div class="ao-card-kpis" v-if="cardKpis[m.module_id]?.length">
           <div v-for="k in cardKpis[m.module_id]" :key="k.label" class="ao-kpi">
             <div class="ao-kpi-label" :title="k.label">{{ k.label }}</div>
@@ -110,7 +111,7 @@ function kpiText(k: CardKpi): string {
         <div class="ao-group-items">
           <NCard v-for="m in researchByGroup[g]" :key="m.module_id" size="small" hoverable class="ao-item" @click="open(m)">
             <b>{{ m.icon }} {{ m.name }}</b>
-            <div class="ao-item-desc">{{ m.desc }}</div>
+            <div class="ao-item-desc"><RichText :text="m.desc" /></div>
           </NCard>
         </div>
       </div>

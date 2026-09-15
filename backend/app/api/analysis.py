@@ -6,6 +6,7 @@
 from fastapi import APIRouter, Query
 
 from ..analysis import market_wind as market_wind_mod
+from ..analysis import sector_rotation as sector_rotation_mod
 from ..analysis.registry import REGISTRY
 
 router = APIRouter()
@@ -22,8 +23,20 @@ def market_wind(
     trend_days: int = Query(250, ge=60, le=1000, description="轮动时序窗口（交易日）"),
     as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
 ):
-    """市场风向：六组收益热力 + 大小盘剪刀差 + 风偏分数 + 市场宽度/量能 + 轮动时序
+    """市场风向：六组收益热力 + 大小盘剪刀差 + 风偏分数 + 市场宽度/量能 + 轮动时序 + 交叉印证
 
     as_of 非空时按该日回放（复盘用），全部查询只取该日及之前。
     """
     return market_wind_mod.market_wind(trend_days, as_of)
+
+
+@router.get("/sector-rotation")
+def sector_rotation(
+    as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
+    level: str = Query("一级", description="申万行业层级：一级（31 个）/ 二级（131 个）"),
+):
+    """板块轮动：申万行业 20 日收益排行（含相对基准超额）+ 概念口径排行 + 双侧口径互证
+
+    ⚠️ 行业排行需扫个股日线快照（约 8 秒），模块内已套 10 分钟 TTL 缓存（见 analysis/_cache.py）。
+    """
+    return sector_rotation_mod.sector_rotation(as_of, level)

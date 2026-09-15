@@ -5,9 +5,10 @@
  * 模块注册：后端 app/analysis/registry.py；前端组件映射见本文件下方 moduleViews（此前注释指向
  * 已不存在的 src/analysis/modules.ts，2026-09-14 订正）
  */
-import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NCard, NEmpty, NSpin, NTag } from 'naive-ui'
+import RichText from '../components/analysis/RichText.vue'
 import api from '../api'
 
 const route = useRoute()
@@ -22,20 +23,26 @@ const moduleMeta = ref<any>(null)
 //    返回的 Promise 会被直接渲染成 "[object Promise]"，模块主体不渲染（2026-09-14 实测踩坑）
 const moduleViews: Record<string, any> = {
   'market-wind': defineAsyncComponent(() => import('./analysis/MarketWindView.vue')),
+  'sector-rotation': defineAsyncComponent(() => import('./analysis/SectorRotationView.vue')),
 }
 const viewComp = computed(() => moduleViews[moduleId.value])
 
-onMounted(async () => {
+// ⚠️ 必须 watch(moduleId, { immediate: true }) 而不是 onMounted：
+//    本组件对 /analysis/:moduleId 是**同一个路由记录**，模块间切换时 vue-router 复用实例、
+//    不重新挂载 → onMounted 不会重跑 → 头部名称/口径/分组会残留上一个模块（2026-09-15 实测截图发现）。
+watch(moduleId, async (id) => {
+  moduleMeta.value = null
+  if (!id) return
   loading.value = true
   try {
     const resp: any = await api.get('/analysis/registry')
-    moduleMeta.value = (resp.items ?? []).find((m: any) => m.module_id === moduleId.value) ?? null
+    moduleMeta.value = (resp.items ?? []).find((m: any) => m.module_id === id) ?? null
   } catch (e) {
     console.error('[analysis-registry]', e)
   } finally {
     loading.value = false
   }
-})
+}, { immediate: true })
 </script>
 
 <template>
@@ -49,7 +56,7 @@ onMounted(async () => {
           <NTag size="small" :bordered="false">{{ moduleMeta.kind === 'track' ? '跟踪' : '研究' }}</NTag>
         </div>
         <div class="am-desc">
-          {{ moduleMeta.desc }}
+          <RichText :text="moduleMeta.desc" />
           <span v-if="moduleMeta.schedule_text || moduleMeta.updated_cron">
             · 更新：{{ moduleMeta.schedule_text || moduleMeta.updated_cron }}</span>
         </div>

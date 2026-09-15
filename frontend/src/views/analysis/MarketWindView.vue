@@ -26,6 +26,7 @@ import RankTable from '../../components/analysis/RankTable.vue'
 import DrillLink from '../../components/analysis/DrillLink.vue'
 import BreadthPanel, { type Breadth } from '../../components/analysis/BreadthPanel.vue'
 import HeatMatrix, { type MatrixRow } from '../../components/analysis/HeatMatrix.vue'
+import CrossCheckPanel, { type CrossItem } from '../../components/analysis/CrossCheckPanel.vue'
 import api from '../../api'
 
 const router = useRouter()
@@ -75,6 +76,10 @@ const breadthTrend = ref<{
   amount: (number | null)[]; amount_ratio: (number | null)[]
 }>({ dates: [], up_ratio: [], adl: [], above_ma20_pct: [], hl_diff60: [], amount: [], amount_ratio: [] })
 const heatMatrix = ref<{ cols: string[]; rows: MatrixRow[] }>({ cols: [], rows: [] })
+// 交叉印证（2026-09-15 P1）：五类参照系第 ④ 类 —— 拿股票市场内的维度去跟外部独立维度比，
+// 专门找「背离」（两个本该同向的维度不同向）。此前这一类完全空白。
+const crossChecks = ref<CrossItem[]>([])
+const crossNote = ref('')
 
 const trendDays = ref(250)
 const trendDaysOptions = [
@@ -114,6 +119,8 @@ async function load() {
       dates: [], up_ratio: [], adl: [], above_ma20_pct: [], hl_diff60: [], amount: [], amount_ratio: [],
     }
     heatMatrix.value = resp.heat_matrix ?? { cols: [], rows: [] }
+    crossChecks.value = resp.cross_checks ?? []
+    crossNote.value = resp.cross_note ?? ''
   } catch (e) {
     console.error('[market-wind]', e)
   } finally {
@@ -231,6 +238,12 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
           height="230px"
         />
       </div>
+    </NCard>
+
+    <!-- 交叉印证（2026-09-15 P1）：参照系第 ④ 类。六项里每一项都是
+         「股票市场内的一个维度 × 一个独立外部维度」，用途只有一个——发现背离。 -->
+    <NCard id="mw-cross" size="small" class="mw-card" title="交叉印证（拿股票市场内的维度，去跟外部独立维度比 —— 专门找「背离」）">
+      <CrossCheckPanel :items="crossChecks" :note="crossNote" />
     </NCard>
 
     <div class="mw-two-col">

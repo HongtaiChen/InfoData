@@ -32,10 +32,16 @@ KPI 结论规则：
 - 为什么需要：原有 19 列全是「指数之间比收益」，测不到「上涨是否普遍」——
   指数被权重股主导，指数涨而多数个股跌即为虚涨。
 - 列由 market_style_sync 计算；首次采集前不存在，本模块用 `_breadth_ready()` 优雅降级为 None。
+
+交叉印证（2026-09-15 新增，P1）：
+- `cross_checks`：6 项「股票市场内维度 × 另一个独立维度」的比对（杠杆/股债/股商/口径/微观/量价），
+  用来发现**背离**——五类参照系里唯一此前完全空白的一类（详见 cross_check.py docstring）。
+- `cross_note`：交叉印证框架说明，随响应下发供前端直接展示（前端只透传不手抄）。
 """
 from __future__ import annotations
 
 from ..db import query_all
+from . import cross_check
 
 # 风险调整口径说明（随响应下发给前端做 tooltip，避免前后端各抄一份口径）
 ADJ_NOTE = (
@@ -577,6 +583,10 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
             "amount_ratio": [_num(r.get("amount_ratio_20")) for r in bh],
         }
 
+    # 交叉印证（2026-09-15 P1）：五类参照系的第 ④ 类，此前完全空白。
+    # 逐项 fail-soft（内部已处理），任一项数据源异常只降级自己，不影响本页其余部分。
+    xcheck = cross_check.cross_checks(as_of)
+
     return {"as_of": data_as_of, "is_replay": is_replay,
             # 回放模式下滞后无意义（数据天然落后于今天），固定报 0 避免误标琥珀
             "stale_sessions": 0 if is_replay else _stale_sessions(data_as_of),
@@ -584,4 +594,6 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
             "size_gradient": size_gradient, "trend": trend, "detail": detail,
             "heat_matrix": _heat_matrix(hist),
             "breadth": breadth, "volume": volume, "breadth_trend": breadth_trend,
+            "cross_checks": xcheck["items"], "cross_summary": xcheck["summary"],
+            "cross_note": xcheck["note"],
             "adj_note": ADJ_NOTE}
