@@ -7,13 +7,22 @@ InvestBuddy 行情快照聚合采集器
 - 解决快照表停更问题：行情看板表格永远展示"最近一个交易日的收盘快照"
 - 幂等：TRUNCATE 后全量重建（约 5400 行，秒级）
 
-⚠️ 调度顺序契约（2026-09-12 修正）：
-  stock_daily_incr（19:00 启动，跑 ~25 分钟）必须先完成，
-  market_current_sync 才能拿到完整 daily 最新日切片。
-  原 cron `45 18` 早于 `0 19`，导致 daily 还没补全就先聚合 → 6 字头股票漏 2220 行被锁死。
-  修复：cron 改到 30 19（晚于 daily_incr 30 分钟），并移除「今日已跑跳过」保护——
-  每次跑都重新聚合（TRUNCATE + INSERT 仅数秒），避免再次出现「daily 已补但 current 卡住」的状态。
-  唯一保留的护栏：daily 最新日行数 < 1000 时拒绝覆盖（防日线表被清空的极端情形）。
+⚠️ 调度顺序契约（2026-09-12 建立，2026-09-16 修正）：
+  stock_daily_incr（19:00 启动）必须先完成，本任务才能拿到完整 daily 最新日切片。
+  历史①（09-12）：原 cron `45 18` 早于 `0 19` → 6 字头股票漏 2220 行被锁死。
+  历史②（09-16）：改到 `30 19` 仍不够——实测 stock_daily_incr 常态耗时 **15~50 分钟**
+  （19:00 起跑，最慢 19:50 才完成），故 19:30 依然早于日线完成 → 写入「半量快照」
+  （2820 / 应为 5119 行），并沿依赖链毒害下游：stock_info_sync 的名单护栏拒绝残缺快照，
+  连续 6 个班次失败，A 股在册名单停更。
+  修正（两管齐下）：
+    ① cron 后移至 `20 20`（20:10），给日线留足余量；
+    ② 新增「相对上一交易日」充分性护栏（见下），即使时序再被打乱也不会写入半量数据。
+  每次跑都重新聚合（TRUNCATE + INSERT 仅数秒），不做「今日已跑跳过」。
+  双重护栏：
+    · 绝对下限 MIN_ROWS —— 防日线表被清空的极端情形；
+    · 相对充分性 PREV_RATIO —— 当日行数不足上一交易日的该比例即拒绝，
+      防「日线增量未跑完」把半量数据写成快照。
+  任一不满足即拒绝覆盖，**保留库内原有完整快照**（宁可数据晚一天，不可毒害下游）。
 """
 import logging
 from datetime import datetime
@@ -25,14 +34,20 @@ from ._common import with_steps
 
 logger = logging.getLogger(__name__)
 
-# 最小行数：少于该值视为异常，拒绝覆盖（防止日线表不完整时把快照清空）
+# 护栏一：绝对下限。少于该值视为异常，拒绝覆盖（防止日线表不完整时把快照清空）
 MIN_ROWS = 1000
+
+# 护栏二：相对充分性。当日行数 < 上一交易日行数 × PREV_RATIO 时拒绝覆盖。
+# 动机（2026-09-16）：MIN_ROWS 只防「表被清空」，拦不住「日线增量跑到一半」
+# —— 2820 行也 > 1000，会静默把半量快照写进库，再连锁毒害下游名单类任务。
+# A 股约 5400 只，交易日之间数量不会骤减 10%，故 0.9 是安全阈值。
+PREV_RATIO = 0.9
 
 # 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）
 RUN_STEPS = [
     {"no": 1, "name": "读最新交易日", "params": "stock_market_daily 取 MAX(trade_date)"},
     {"no": 2, "name": "聚合当日行情", "params": "LEFT JOIN stock_info 名称 + 年初至今涨幅，全市场约 5400 行"},
-    {"no": 3, "name": "行数护栏校验", "params": f"少于 {MIN_ROWS} 行拒绝覆盖（防 daily 极端缺失时空表）"},
+    {"no": 3, "name": "行数护栏校验", "params": f"①少于 {MIN_ROWS} 行；②不足上一交易日的 {PREV_RATIO:.0%}——任一不满足即拒绝覆盖"},
     {"no": 4, "name": "全量重建写入", "params": "TRUNCATE 后单事务批量 INSERT（22 列, data_source=daily-agg）"},
 ]
 
@@ -80,15 +95,43 @@ class MarketCurrentSyncCollector:
                 """
                 cur.execute(sql, [f"{year}-01-01", latest_date])
                 rows = cur.fetchall()
-                if len(rows) < MIN_ROWS:
+
+                # 上一交易日行数（相对充分性护栏的基准）
+                cur.execute(
+                    "SELECT COUNT(*) AS c FROM stock_market_daily "
+                    "WHERE trade_date = (SELECT MAX(trade_date) FROM stock_market_daily WHERE trade_date < %s)",
+                    (latest_date,),
+                )
+                prev_cnt = cur.fetchone()["c"] or 0
+                n = len(rows)
+
+                # 双重护栏：任一不满足即拒绝覆盖，保留库内原有完整快照
+                reject = None
+                if n < MIN_ROWS:
+                    reject = f"仅 {n} 行，小于绝对下限 {MIN_ROWS}"
+                elif prev_cnt and n < prev_cnt * PREV_RATIO:
+                    reject = (
+                        f"仅 {n} 行，不足上一交易日 {prev_cnt} 行的 {PREV_RATIO:.0%}"
+                        f"（{prev_cnt * PREV_RATIO:.0f} 行）——疑似 stock_daily_incr 尚未跑完"
+                    )
+                if reject:
+                    logger.warning(
+                        f"⛔ 快照护栏拒绝覆盖：最新交易日 {latest_date} {reject}；保留库内原有快照"
+                    )
                     return with_steps(
                         {
                             "records_written": 0,
                             "error_count": 1,
-                            "errors": [f"最新交易日 {latest_date} 仅 {len(rows)} 行，小于阈值 {MIN_ROWS}，拒绝覆盖"],
-                            "note": "数据异常保护",
+                            "errors": [f"最新交易日 {latest_date} {reject}，拒绝覆盖（保留库内原有快照）"],
+                            "note": "数据异常保护：疑似日线未跑完，避免写入半量快照毒害下游名单类任务",
                         },
-                        RUN_STEPS, {1: f"最新交易日 {latest_date}", 2: f"聚合仅 {len(rows)} 行", 3: f"< {MIN_ROWS}，拒绝覆盖"},
+                        RUN_STEPS,
+                        {
+                            1: f"最新交易日 {latest_date}",
+                            2: f"聚合 {n} 行（上一交易日 {prev_cnt} 行）",
+                            3: f"⛔ {reject}，拒绝覆盖",
+                            4: "保留库内原有快照",
+                        },
                     )
 
                 # 3. TRUNCATE + 批量重建

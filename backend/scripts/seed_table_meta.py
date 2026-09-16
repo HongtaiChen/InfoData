@@ -53,7 +53,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["stock_daily_incr"], ""),
     ("stock_market_current", "行情",
      "本地聚合（无外部源）",
-     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,400 行，<1,000 行护栏拒写）；每工作日 19:30（晚于 stock_daily_incr 30 分钟，确保拿到完整切片）。",
+     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,400 行，双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每工作日 20:15（**必须晚于 stock_daily_incr 跑完**——日线常态耗时 15~50 分钟，原 19:30 会读到半量数据，2026-09-16 因此写出 2820/5119 行残快照并毒害下游 stock_info_sync 名单）。",
      ["market_current_sync"], ""),
     ("dc_index_market", "指数",
      "中证官网;国证+腾讯;东财",
@@ -62,7 +62,8 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # 2026-09-14 补：分析研究·市场风向模块的物化表（此前漏登 table_meta）
     ("market_style_daily", "分析",
      "本地聚合（dc_index_market 派生 + stock_market_daily 个股聚合，无外部源）",
-     "市场风格日频物化表（5,252 行 / 2005-02-01~2026-09-15）：market_style_sync 每工作日 18:45（挂 index_market_sync 之后）"
+     "市场风格日频物化表（5,253 行 / 2005-02-01~）：market_style_sync 每工作日 20:05（**晚于个股日线跑完**，"
+     "并带「日线充分性护栏」——当日行数不足上一交易日 90% 时上界退回上一交易日；原 18:45 必然早于日线完成）"
      "按 dc_index_market 的 index_group 六分类等权合成收益（20/60 日）、大小盘剪刀差、风险偏好分数、"
      "情绪温度、政策超额、250 日分位；2026-09-14 起增设**市场宽度** 12 列（个股涨跌家数/涨停跌停/"
      "站上 MA20·MA60 占比/60 日新高新低/腾落线 ADL）+ **量能** 2 列，因为原 19 列全是指数间收益差、测不到"
@@ -299,7 +300,7 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                      "pre_close", "volume", "amount", "turnover_ratio", "amplitude", "ytd_change_pct",
                      "dynamic_pe", "pb", "volume_ratio", "rise_speed", "5m_change_pct", "60d_change_pct",
                      "total_captital", "float_captital"],
-            "note": "TRUNCATE+全量重建（<1,000 行护栏拒写）",
+            "note": "TRUNCATE+全量重建（双重护栏拒写：①<1,000 行 ②不足上一交易日 90%）",
         },
     },
     "dc_index_market": {

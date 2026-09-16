@@ -88,11 +88,22 @@ from ._common import with_steps
 
 logger = logging.getLogger(__name__)
 
+# 日线充分性阈值（2026-09-16 新增）
+# 本任务的输入是「个股日线」，而上游 stock_daily_incr 常态耗时 15~50 分钟
+# （19:00 起跑，最慢约 19:50 完成）→ 原 cron 18:45 必然早于日线完成，
+# 用「半量日线」算出残缺的当天宽度写进库，使市场风向 / 交叉印证在当天给出**假信号**
+# （2026-09-16 实测：cross_checks 的 micro/pxvol 两项因宽度全 NULL 直接退化为「数据缺失」）。
+# 故：当日行数不足上一交易日该比例时，把计算上界退回上一交易日
+# —— 宁可停在上一交易日，不写半量数据。
+# ⚠️ 必须定义在 RUN_STEPS 之前：RUN_STEPS 的 f-string 在「模块导入期」就求值，
+#    放到下面会直接 NameError（2026-09-16 踩过，py_compile 查不出来）。
+DAILY_SUFFICIENT_RATIO = 0.9
+
 RUN_STEPS = [
     {"no": 1, "name": "加载指数收盘矩阵", "params": "dc_index_market 全史 close → pivot(index_code×trade_date)"},
     {"no": 2, "name": "计算 N 日收益", "params": "N=20/60；六组等权（要求组内全员有值）"},
     {"no": 3, "name": "派生风格指标", "params": "剪刀差 / 风偏分数 / 情绪温度 / 政策敏感 / 大势位置(250日分位) / 风险调整(差值÷自身滚动σ)"},
-    {"no": 4, "name": "计算市场宽度与量能", "params": "个股涨跌家数/涨停跌停/站上MA20·MA60占比/60日新高新低/成交额放缩量/换手率中位数；pandas 增量重算"},
+    {"no": 4, "name": "计算市场宽度与量能", "params": f"日线充分性护栏（不足上一交易日 {DAILY_SUFFICIENT_RATIO:.0%} 则上界退回）→ 涨跌家数/涨停跌停/站上MA20·MA60占比/60日新高新低/成交额放缩量/换手率中位数；pandas 增量重算"},
     {"no": 5, "name": "全量重建写入", "params": "market_style_daily DELETE + INSERT 单事务"},
 ]
 
@@ -286,6 +297,31 @@ class MarketStyleSyncCollector:
             row = cur.fetchone()
             return row[0] if row else None
 
+    def _safe_max_date(self, conn, max_d: date) -> date:
+        """日线充分性护栏：当日行数不足上一交易日的 DAILY_SUFFICIENT_RATIO 时，
+        把计算上界退回上一交易日，避免用「半量日线」算出残缺的当天宽度写进库。
+
+        与 market_current_sync 的双重护栏同源同口径（见该模块 docstring）：
+        时序排期是根本解法，本护栏是第二层防御，防止时序再次被打乱时数据被污染。
+        """
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM stock_market_daily WHERE trade_date = %s", (max_d,))
+            n = cur.fetchone()[0] or 0
+            cur.execute(
+                "SELECT MAX(trade_date) FROM stock_market_daily WHERE trade_date < %s", (max_d,))
+            prev_d = cur.fetchone()[0]
+            if prev_d is None:
+                return max_d
+            cur.execute("SELECT COUNT(*) FROM stock_market_daily WHERE trade_date = %s", (prev_d,))
+            prev_n = cur.fetchone()[0] or 0
+        if prev_n and n < prev_n * DAILY_SUFFICIENT_RATIO:
+            logger.warning(
+                f"⚠️ 日线不充分：{max_d} 仅 {n} 行，不足上一交易日 {prev_d}（{prev_n} 行）的 "
+                f"{DAILY_SUFFICIENT_RATIO:.0%} → 计算上界退回 {prev_d}（不写半量数据）"
+            )
+            return prev_d
+        return max_d
+
     def _fetch_raw(self, conn, start: date, end: date) -> pd.DataFrame:
         """抓个股日线（6 列：含 amount 供量能派生、turnover_ratio 供换手率结构）
 
@@ -408,6 +444,8 @@ class MarketStyleSyncCollector:
         max_d = self._max_stock_date(conn)
         if max_d is None:
             return pd.DataFrame()
+        # 日线充分性护栏：日线未跑完时退回上一交易日，不把「半量数据」算成宽度
+        max_d = self._safe_max_date(conn, max_d)
 
         t0 = time.time()
         parts: list[pd.DataFrame] = []

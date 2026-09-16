@@ -49,8 +49,8 @@ REGISTRY: list[dict] = [
         "icon": "🧭",
         "desc": "六组收益热力 + 风偏/剪刀差/情绪温度/政策敏感/大势位置 5 项 KPI（附近一年分位与风险调整）+ 大小盘梯度 + 轮动时序 + 市场宽度与量能 + **交叉印证 6 项**（杠杆/股债/股商/口径/微观/量价，专门找「背离」）",
         "as_of_source": "market_style_daily.MAX(trade_date)",
-        "updated_cron": "45 18 * * 0-4",
-        "schedule_text": "每工作日 18:45（指数行情同步后）",
+        "updated_cron": "5 20 * * 0-4",
+        "schedule_text": "每工作日 20:05（个股日线完成后）",
         "params": [
             {"key": "trend_days", "type": "select", "label": "时序窗口",
              "options": [120, 250, 500], "default": 250},
@@ -68,7 +68,7 @@ REGISTRY: list[dict] = [
         "icon": "🔀",
         "desc": "申万行业（一级 31 / 二级 131）20 日收益排行 + **相对市场基准的超额** + 行业离散度与首尾差（轮动速度）+ 同花顺概念口径排行 + **双侧口径互证**（两个独立数据集是否给出同一结论）",
         "as_of_source": "stock_market_daily.MAX(trade_date)",
-        "updated_cron": "45 18 * * 0-4",
+        "updated_cron": "0 19 * * 0-4",
         "schedule_text": "随个股日线（每工作日 19:00 后）+ 概念（20:00/22:00）自动可见",
         "params": [
             {"key": "level", "type": "select", "label": "行业层级",
