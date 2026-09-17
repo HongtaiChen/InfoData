@@ -46,6 +46,17 @@ from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
 
+
+class TaskBlockedError(RuntimeError):
+    """数据未就绪 → 本次按设计不执行（**非任务故障**）。
+
+    与普通 RuntimeError 的区别：run_task 捕获它时把 task_runs.status 记为
+    'blocked' 而非 'failed'。动机（2026-09-17）：快照护栏每天都会因「日线尚未
+    跑完」拒绝一次，若记 failed，每个交易日都会产出一次假失败污染 DQ 失败率。
+    见 app/task_recorder.py 的三态语义说明。
+    """
+
+
 # 线程局部：wrapper 里采集器 run() 返回的结构化快照（含 run_steps），run_task 结束时写入 task_runs.run_detail
 _tls = threading.local()
 
@@ -106,6 +117,9 @@ def run_market_current_sync(params: dict) -> int:
     """行情快照聚合：stock_market_daily 最新交易日 → stock_market_current"""
     collector = MarketCurrentSyncCollector()
     result = _collector_run(collector)
+    if result.get("blocked"):
+        # 护栏拦截（日线未就绪）→ blocked 语义，不计入失败率
+        raise TaskBlockedError("; ".join(result.get("errors") or ["数据未就绪"]))
     if result["error_count"] > 0:
         raise RuntimeError("; ".join(result["errors"]))
     return result["records_written"]
@@ -676,6 +690,13 @@ def run_task(task_name: str) -> int:
         recorder.finish(records_written=written, run_detail=_dumps(detail))
         logger.info(f"✅ 任务 {task_name} 完成，写入 {written} 条")
         return written
+    except TaskBlockedError as e:
+        # 数据未就绪：记为 blocked（非 failed，不计失败率），但**仍然向上抛出**——
+        # 让调用方（调度器）知道本次没有产出数据，不要据此接力下游任务。
+        detail = _take_run_detail()
+        recorder.finish(records_written=0, error_message=str(e), run_detail=_dumps(detail), status="blocked")
+        logger.warning(f"⏸ 任务 {task_name} 未执行（数据未就绪，非故障）: {e}")
+        raise
     except Exception as e:
         detail = _take_run_detail()
         recorder.finish(records_written=0, error_message=str(e), run_detail=_dumps(detail))

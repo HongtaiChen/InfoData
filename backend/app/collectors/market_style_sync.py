@@ -232,6 +232,9 @@ class MarketStyleSyncCollector:
         # 表内旧行的新列为 NULL，而增量门控只看 breadth_up_ratio，会误判为「已有数据」，
         # 导致历史新列永远为空 —— 此时必须显式全量重算一次。
         self.full_refresh = full_refresh
+        # 日线不充分时 _safe_max_date 会把计算上界退回上一交易日；记录实际退回的日期，
+        # 供 run() 在 run_detail 里显式标注「本次未产出当日宽度」，避免静默空转（2026-09-17）。
+        self._reverted_to: date | None = None
 
     # ---------- 表结构维护 ----------
 
@@ -319,7 +322,9 @@ class MarketStyleSyncCollector:
                 f"⚠️ 日线不充分：{max_d} 仅 {n} 行，不足上一交易日 {prev_d}（{prev_n} 行）的 "
                 f"{DAILY_SUFFICIENT_RATIO:.0%} → 计算上界退回 {prev_d}（不写半量数据）"
             )
+            self._reverted_to = prev_d
             return prev_d
+        self._reverted_to = None
         return max_d
 
     def _fetch_raw(self, conn, start: date, end: date) -> pd.DataFrame:
@@ -579,13 +584,24 @@ class MarketStyleSyncCollector:
             n_breadth = int(out["breadth_total"].notna().sum()) if "breadth_total" in out else 0
             msg = (f"市场风格物化 {len(payload)} 行（{cols[0]}~{cols[-1]}），截至 {as_of}；"
                    f"其中宽度列 {n_breadth} 行")
-            logger.info(f"✅ {msg}")
+            reverted = self._reverted_to
+            if reverted is not None:
+                # 「成功但上界回退」：多发生在下游跑在日线前面时（2026-09-17 实测）。
+                # 它不是失败，但若只报 success，从任何监控看都完全正常——必须显式标注，
+                # 否则这类空转会一直被当成「跑过了」。
+                msg += (f"；⚠️ 日线未就绪（{reverted} 之后不充分），计算上界已退回 {reverted}，"
+                        f"本次未产出当日宽度，待日线完成后的链式触发重跑")
+                logger.warning(f"⚠️ {msg}")
+            else:
+                logger.info(f"✅ {msg}")
             return with_steps(
                 {
                     "records_written": len(payload),
                     "error_count": 0,
                     "errors": [],
                     "note": msg,
+                    # 结构化标记：前端 / DQ 可据此区分「正常成功」与「成功但数据滞后」
+                    "stale_upper_bound": str(reverted) if reverted is not None else None,
                 },
                 RUN_STEPS,
                 {

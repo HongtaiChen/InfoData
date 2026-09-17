@@ -121,9 +121,14 @@ class MarketCurrentSyncCollector:
                     return with_steps(
                         {
                             "records_written": 0,
-                            "error_count": 1,
+                            "error_count": 0,
+                            # blocked=True 表达「数据未就绪，本次不执行」——这不是任务故障。
+                            # run_task 据此写 status='blocked'（而非 failed），
+                            # 否则每个交易日的 21:40 兜底班次都会产生一次假失败，污染 DQ 失败率。
+                            "blocked": True,
                             "errors": [f"最新交易日 {latest_date} {reject}，拒绝覆盖（保留库内原有快照）"],
-                            "note": "数据异常保护：疑似日线未跑完，避免写入半量快照毒害下游名单类任务",
+                            "note": "数据未就绪保护：疑似日线未跑完，本次不写（保留库内原有快照）；"
+                                    "日线完成后的链式触发会自动重跑本任务",
                         },
                         RUN_STEPS,
                         {

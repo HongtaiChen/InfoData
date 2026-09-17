@@ -1033,6 +1033,9 @@ function flowLastStatus(j: FlowJob): { text: string; color: string } {
   const st = j.last?.status
   if (st === 'success') return { text: '成功', color: '#18A058' }
   if (st === 'failed') return { text: '失败', color: '#d03050' }
+  // blocked：数据未就绪按设计未执行（如快照发现日线只跑了一半），非故障，
+  // 用琥珀色「提醒」而非失败色，避免与真实失败混淆
+  if (st === 'blocked') return { text: '待数据', color: '#B45309' }
   if (st === 'running') return { text: '运行中', color: '#185FA5' }
   return { text: '从未运行', color: '#999' }
 }

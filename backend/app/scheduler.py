@@ -30,6 +30,32 @@ MANUAL_MARK = "手动"
 # running 记录视为「仍在运行」的时间窗口（超过视为遗留脏记录，允许重跑）
 RUNNING_STALE_HOURS = 2
 
+# 错过多少秒内仍补跑。原值 3600（1h）会让「睡眠超过 1 小时」的班次被 APScheduler 静默丢弃
+# （连日志都不留）。放宽到 6h 覆盖「头天没开机、次日才开机」的场景；coalesce=True 保证
+# 错过多次也只补一次，不会堆积。仍不设 None——唤醒瞬间全部 job 同时到期会造成
+# ThreadPoolExecutor(10) 并发风暴。
+MISFIRE_GRACE_SECONDS = 21600
+
+# ============================================================================
+# 链式触发（2026-09-17）：把「下游等固定时刻」改成「上游完成即接力」
+#
+# 动机：stock_daily_incr 常态耗时 15~52 分钟，任何固定时刻都会赌输。两次实测：
+#   09-16  快照在日线只跑了一半时写入（2820/5119 行），连锁致 stock_info_sync 的
+#          名单护栏连续 6 个班次失败，A 股名单停更；
+#   09-17  物化表 20:05 报 success 写入 5254 行，实为**上一交易日**的数据
+#          （护栏把上界退回），白跑一次却显示成功，前端看到的仍是昨天。
+# 链式触发后，数据就绪时间 = 「日线完成 + 数分钟」，固定时刻降级为兜底。
+# ============================================================================
+CHAIN_NEXT: dict[str, list[str]] = {
+    "stock_daily_incr": ["market_style_sync"],
+    "market_style_sync": ["market_current_sync"],
+    "market_current_sync": ["data_quality_check"],
+}
+
+# 兜底班次清单：这些任务的固定时刻只在「当日链式未跑成」时才真正执行。
+# 判定看当日是否已有 success —— blocked（数据未就绪）不算跑成，故仍允许兜底再试一次。
+CHAIN_FALLBACK_TASKS: set[str] = {"market_style_sync", "market_current_sync", "data_quality_check"}
+
 
 def parse_cron(cron: str):
     """解析 5 字段 crontab，非法返回 None"""
@@ -273,7 +299,7 @@ class SchedulerManager:
                     args=[name],
                     coalesce=True,          # 错过多次只补跑一次
                     max_instances=1,        # 同任务不并发
-                    misfire_grace_time=3600,  # 错过 1 小时内仍补跑（如休眠期）
+                    misfire_grace_time=MISFIRE_GRACE_SECONDS,  # 错过 6h 内仍补跑（如休眠期）
                     replace_existing=True,
                 )
             scheduled.append(name)
@@ -286,9 +312,32 @@ class SchedulerManager:
 
     # ---------- 任务执行 ----------
 
-    def _run_scheduled(self, task_name: str):
-        """APScheduler 触发的任务入口（异常必须吞掉，避免 scheduler 内部报错）"""
+    @staticmethod
+    def _succeeded_today(task_name: str) -> bool:
+        """该任务今日是否已有 success 记录（兜底班次据此跳过重复执行）"""
+        from .db import _connect  # noqa: PLC0415
+
+        conn = _connect()
         try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM task_runs "
+                    "WHERE task_name=%s AND status='success' AND finished_at >= CURDATE()",
+                    (task_name,),
+                )
+                return (cur.fetchone()[0] or 0) > 0
+        finally:
+            conn.close()
+
+    def _run_scheduled(self, task_name: str, force: bool = False):
+        """APScheduler 触发的任务入口（异常必须吞掉，避免 scheduler 内部报错）
+
+        force=True（API 手动触发）跳过兜底去重检查，保证人工触发一定执行。
+        """
+        try:
+            if not force and task_name in CHAIN_FALLBACK_TASKS and self._succeeded_today(task_name):
+                logger.info(f"⏭ 兜底班次跳过：{task_name} 当日已有成功记录（链式已跑成）")
+                return
             self._execute(task_name)
         except Exception as e:
             logger.exception(f"定时任务 {task_name} 执行异常: {e}")
@@ -315,7 +364,32 @@ class SchedulerManager:
         from .tasks.run import run_task  # noqa: PLC0415
 
         written = run_task(task_name)
+        # 链式触发：本任务成功后接力下游。上游失败或 blocked 会抛异常，
+        # 根本走不到这里 —— 这正是期望行为：数据没就绪就不接力。
+        downstream = CHAIN_NEXT.get(task_name)
+        if downstream:
+            threading.Thread(
+                target=self._run_chain, args=(task_name, list(downstream)), daemon=True
+            ).start()
         return {"started": True, "records_written": written}
+
+    def _run_chain(self, upstream: str, downstream: list[str]):
+        """上游成功后按依赖顺序接力下游（独立线程，不占用调度器 worker）
+
+        每级都经 _execute 调用，成功后自动继续接力下一级（自然递归）。
+        任一级失败 / blocked 即中止整条链，等兜底班次或下次开机补偿再试。
+        """
+        logger.info(f"🔗 链式触发：{upstream} 已完成 → 接力 {downstream}")
+        for name in downstream:
+            try:
+                res = self._execute(name)
+                if not res.get("started"):
+                    logger.warning(f"🔗 链式接力 {name} 未启动，链条中止：{res.get('reason')}")
+                    break
+                logger.info(f"🔗 链式接力 {name} 完成")
+            except Exception as e:
+                logger.warning(f"🔗 链式接力 {name} 未完成，链条中止：{e}")
+                break
 
     def trigger_now(self, task_name: str) -> dict:
         """立即执行（异步线程），供 API 调用"""
@@ -323,7 +397,7 @@ class SchedulerManager:
             return {"started": False, "reason": f"任务 {task_name} 无执行实现"}
         if self._running_count(task_name) > 0:
             return {"started": False, "reason": "任务正在运行中，请稍后再试"}
-        t = threading.Thread(target=self._run_scheduled, args=(task_name,), daemon=True)
+        t = threading.Thread(target=self._run_scheduled, args=(task_name, True), daemon=True)
         t.start()
         return {"started": True, "reason": "已提交执行，请到运行记录查看进度"}
 

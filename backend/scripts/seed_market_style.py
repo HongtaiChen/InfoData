@@ -5,7 +5,7 @@
 用法：python scripts/seed_market_style.py
 
 - market_style_sync：市场风格日频物化表（market_style_daily）计算任务，纯库内 SQL 与 pandas 聚合，
-  cron `5 20 * * 0-4`（每工作日 20:05）。
+  cron `30 21 * * 0-4`（每工作日 21:30，仅兜底）。
 
   ⚠️ 排期契约（2026-09-16 修正）：本任务的输入是**个股日线**，而 stock_daily_incr（19:00 起跑）
   常态耗时 15~50 分钟 —— 因此任何早于「日线完成」的时刻（原 18:45、以及 19:30）都会读到
@@ -27,7 +27,7 @@ import pymysql  # noqa: E402
 
 # (task_name, enabled, cron, params)
 TASKS = [
-    ("market_style_sync", 1, "5 20 * * 0-4", {}),
+    ("market_style_sync", 1, "30 21 * * 0-4", {}),
 ]
 
 

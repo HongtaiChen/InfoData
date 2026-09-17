@@ -234,6 +234,8 @@ const statusTag = (s: string) => {
   const map: Record<string, { type: 'info' | 'error' | 'default' | 'warning'; text: string }> = {
     success: { type: 'info', text: '成功' },
     failed: { type: 'error', text: '失败' },
+    // blocked：数据未就绪按设计未执行（如快照发现日线只跑了一半），非故障
+    blocked: { type: 'warning', text: '待数据' },
     running: { type: 'info', text: '运行中' },
     partial: { type: 'warning', text: '部分成功' },
   }
@@ -299,6 +301,7 @@ const statusOptions = [
   { label: '全部状态', value: '' },
   { label: '成功', value: 'success' },
   { label: '失败', value: 'failed' },
+  { label: '待数据', value: 'blocked' },
   { label: '运行中', value: 'running' },
 ]
 

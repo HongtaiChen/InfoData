@@ -3,7 +3,15 @@
 """
 InvestBuddy 作业记录模块
 所有采集任务统一通过 TaskRecorder 记录运行状态到 task_runs 表：
-  running -> (success | failed) + 写入条数 + 错误信息
+  running -> (success | failed | blocked) + 写入条数 + 错误信息
+
+⚠️ 三态语义（2026-09-17 立）：
+  success —— 任务正常跑完并写入数据
+  failed  —— 任务本身出错（异常/源不可用/写入失败）
+  blocked —— **数据未就绪，本次按设计不执行**（如快照护栏发现日线只跑了一半）
+            它不是故障，因此不计入失败率；但也不算成功，
+            故 catchup_missed 仍会在下次开机时重新补跑它（这是期望行为）。
+            加此状态的动机：护栏拒绝若记 failed，每个交易日都会产出一次假失败。
 """
 import pymysql
 from datetime import datetime
@@ -36,13 +44,17 @@ class TaskRecorder:
             self.run_id = cur.lastrowid
         return self.run_id
 
-    def finish(self, records_written: int = 0, error_message: str | None = None, run_detail=None):
-        """记录任务结束（成功或失败）
+    def finish(self, records_written: int = 0, error_message: str | None = None,
+               run_detail=None, status: str | None = None):
+        """记录任务结束（成功 / 失败 / 未执行）
+
         run_detail: 可选 dict/str —— 结构化运行快照（步骤链+当轮实录），存入 task_runs.run_detail JSON 列
+        status: 可选显式状态。默认按 error_message 推导（有错误信息 → failed，否则 success）；
+                传 'blocked' 表示「数据未就绪，本次按设计不执行」（非任务故障，不计失败率）。
         """
         if self.connection is None:
             return
-        status = "failed" if error_message else "success"
+        status = status or ("failed" if error_message else "success")
         finished_at = datetime.now()
         try:
             with self.connection.cursor() as cur:
