@@ -88,12 +88,14 @@ def index_list():
                (SELECT x.close FROM dc_index_market x
                  WHERE x.index_code = i.index_code
                    AND x.trade_date < MAKEDATE(YEAR(i.trade_date), 1)
-                 ORDER BY x.trade_date DESC LIMIT 1) AS prev_year_close
+                 ORDER BY x.trade_date DESC LIMIT 1) AS prev_year_close,
+               p.description, p.base_date, p.base_point
         FROM dc_index_market i
         JOIN (
             SELECT index_code, MAX(trade_date) AS md
             FROM dc_index_market GROUP BY index_code
         ) t ON t.index_code = i.index_code AND t.md = i.trade_date
+        LEFT JOIN index_profile p ON p.index_code = i.index_code
     """
     rows = query_all(sql)
     for r in rows:

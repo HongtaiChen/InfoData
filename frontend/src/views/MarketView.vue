@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { NCard, NSpace, NSelect, NDataTable, NInput, type DataTableColumns } from 'naive-ui'
 import KLineChart from '../components/KLineChart.vue'
 import IndexDetailDrawer from '../components/IndexDetailDrawer.vue'
+import KpiHint from '../components/analysis/KpiHint.vue'
 import api from '../api'
 
 const route = useRoute()
@@ -52,6 +53,10 @@ interface IndexRow {
   amount: number
   ytd_change_pct: number | null
   data_source: string
+  /** 指数释义（index_profile 随 index-list 一并下发；无档案时为 null，ⓘ 不渲染） */
+  description?: string | null
+  base_date?: string | null
+  base_point?: string | null
 }
 
 const indices = ref<IndexRow[]>([])
@@ -90,6 +95,14 @@ function openCons(it: IndexRow) {
   drawerCode.value = it.index_code
   drawerName.value = it.index_name
   drawerShow.value = true
+}
+
+/** 释义浮窗落款：有基准则展示基准（人工 seed、无把握留空的既定原则），否则给通用落款 */
+function profileFooter(it: IndexRow): string {
+  const bits: string[] = []
+  if (it.base_date) bits.push(`基日 ${it.base_date}`)
+  if (it.base_point) bits.push(`基点 ${it.base_point}`)
+  return bits.length ? bits.join(' · ') : '释义由后端统一下发'
 }
 
 function tint(v: number | null | undefined): string {
@@ -264,6 +277,16 @@ onMounted(() => {
         >
           <div class="idx-head">
             <span class="idx-name" :title="it.index_name">{{ it.index_name }}</span>
+            <KpiHint
+              v-if="it.description"
+              :label="it.index_name"
+              :hint="it.description"
+              :footer="profileFooter(it)"
+            >
+              <template #trigger>
+                <span class="idx-q" aria-label="指数释义" @click.stop>ⓘ</span>
+              </template>
+            </KpiHint>
             <span class="idx-code">{{ it.index_code }}</span>
           </div>
           <div class="idx-close" :class="tint(it.change_pct)">
@@ -433,6 +456,33 @@ onMounted(() => {
   color: #9ca3af;
   font-family: Consolas, Menlo, monospace;
   flex: none;
+}
+/* 指数释义 ⓘ —— 与分析栏目 .ao-card-q 同款描边圆标（#8D97A5，常显 0.75）。
+   每卡 1 个、是释义的快捷入口，常显才有可发现性；@click.stop 已在模板上防触发卡片选中。 */
+.idx-q {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  line-height: 12px;
+  text-align: center;
+  border-radius: 50%;
+  border: 1px solid #8d97a5;
+  color: #6b7280;
+  font-size: 10px;
+  font-weight: 600;
+  font-style: italic;
+  cursor: help;
+  user-select: none;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.idx-q:hover,
+.idx-q:focus-visible {
+  opacity: 1;
+  border-color: var(--color-primary, #185fa5);
+  color: var(--color-primary, #185fa5);
+  background: #e6f1fb;
+  outline: none;
 }
 .idx-close {
   font-size: 17px;
