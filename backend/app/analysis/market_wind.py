@@ -431,6 +431,54 @@ def _sign_bands(dates: list[str], values: list, min_len: int = 3) -> list[dict]:
     return out
 
 
+# 卡片判读条（2026-09-19）：卡片墙的「一句话结论」，由后端生成。
+# 为什么放后端：本项目铁律是「口径随响应下发，前端只透传不手抄」（见 registry.py 第一原则）；
+# 结论句若在前端拼装，会立刻产生第二份口径，日后必然漂移。
+#
+# 三个「别凭直觉改」的实测依据（2026-09-19 回放 16 个交易日确定）：
+#   ❌ 背离项计数不做头条：近 16 日序列 [4,3,4,3,2,3,3,4,4,4,4,4]，中位即 4、最近连续 5 日
+#      为 4 —— 它是**常态不是信号**，当头条等于每天喊狼来了。（要让它成为真信号，需
+#      「背离数自身的历史分位」= market_style_daily 新列 + 六层落地，本轮不做。）
+#   ❌ ERP 分位不做唯一头条：估值分母是乐咕「近 250 个月末」序列（月频），实测 71.6 连续
+#      14 个交易日不动 —— 在日频卡片上它几乎恒定，会退化成「永远偏便宜」。
+#   ✅ 大势位置分位是日频活信号：实测近 16 日 18.2~39.4、极差 21.2pp。
+# 故结论 = 位置（日频信号）+ 风险偏好方向（往哪走）+ 估值（慢变量锚）。
+#
+# tone 只按位置分位切五分之一位（<=20 金 / >=80 琥珀 / 其余蓝）：实测该规则在近 16 日
+# 只触发 2 天（18.7 / 18.2）—— 亮得少才算信号。
+def _card_verdict(bp, ra, erp_pct, xcheck: dict) -> dict:
+    items = xcheck.get("items") or []
+    n_all = len(items)
+    n_div = (xcheck.get("summary") or {}).get("diverge") or 0
+    div_labels = [i.get("label") for i in items
+                  if i.get("level") == "diverge" and i.get("label")]
+
+    if bp is None:
+        head = "位置数据未就绪"
+    else:
+        head = f"近一年{_pos_status(bp)}（{bp:.0f}% 分位）"
+    head += "、风险偏好" + ("待定" if ra is None else ("偏防守" if ra < 0 else "偏进攻"))
+    if erp_pct is None:
+        head += "、估值数据未就绪"
+    elif erp_pct >= 60:
+        head += "、估值偏便宜"
+    elif erp_pct <= 40:
+        head += "、估值偏贵"
+    else:
+        head += "、估值中性"
+
+    detail = (f"交叉印证 {n_all} 项中 {n_div} 项背离：{' · '.join(div_labels)}"
+              if n_div and div_labels else f"交叉印证 {n_all} 项，当前无背离项")
+
+    if bp is not None and bp <= 20:
+        tone = "opportunity"
+    elif bp is not None and bp >= 80:
+        tone = "caution"
+    else:
+        tone = "normal"
+    return {"headline": head, "detail": detail, "tone": tone}
+
+
 # 进程内 TTL 缓存（2026-09-19）：与「板块轮动」同一策略（见 _cache.py 边界说明）。
 # market_style_daily 是日频盘后物化的，同一交易日内结果确定不变；而本接口会被
 # 「分析研究总览页卡片墙」和「市场风向详情页」重复请求，且每次要跑 36 条查询 +
@@ -472,6 +520,13 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     # 2026-09-14：3 → 5 项。补入 sentiment_20（情绪温度）与 policy_excess_20（政策敏感）——
     # 这两列 market_style_sync 每个交易日都在算（见该文件口径表）与设计规范 §4.1 的口径表，
     # 但视图层一直没接入，属「白算」。同时每项附近 250 日分位、z-score 与极值标记。
+
+    # card_rank（2026-09-19）：**卡片墙只放这 3 个**（总览页据此挑，不再取数组前 3 个）。
+    # 病灶：原先前端 slice(0,3) 按声明顺序截断，恰好把带分位的 bench_pos / erp 截掉，
+    # 只留三个同类的「20 日动量」（风偏/剪刀差/情绪温度），语义高度重叠。
+    # 选取标准 = **与判读条结论正交、各自回答一个不同的问题**：
+    #   bench_pos 答「我在哪」／risk_appetite 答「资金往哪走」／erp 答「贵还是便宜」。
+    # 未标注的项（scissors / sentiment / policy）仍完整出现在详情页，不丢信息。
     ra, sc = _num(cur_row.get("risk_appetite_20")), _num(cur_row.get("scissors_20"))
     se, po = _num(cur_row.get("sentiment_20")), _num(cur_row.get("policy_excess_20"))
     bp = _num(cur_row.get("bench_pos_pct"))
@@ -499,7 +554,7 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
         erp_status = "估值数据未就绪"
 
     kpis = [
-        {"key": "risk_appetite", "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
+        {"key": "risk_appetite", "card_rank": 2, "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
          "pct": pct_ra, "z": z_of("risk_appetite_20"), "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
          "adj": ra_adj,
@@ -517,7 +572,7 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
          "status": _policy_status(po, prev5.get("policy_excess_20")),
          "pct": pct_po, "z": z_of("policy_excess_20"), "highlight": _is_extreme(pct_po), "anchor": "mw-heat",
          "hint": "中证全指房地产 − 中证全指 20 日超额；正=政策敏感板块占优"},
-        {"key": "bench_pos", "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
+        {"key": "bench_pos", "card_rank": 1, "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
          "status": _pos_status(bp), "pct": None, "z": None, "highlight": False, "anchor": "mw-detail",
          "hint": "中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位（本身即分位，不再二次求分位）"},
         # 股债性价比 ERP（2026-09-19 P2 落地）：估值分母此前完全缺失（stock_market_current 的 PE/PB
@@ -525,7 +580,7 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
         # ⚠️ 分位窗口是「近 250 个月末」而非 250 个交易日 —— 长期估值分位本就该用长窗口，
         #    但不能塞进通用 pct 字段（前端会固定渲染成「近一年 N% 分位」），故写进 status 文案。
         # ⚠️ 不设 anchor：ERP 的论据在交叉印证面板里，不是本页独立图表。
-        {"key": "erp", "label": "股债性价比 ERP", "value": erp_val, "unit": "pp", "tone": "neutral",
+        {"key": "erp", "card_rank": 3, "label": "股债性价比 ERP", "value": erp_val, "unit": "pp", "tone": "neutral",
          "status": erp_status, "pct": None, "z": None,
          "highlight": bool(erp_pct is not None and erp_pct >= 90), "anchor": None,
          "hint": ERP_HINT},
@@ -633,6 +688,8 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     xcheck = cross_check.cross_checks(as_of)
 
     return {"as_of": data_as_of, "is_replay": is_replay,
+            # 卡片墙的一句话结论（卡片专用；详情页有自己的完整面板，不重复渲染）
+            "verdict": _card_verdict(bp, ra, erp_pct, xcheck),
             # 回放模式下滞后无意义（数据天然落后于今天），固定报 0 避免误标琥珀
             "stale_sessions": 0 if is_replay else _stale_sessions(data_as_of),
             "kpis": kpis, "groups": groups,

@@ -32,6 +32,18 @@
   4) 前端 views/AnalysisModuleView.vue 的 moduleViews 里用 defineAsyncComponent 映射视图组件
      （⚠️ 必须 defineAsyncComponent 包装，裸 () => import() 会被 Vue 当函数式组件、渲染成 [object Promise]）
 
+卡片墙契约（2026-09-19 确立，track 型模块必读）：
+  总览页卡片曾出现「看不出想说什么」的问题，根因是三条约定缺失，新增模块必须遵守：
+
+  ① `verdict = {headline, detail, tone}` —— 卡片顶部的一句话结论，**必须由后端生成**。
+     这是「口径随响应下发，前端只透传不手抄」在本处的落点；前端拼结论句会立刻产生
+     第二份口径，日后必然漂移。tone ∈ normal(蓝) / opportunity(金) / caution(琥珀)。
+  ② 每个 KPI 可标 `card_rank`（1..3）声明是否上卡片 —— 总览页据此挑，**不按数组顺序截断**。
+     曾因前端 slice(0,3) 按声明顺序截断，把带分位的指标截掉、只留三个同类动量。
+     未标注的项仍完整出现在详情页，不丢信息。
+  ③ `desc` 写「这个模块回答什么问题」，**不写功能清单、不写会漂移的计数**
+     （计数改一次规则就要回来改一次文案，历史上已多次滞后）。
+
 展示约定：
   - updated_cron = 原始 cron（供运维/调试核对，勿直接面向用户展示）
   - schedule_text = 人话化的更新节奏（面向用户；缺省时前端回退显示 updated_cron）
@@ -47,7 +59,7 @@ REGISTRY: list[dict] = [
         "group": "市场风向",
         "kind": "track",
         "icon": "🧭",
-        "desc": "六组收益热力 + 风偏/剪刀差/情绪温度/政策敏感/大势位置/股债性价比 ERP 6 项 KPI（附近一年分位与风险调整）+ 大小盘梯度 + 轮动时序 + 市场宽度与量能 + **交叉印证 7 项**（杠杆/股债/股商/口径/微观/量价/估值，专门找「背离」）",
+        "desc": "回答三件事：**现在处在什么位置、估值贵不贵、内部结构有没有背离**",
         "as_of_source": "market_style_daily.MAX(trade_date)",
         "updated_cron": "30 21 * * 0-4",
         "schedule_text": "日线完成后链式触发（兜底：每工作日 21:30）",
@@ -66,7 +78,7 @@ REGISTRY: list[dict] = [
         "group": "板块与概念",
         "kind": "track",
         "icon": "🔀",
-        "desc": "申万行业（一级 31 / 二级 131）20 日收益排行 + **相对市场基准的超额** + 行业离散度与首尾差（轮动速度）+ 同花顺概念口径排行 + **双侧口径互证**（两个独立数据集是否给出同一结论）",
+        "desc": "回答三件事：**钱在往哪些行业和概念走、轮动快不快、两个口径是否互证**",
         "as_of_source": "stock_market_daily.MAX(trade_date)",
         "updated_cron": "20 19 * * 0-4",
         "schedule_text": "随个股日线（每工作日 19:20 后）+ 概念（21:00/22:00）自动可见",

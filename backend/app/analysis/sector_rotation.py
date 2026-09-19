@@ -156,6 +156,40 @@ def _concept_rank(as_of: str) -> dict:
     return {"as_of": anchor, "items": items, "outliers": outliers}
 
 
+# 卡片判读条（2026-09-19）：与 market-wind 同一套机制（口径在后端生成、前端只透传），
+# 机制说明与「别凭直觉改」的实测依据见 app/analysis/market_wind.py 的 _card_verdict。
+#
+# 本模块的结论取三条正交信息：
+#   ① 口径互证结果 —— 模块的核心产出，也是本模块唯一「找背离」的地方；
+#   ② 相对市场基准的超额 —— ⚠️ 该值此前只在详情页可见（industry.bench_ret_20），
+#      卡片上完全看不到；而它恰恰是「钱是不是真在往板块里走」最直接的量化；
+#   ③ 广度（中位 + 上涨占比）。
+# tone：互证背离 → 琥珀（两个独立数据集给出矛盾判断，此时任何单一口径的结论都不该被
+#       独立采信）；其余 → 蓝。
+def _card_verdict(compare: dict, industry: dict, concept: dict) -> dict:
+    im, cm = industry.get("median"), concept.get("median")
+    up, bench = industry.get("up_ratio"), industry.get("bench_ret_20")
+    level = (compare or {}).get("level")
+    if im is None:
+        return {"headline": "板块数据未就绪", "detail": "", "tone": "normal"}
+
+    if level == "diverge":
+        head, tone = "行业与概念两个口径背离 —— 当前没有一致的市场叙事", "caution"
+    elif level == "agree":
+        head, tone = "行业与概念双口径互证一致", "normal"
+    else:
+        head, tone = "口径互证数据不足", "normal"
+    if bench is not None:
+        excess = im - bench
+        head += f"、{'超基准' if excess >= 0 else '落后基准'} {abs(excess):.2f}pp"
+
+    lvl = industry.get("level") or "一级"
+    detail = f"申万{lvl} {industry.get('count')} 个行业 {up}% 上涨、中位 {im:+.2f}%"
+    if cm is not None:
+        detail += f"｜概念 {concept.get('count')} 个、中位 {cm:+.2f}%"
+    return {"headline": head, "detail": detail, "tone": tone}
+
+
 @ttl_cache(600)
 def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dict:
     """板块轮动模块数据装配（/api/analysis/sector-rotation）
@@ -223,16 +257,21 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
                                "两个独立数据集给出矛盾判断（成分与加权方式不同），"
                                "说明当前没有一致的市场叙事，任何单一口径的结论都不该被独立采信。")}
 
+    # card_rank（2026-09-19）：卡片墙只放这 3 个（总览页据此挑，不再取数组前 3 个）。
+    # 取向与 market-wind 一致 —— 每个盒子回答一个不同的问题、且不重复判读条已说过的话：
+    #   industry_median 答「涨得广不广」／dispersion 答「轮动快不快」／industry_spread 答「分化有多极端」。
+    # ⚠️ concept_median 刻意不上卡片：判读条已用「双口径互证一致/背离」+ 概念中位表述过，
+    #    重复上卡片只会挤掉「轮动速度」这个独立维度。它仍完整出现在详情页。
     kpis = [
-        {"key": "industry_median", "label": f"申万{level}行业中位（20日）", "value": im, "unit": "%",
+        {"key": "industry_median", "card_rank": 1, "label": f"申万{level}行业中位（20日）", "value": im, "unit": "%",
          "tone": "updown", "status": f"{industry['up_ratio']}% 的行业上涨",
          "hint": f"申万{level}行业个股等权 20 日收益的中位数；上涨占比与它成对出现，"
                  "避免只看中位数而漏掉「一半以上行业在涨但被少数大跌拖累」"},
-        {"key": "dispersion", "label": "行业离散度（20日）", "value": industry["dispersion"], "unit": "pp",
+        {"key": "dispersion", "card_rank": 2, "label": "行业离散度（20日）", "value": industry["dispersion"], "unit": "pp",
          "tone": "neutral", "status": "（越大=轮动越剧烈）",
          "hint": "各行业 20 日收益的标准差。数值越大说明行业间分化越剧烈、轮动越快；"
                  "越小说明齐涨齐跌。这是「轮动速度」的量化描述，单看排行看不出来"},
-        {"key": "industry_spread", "label": "首尾差（20日）", "value": industry["spread"], "unit": "pp",
+        {"key": "industry_spread", "card_rank": 3, "label": "首尾差（20日）", "value": industry["spread"], "unit": "pp",
          "tone": "neutral",
          "status": f"{items[0]['name']} {items[0]['ret_20']:+.2f}% / {items[-1]['name']} {items[-1]['ret_20']:+.2f}%",
          "hint": "最强行业 − 最弱行业的 20 日收益差。配合离散度读：离散度大而首尾差小，"
@@ -246,5 +285,7 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
     return {
         "as_of": d_cur, "base_date": d_old, "is_replay": bool(as_of),
         "kpis": kpis, "industry": industry, "concept": concept_out, "compare": compare,
+        # 卡片墙的一句话结论（卡片专用；详情页有自己的完整面板，不重复渲染）
+        "verdict": _card_verdict(compare, industry, concept_out),
         "note": ROTATION_NOTE,
     }
