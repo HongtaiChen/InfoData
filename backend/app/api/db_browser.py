@@ -306,15 +306,30 @@ def tables_flow():
     last_map = {r["task_name"]: r for r in runs}
 
     def _parse_run_detail(raw):
-        """run_detail JSON → dict（含 run_steps 步骤链 + 当轮实录）"""
+        """run_detail JSON → dict（含 run_steps 步骤链 + 当轮实录）
+
+        兼容历史行：2026-09-19 之前写入方把步骤链塞在第二层
+        （`run_detail.run_detail.run_steps`），前端读第一层 → 实录值全空。
+        写入侧已在 `app/tasks/run.py::_flatten_run_detail` 修正；这里对**存量行**
+        读时展平，让尚未重跑的任务（如月频 index_cons_sync、手动 ai_concept_analysis）
+        也能立刻显示实录值，不必等下一轮。
+        """
         if not raw:
             return None
         if isinstance(raw, dict):
-            return raw
-        try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return None
+            d = raw
+        else:
+            try:
+                d = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                return None
+            if not isinstance(d, dict):
+                return d
+        inner = d.get("run_detail")
+        if isinstance(inner, dict):
+            d = {k: v for k, v in d.items() if k != "run_detail"}
+            d.update(inner)
+        return d
 
     def _collector_run_steps(task_name: str):
         """动态读取采集器模块的 RUN_STEPS 模板（代码即模板，改完即时生效）。

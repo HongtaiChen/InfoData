@@ -10,8 +10,10 @@ InvestBuddy 采集任务统一运行入口
 import argparse
 import json
 import logging
+import os
 import sys
 import threading
+import traceback
 from datetime import datetime
 
 from ..db import get_db_config
@@ -71,7 +73,33 @@ _tls = threading.local()
 
 
 def _set_run_detail(detail) -> None:
-    _tls.run_detail = detail
+    """暂存 run_detail 快照（写入前统一展平 → _flatten_run_detail）"""
+    _tls.run_detail = _flatten_run_detail(detail)
+
+
+def _flatten_run_detail(detail):
+    """把 with_steps 塞进 result["run_detail"] 的步骤链**提到顶层**。
+
+    背景（2026-09-19 实测定位）：`with_steps` 把步骤链写成
+        result["run_detail"]["run_steps"]
+    而这里原先**整包**落库 → task_runs.run_detail 的顶层只有
+        records_written / error_count / errors / note
+    步骤链被压在第二层。前端「数据流·整链拓扑」读的是
+        last.run_detail.run_steps          （第一层）
+    于是 `real` 恒为空数组，每一步都渲染成「—」——
+    **模板（步骤名/参数）有、当轮实录（value）全空**，44 张表全部中招。
+
+    展平策略：外层键全保留（xcheck_sync 的 as_of/summary、
+    stock_daily_incr 的 duration/source_stats/cutoff/skipped 都在外层，
+    前端要用），再把内层 run_detail 的键并上来（run_steps 由此落到第一层）。
+    """
+    if not isinstance(detail, dict):
+        return detail
+    inner = detail.get("run_detail")
+    flat = {k: v for k, v in detail.items() if k != "run_detail"}
+    if isinstance(inner, dict):
+        flat.update(inner)
+    return flat
 
 
 def _take_run_detail():
@@ -782,6 +810,51 @@ TASKS = {
 }
 
 
+_BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _error_trace(exc: BaseException, limit: int = 6) -> dict:
+    """把异常现场压成结构化摘要，供 task_runs.run_detail.error_trace 留档。
+
+    动机（2026-09-19 复盘踩坑）：run_task 原先**只把 str(e) 写进 error_message**，
+    没有任何栈帧。`index_valuation_sync` 那次
+        TypeError: tuple indices must be integers or slices, not str
+    因为缺栈帧、无从定位，被当成「重试即好的偶发缺陷、根因未修」，
+    白花一整轮排查（事后靠 git 提交时间才还原真因＝开发期未提交版本、已在 703ecba 修掉）。
+    → 失败现场必须自带「哪个文件哪一行」，否则 4 秒就挂的偶发错误永远查不动。
+
+    只保留 backend/ 内的帧（排除 pymysql/pandas 等 site-packages 噪音），
+    取末尾 limit 帧（最靠近出错点）。附加字段，前端按可选字段读取，不影响现有渲染。
+    """
+    frames: list[dict] = []
+    for fr in traceback.extract_tb(exc.__traceback__):
+        fn = fr.filename or ""
+        try:
+            full = os.path.abspath(fn)
+        except (OSError, ValueError):
+            continue
+        if not full.startswith(_BACKEND_ROOT):
+            continue
+        frames.append({
+            "file": os.path.relpath(full, _BACKEND_ROOT).replace("\\", "/"),
+            "line": fr.lineno,
+            "func": fr.name,
+            "code": (fr.line or "").strip()[:160],
+        })
+    return {
+        "type": type(exc).__name__,
+        "message": str(exc)[:500],
+        "frames": frames[-limit:],
+    }
+
+
+def _with_error_trace(detail, exc: BaseException):
+    """在既有 run_detail 上附加 error_trace，保留 run_steps 等原有字段（失败路径专用）"""
+    merged = dict(detail) if isinstance(detail, dict) else {}
+    merged["error_trace"] = _error_trace(exc)
+    return merged
+
+
 def run_task(task_name: str) -> int:
     """执行单个任务（带 task_runs 记录）"""
     import json
@@ -825,14 +898,19 @@ def run_task(task_name: str) -> int:
     except TaskBlockedError as e:
         # 数据未就绪：记为 blocked（非 failed，不计失败率），但**仍然向上抛出**——
         # 让调用方（调度器）知道本次没有产出数据，不要据此接力下游任务。
+        # ⚠️ blocked 是**设计内的拒绝**（护栏触发，每天都会发生），不附 error_trace：
+        #    消息已点明是哪条护栏，附栈只会把「正常日路径」的 run_detail 撑噪。
         detail = _take_run_detail()
         recorder.finish(records_written=0, error_message=str(e), run_detail=_dumps(detail), status="blocked")
         logger.warning(f"⏸ 任务 {task_name} 未执行（数据未就绪，非故障）: {e}")
         raise
     except Exception as e:
-        detail = _take_run_detail()
+        # 真失败：run_detail 追加 error_trace（异常类型 + backend/ 内栈帧），让偶发故障可定位
+        detail = _with_error_trace(_take_run_detail(), e)
         recorder.finish(records_written=0, error_message=str(e), run_detail=_dumps(detail))
-        logger.error(f"❌ 任务 {task_name} 失败: {e}")
+        # logger.exception（非 error）：保留完整堆栈。偶发错误往往 4 秒就挂，
+        # 只有一行 message 时根本无从下手（2026-09-19 index_valuation_sync 的教训）。
+        logger.exception(f"❌ 任务 {task_name} 失败: {e}")
         raise
 
 
