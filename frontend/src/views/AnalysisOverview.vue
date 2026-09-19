@@ -8,6 +8,7 @@ import { computed, onMounted, ref } from 'vue'
 import { NCard, NEmpty, NSkeleton, NSpin, NTag } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import RichText from '../components/analysis/RichText.vue'
+import KpiHint from '../components/analysis/KpiHint.vue'
 import api from '../api'
 
 interface RegistryItem {
@@ -41,6 +42,12 @@ interface CardKpi {
   scale?: KpiScale | null
   /** 分位进极值区（<=10 / >=90）→ 刻度圆点染金（亮得少才算信号） */
   highlight?: boolean
+  /**
+   * 口径说明（后端下发，含 `**强调**`）。此前本接口没声明它 → 卡片墙看不到入口，
+   * 但 `pickCardKpis` 只做 filter/sort/slice、**不剥字段**，所以运行时其实一直带着
+   * hint（实测 18/18 全覆盖）——纯前端接线即可，无需改后端。
+   */
+  hint?: string
 }
 /**
  * 卡片顶部的一句话结论。**由后端生成**——口径随响应下发，前端只透传不手抄；
@@ -209,7 +216,24 @@ function kpiText(k: CardKpi): string {
           </template>
           <template v-else>
             <div v-for="k in cardKpis[m.module_id]" :key="k.key || k.label" class="ao-kpi">
-              <div class="ao-kpi-label" :title="k.label">{{ k.label }}</div>
+              <!-- 口径入口（2026-09-19）：规范 §1.1 第 4 条「口径透明」在卡片墙落地。
+                   ⚠️ 触发元素必须是 ⓘ 本身而非整卡：卡片是 @click=open(m) 的跳转按钮，
+                      整卡悬浮会与「点击进详情」互相干扰；且点击 ⓘ 必须 .stop，
+                      否则冒泡到卡片 → 想看口径却被跳进详情页。 -->
+              <div class="ao-kpi-label">
+                <span class="ao-kpi-label-txt" :title="k.label">{{ k.label }}</span>
+                <KpiHint v-if="k.hint" :label="k.label" :value="kpiText(k)" :hint="k.hint">
+                  <template #trigger>
+                    <span
+                      class="ao-kpi-q"
+                      role="button"
+                      tabindex="0"
+                      :aria-label="`查看「${k.label}」的口径说明`"
+                      @click.stop
+                    >i</span>
+                  </template>
+                </KpiHint>
+              </div>
               <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
               <div class="ao-kpi-status">{{ k.status }}</div>
               <!-- 分位刻度（2026-09-19）：绝对 pp 跨期不可比，刻度回答「这个数在近一年排第几」。
@@ -287,7 +311,28 @@ function kpiText(k: CardKpi): string {
 /* min-height 统一各盒子高度：有/无刻度条时高度差 27px，若任其自然，
    同一行里带刻度的盒子会把邻居衬托得参差不齐 */
 .ao-kpi { min-width: 0; min-height: 84px; background: #F5F7FA; border-radius: 6px; padding: 8px 10px; }
-.ao-kpi-label { font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 标签行 = 文字 + ⓘ 口径入口。
+   ⚠️ 文字必须 nowrap + ellipsis + min-width:0：CJK 可在任意字符处断行，
+   缺 nowrap 时会被图标挤成「逐/字/竖/排」（本项目已踩过同类坑）。 */
+.ao-kpi-label { display: flex; align-items: center; gap: 3px; font-size: 11px; color: #6B7280; }
+.ao-kpi-label-txt { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 描边款 ⓘ（设计原型 v0.1 的推荐形态：信息类通用符号，语义最准、不抢数字）。
+   描边取 #8D97A5 —— 实测 #B8BEC9 在 14px 下过淡，缩略图/低分屏几乎不可见。
+   刻意不用感叹号：琥珀 #B45309 在项目里已被「数据延迟 / cron 无效」占用，
+   会被读成「这个指标出问题了」。 */
+.ao-kpi-q {
+  flex: none; width: 13px; height: 13px; line-height: 11px; text-align: center;
+  border-radius: 50%; border: 1px solid #8D97A5; color: #6B7280;
+  font-size: 9px; font-weight: 600; font-style: italic;
+  cursor: help; user-select: none;
+  /* 悬停显形：卡片信息密集，18 个图标常显会与数字抢注意力；
+     鼠标进入卡片时淡入（图标此时已在可视范围内，可发现性不受影响）。
+     触摸设备无 hover → 常显，否则等于没有入口。 */
+  opacity: 0; transition: opacity 0.15s;
+}
+.ao-card:hover .ao-kpi-q, .ao-card:focus-within .ao-kpi-q { opacity: 1; }
+.ao-kpi-q:hover, .ao-kpi-q:focus-visible { border-color: #185FA5; color: #185FA5; background: #E6F1FB; outline: none; }
+@media (hover: none) { .ao-kpi-q { opacity: 1; } }
 .ao-kpi-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ao-kpi-status { font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 分位刻度条：轨道 + 圆点 + 窗口文字，竖排。

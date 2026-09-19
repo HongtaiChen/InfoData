@@ -27,7 +27,7 @@
  *   （含幅度、可跨期比较）。两者并列展示，互为参照。
  * - 配色：adj 不是涨跌语义 → 用次要文字色，绝不走红绿。
  */
-import { NTooltip } from 'naive-ui'
+import KpiHint from './KpiHint.vue'
 
 interface Kpi {
   key: string
@@ -78,7 +78,20 @@ function goAnchor(k: Kpi) {
 
 <template>
   <div class="kpi-row">
-    <NTooltip v-for="k in props.items" :key="k.key" trigger="hover" placement="top" :disabled="!k.hint">
+    <!-- 口径浮窗（2026-09-19 统一）：换用与总览页卡片墙同一个 KpiHint ——
+         - 白底信息卡（naive-ui 默认深色，243 字的 ERP 在深色大段正文里更费眼）
+         - `**强调**` 走 RichText（此前 {{ k.hint }} 直出，`**` 原样显示，是既有漏点）
+         触发元素保留「整张卡片」：分析页卡片不可跳转，整卡悬浮更顺手，
+         不必为了形式统一而要求用户去瞄准一个小图标。 -->
+    <KpiHint
+      v-for="k in props.items"
+      :key="k.key"
+      :label="k.label"
+      :value="fmt(k)"
+      :hint="k.hint"
+      :note="k.adj != null ? props.adjNote : undefined"
+      placement="top"
+    >
       <template #trigger>
         <div
           class="kpi-card"
@@ -86,8 +99,8 @@ function goAnchor(k: Kpi) {
           @click="goAnchor(k)"
         >
           <div class="kpi-label">
-            {{ k.label }}
-            <span v-if="k.hint" class="kpi-q">?</span>
+            <span class="kpi-label-txt" :title="k.label">{{ k.label }}</span>
+            <span v-if="k.hint" class="kpi-q">i</span>
           </div>
           <div class="kpi-value" :class="valueClass(k)">{{ fmt(k) }}</div>
           <div class="kpi-status" v-if="k.status">{{ k.status }}</div>
@@ -104,11 +117,7 @@ function goAnchor(k: Kpi) {
           <div v-if="k.adj != null" class="kpi-adj">风险调整 {{ fmtAdj(k.adj) }}</div>
         </div>
       </template>
-      {{ k.hint }}
-      <template v-if="k.adj != null && props.adjNote">
-        <br /><br />{{ props.adjNote }}
-      </template>
-    </NTooltip>
+    </KpiHint>
   </div>
 </template>
 
@@ -126,9 +135,17 @@ function goAnchor(k: Kpi) {
   border-radius: 0 2px 2px 0; background: #C9A227;
 }
 .kpi-label { font-size: 13px; color: #6B7280; display: flex; align-items: center; gap: 4px; }
+/* 文字包一层 span：label 行里同时有文字与 ⓘ 时，文字需可收缩但不被逐字挤压
+   （CJK 可在任意字符处断行 —— 本项目踩过同类坑，窄卡片下会渲染成竖排） */
+.kpi-label-txt { flex: 1 1 auto; min-width: 0; }
+/* ⓘ 描边款：与总览页卡片墙统一（设计原型 v0.1 的推荐形态）。
+   此前详情页用浅蓝底「?」—— 两页两套符号表达同一件事；
+   且「?」的通用语义是「求助」，而这里的意思是「此指标有权重解释」。
+   描边取 #8D97A5：实测 #B8BEC9 在 14px 下过淡、缩略图里几乎不可见。 */
 .kpi-q {
-  width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 50%;
-  background: #E6F1FB; color: #185FA5; font-size: 10px; flex: none;
+  width: 14px; height: 14px; line-height: 12px; text-align: center; border-radius: 50%;
+  border: 1px solid #8D97A5; color: #6B7280; font-size: 10px; font-weight: 600;
+  font-style: italic; flex: none;
 }
 .kpi-value { font-size: 26px; font-weight: 700; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
 .kpi-status { font-size: 12px; color: #6B7280; }

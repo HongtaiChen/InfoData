@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>指标口径说明 · 前端交互设计示例 v0.1（评审稿）</title>
+<style>
+/* ===== 颜色令牌：全部取自 docs/design/颜色体系设计规范.md v2.0 ===== */
+:root{
+  --primary:#185FA5; --primary-hover:#1E6FFF; --primary-pressed:#0C447C;
+  --primary-50:#E6F1FB; --primary-100:#CFE3F8; --primary-200:#B5D4F4;
+  --gold:#C9A227; --gold-deep:#7A6410; --gold-50:#FBF6E9;
+  --amber:#B45309; --amber-bg:#FDF4E7;
+  --up:#EF232A; --down:#14B143; --flat:#909399;
+  --bg-body:#F5F7FA; --bg-card:#FFFFFF;
+  --border:#D4D7DE; --border-hover:#B8BEC9;
+  --t1:#1F2937; --t2:#6B7280; --t3:#9CA3AF;
+  --mono:Consolas,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; padding:28px 24px 80px; background:var(--bg-body); color:var(--t1);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+}
+.wrap{max-width:1120px;margin:0 auto}
+
+/* ===== 页头 ===== */
+.doc-head{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin-bottom:20px}
+.doc-head h1{margin:0 0 6px;font-size:20px;letter-spacing:.2px}
+.doc-head .sub{color:var(--t2);font-size:13px}
+.tagrow{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+.tag{font-size:12px;padding:2px 9px;border-radius:11px;border:1px solid var(--border);color:var(--t2);background:#FAFBFC}
+.tag.blue{color:var(--primary);background:var(--primary-50);border-color:var(--primary-100)}
+.tag.gold{color:var(--gold-deep);background:var(--gold-50);border-color:#EEDC9E}
+.tag.amber{color:var(--amber);background:var(--amber-bg);border-color:#F0D9B5}
+
+/* ===== 章节 ===== */
+section{margin-bottom:26px}
+h2{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+h2 .n{
+  width:20px;height:20px;flex:none;border-radius:5px;background:var(--primary);color:#fff;
+  font-size:11.5px;display:grid;place-items:center;font-weight:600
+}
+.h2sub{color:var(--t2);font-size:12.5px;margin:0 0 12px 28px}
+.panel{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:18px 20px}
+.panel + .panel{margin-top:12px}
+
+/* ===== 诊断三条 ===== */
+.findings{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.finding{border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:#FCFDFE}
+.finding .fk{font-size:12px;color:var(--t2);display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.finding .fv{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.finding .fd{font-size:12.5px;color:var(--t2);margin-top:6px}
+.finding.ok{background:var(--primary-50);border-color:var(--primary-100)}
+.finding.ok .fv{color:var(--primary)}
+.finding.warn{background:var(--amber-bg);border-color:#F0D9B5}
+.finding.warn .fv{color:var(--amber);font-size:19px}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.dot.g{background:var(--down)} .dot.r{background:var(--up)} .dot.b{background:var(--primary)}
+/* 注：诊断条里 dot 不使用绿=成功。此处 g/r 仅示意「命中/未命中」，评审稿专用，落地时不用色 */
+
+/* ===== 控制台 ===== */
+.console{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.ctl label{display:block;font-size:12px;color:var(--t2);margin-bottom:6px}
+.seg{display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;background:#fff}
+.seg button{
+  flex:1;border:0;background:transparent;padding:7px 4px;font-size:12.5px;cursor:pointer;
+  color:var(--t2);font-family:inherit;transition:background .12s;white-space:nowrap
+}
+.seg button:hover{background:#F3F6F9}
+.seg button.on{background:var(--primary);color:#fff;font-weight:500}
+.seg button.on.gold{background:var(--gold)}
+.ctl .note{font-size:11.5px;color:var(--t3);margin-top:5px;line-height:1.5}
+/* 放大图例：4 种图标并排对比（独立 class，不受 body[data-icon] 影响） */
+.legend{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px;padding-top:14px;border-top:1px dashed #E5E9EF}
+.lg{display:flex;gap:9px;align-items:flex-start}
+.lg-q{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;font:700 13px/1 var(--mono)}
+.lg-q.v-q{background:var(--primary-50);color:var(--primary)}
+.lg-q.v-i{background:#fff;color:var(--t2);border:1px solid #8D97A5;font-style:italic}
+.lg-q.v-warn{background:var(--amber);color:#fff}
+.lg-q.v-dark{background:#E9EBEF;color:var(--t2)}
+.lg-t{font-size:11.5px;color:var(--t2);line-height:1.5}
+.lg-t b{color:var(--t1);font-weight:600;display:block;margin-bottom:1px}
+
+/* ===== 卡片墙（还原 AnalysisOverview.vue） ===== */
+.cw{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.card{
+  background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:14px 16px;cursor:pointer;transition:border-color .15s,box-shadow .15s
+}
+.card:hover{border-color:var(--primary);box-shadow:0 2px 10px rgba(24,95,165,.09)}
+.card.full{grid-column:1 / -1}
+.card-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.card-hd .ico{font-size:15px}
+.card-hd .nm{font-size:14px;font-weight:600}
+.card-hd .more{margin-left:auto;font-size:12px;color:var(--primary)}
+.verdict{
+  font-size:12.5px;border-radius:6px;padding:7px 10px;margin-bottom:12px;
+  background:var(--primary-50);color:var(--primary-pressed);line-height:1.55
+}
+.verdict.caution{background:var(--amber-bg);color:var(--amber)}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.kpi{min-width:0;min-height:84px;background:var(--bg-body);border-radius:6px;padding:8px 10px;position:relative}
+.kpi.is-hl::before{
+  content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 2px 2px 0;background:var(--gold)
+}
+.kpi-label{
+  font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  display:flex;align-items:center;gap:4px
+}
+.kpi-label .txt{overflow:hidden;text-overflow:ellipsis}
+.kpi-value{font-size:19px;font-weight:700;margin:5px 0 2px;font-variant-numeric:tabular-nums}
+.kpi-status{font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scale{margin-top:6px}
+.scale-track{position:relative;display:block;height:4px;border-radius:2px;background:#E3E8EF}
+.scale-dot{
+  position:absolute;top:50%;width:8px;height:8px;margin-left:-4px;border-radius:50%;
+  background:var(--primary);transform:translateY(-50%);box-shadow:0 0 0 2px var(--bg-body)
+}
+.scale-dot.hl{background:var(--gold)}
+.scale-txt{font-size:10.5px;color:var(--t3);margin-top:3px}
+.scale-txt.hl{color:var(--gold);font-weight:500}
+.c-up{color:var(--up)} .c-down{color:var(--down)} .c-primary{color:var(--primary)} .c-flat{color:var(--flat)}
+
+/* ===== 感叹号图标（4 种候选） ===== */
+.q{
+  width:14px;height:14px;flex:none;border-radius:50%;font-size:10px;line-height:14px;
+  text-align:center;cursor:help;user-select:none;transition:opacity .15s,background .15s;
+  font-family:var(--mono);font-weight:700
+}
+/* A ? 实心蓝（详情页 KpiCards 现状） */
+body[data-icon="q"] .q{background:var(--primary-50);color:var(--primary)}
+/* B ⓘ 描边（推荐）。描边色取 #8D97A5：实测 #B8BEC9 在 14px 下过淡，缩略图/低分屏几乎不可见 */
+body[data-icon="i"] .q{background:#fff;color:var(--t2);border:1px solid #8D97A5;line-height:12px;font-style:italic}
+/* C ! 琥珀（用户提议） */
+body[data-icon="warn"] .q{background:var(--amber);color:#fff}
+/* D ! 中性灰 */
+body[data-icon="dark"] .q{background:#E9EBEF;color:var(--t2)}
+/* 显示时机：卡片 hover 才显形 */
+body[data-reveal="hover"] .q{opacity:0}
+body[data-reveal="hover"] .card:hover .q,
+body[data-reveal="hover"] .kpi:hover .q{opacity:1}
+.q:hover{background:var(--primary-100)!important;color:var(--primary-pressed)!important}
+body[data-reveal="hover"] .card:hover .q:hover{opacity:1}
+/* 无说明时的占位（不发散、不占位跳动） */
+.q.off{visibility:hidden}
+
+/* ===== tooltip 本体 ===== */
+#tip{
+  position:fixed;z-index:9999;display:none;max-width:min(360px,calc(100vw - 24px));
+  border-radius:8px;font-size:12.5px;line-height:1.62;pointer-events:none
+}
+body[data-tip="card"] #tip{
+  background:#fff;border:1px solid var(--border);box-shadow:0 6px 22px rgba(31,41,55,.14);padding:10px 13px;color:var(--t1)
+}
+body[data-tip="dark"] #tip{
+  background:#2B2F36;color:#E8EAED;padding:9px 12px;box-shadow:0 6px 22px rgba(0,0,0,.3)
+}
+#tip .tt-hd{
+  display:flex;align-items:baseline;gap:8px;font-weight:600;font-size:12.5px;
+  padding-bottom:6px;margin-bottom:7px
+}
+body[data-tip="card"] #tip .tt-hd{border-bottom:1px solid #EEF1F5;color:var(--t1)}
+body[data-tip="dark"] #tip .tt-hd{border-bottom:1px solid #3C424B;color:#fff}
+#tip .tt-hd .v{margin-left:auto;font-family:var(--mono);font-weight:700;font-size:12.5px;color:var(--primary)}
+body[data-tip="dark"] #tip .tt-hd .v{color:#8FBCE6}
+#tip .tt-bd b{font-weight:600}
+body[data-tip="card"] #tip .tt-bd b{color:var(--primary-pressed);background:var(--primary-50);padding:0 3px;border-radius:3px}
+body[data-tip="dark"] #tip .tt-bd b{color:#FFD873}
+#tip .tt-bd{white-space:pre-wrap;word-break:break-word}
+#tip .wn{display:inline-block;color:var(--amber)}
+body[data-tip="dark"] #tip .wn{color:#F0B27A}
+#tip .tt-ft{
+  margin-top:8px;padding-top:7px;border-top:1px dashed #E5E9EF;font-size:11px;color:var(--t3);
+  display:flex;gap:10px;flex-wrap:wrap
+}
+body[data-tip="dark"] #tip .tt-ft{border-color:#3C424B;color:#9AA0A8}
+#tip .arw{position:absolute;width:9px;height:9px;transform:rotate(45deg)}
+body[data-tip="card"] #tip .arw{background:#fff;border:1px solid var(--border)}
+body[data-tip="dark"] #tip .arw{background:#2B2F36}
+#tip[data-below="0"] .arw{bottom:-5px;border-top:0!important;border-left:0!important}
+#tip[data-below="1"] .arw{top:-5px;border-bottom:0!important;border-right:0!important}
+/* 点击固定态：浮窗带可点区域 */
+#tip.pinned{pointer-events:auto}
+
+/* ===== 路线对比表 ===== */
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:9px 11px;text-align:left;border-bottom:1px solid #EDF0F4;vertical-align:top}
+th{background:#F7F9FB;color:var(--t2);font-weight:500;white-space:nowrap}
+td b{color:var(--primary-pressed)}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:9px;white-space:nowrap}
+.pill.ok{background:var(--primary-50);color:var(--primary)}
+.pill.gold{background:var(--gold-50);color:var(--gold-deep)}
+.pill.no{background:#F2F3F5;color:var(--t2)}
+
+/* ===== 决策清单 ===== */
+.dec{border:1px solid var(--border);border-radius:8px;padding:0;overflow:hidden;background:#fff}
+.dec-row{display:flex;gap:12px;padding:12px 14px;border-bottom:1px solid #EDF0F4;align-items:flex-start}
+.dec-row:last-child{border-bottom:0}
+.dec-row .q-id{
+  width:22px;height:22px;flex:none;border-radius:6px;background:var(--gold-50);color:var(--gold-deep);
+  font-size:12px;display:grid;place-items:center;font-weight:600
+}
+.dec-row .q-body{flex:1;min-width:0}
+.dec-row .q-t{font-size:13px;font-weight:600;margin-bottom:3px}
+.dec-row .q-d{font-size:12.5px;color:var(--t2);line-height:1.6}
+.dec-row .q-rec{font-size:12.5px;color:var(--primary);margin-top:4px}
+.opt{display:inline-block;font-family:var(--mono);font-size:11.5px;background:var(--bg-body);
+  border:1px solid var(--border);border-radius:4px;padding:0 5px;margin-right:4px;color:var(--t2)}
+
+/* ===== 提示条 ===== */
+.callout{
+  border-left:3px solid var(--primary);background:var(--primary-50);border-radius:0 6px 6px 0;
+  padding:10px 14px;font-size:12.5px;color:var(--primary-pressed);line-height:1.65
+}
+.callout.gold{border-color:var(--gold);background:var(--gold-50);color:var(--gold-deep)}
+.callout.amber{border-color:var(--amber);background:var(--amber-bg);color:var(--amber)}
+.callout b{font-weight:600}
+.hintline{font-size:12px;color:var(--t3);margin-top:10px}
+code{font-family:var(--mono);font-size:11.5px;background:#F2F4F7;padding:1px 5px;border-radius:4px;color:#374151}
+</style>
+</head>
+<body data-icon="i" data-reveal="hover" data-tip="card" data-trigger="hover">
+<div class="wrap">
+
+  <!-- ================= 页头 ================= -->
+  <div class="doc-head">
+    <h1>指标口径说明 · 前端交互设计示例</h1>
+    <div class="sub">分析研究页 · 总览卡片墙 &nbsp;|&nbsp; 版本 v0.1（评审稿，未落地）&nbsp;|&nbsp; 数据取自 2026-09-19 线上接口真实响应</div>
+    <div class="tagrow">
+      <span class="tag blue">零后端改动可行</span>
+      <span class="tag">数据已就绪：28/28 KPI 带口径</span>
+      <span class="tag">遵循 颜色体系规范 v2.0</span>
+      <span class="tag">补齐 交互设计规范 §1.1-4</span>
+    </div>
+  </div>
+
+  <!-- ================= 0. 现状诊断 ================= -->
+  <section>
+    <h2><span class="n">0</span>先给结论：这不是新增能力，是补齐已定稿的规范</h2>
+    <p class="h2sub">动手前先核实了代码与线上响应，三条实测事实决定了这件事的成本远比预想低。</p>
+    <div class="panel">
+      <div class="findings">
+        <div class="finding ok">
+          <div class="fk"><span class="dot b"></span>后端口径已下发</div>
+          <div class="fv">28 / 28</div>
+          <div class="fd">5 个跟踪模块的全部 KPI 都带 <code>hint</code> 字段，覆盖率 <b>100%</b>。最长 243 字（ERP），最短 32 字。</div>
+        </div>
+        <div class="finding ok">
+          <div class="fk"><span class="dot b"></span>详情页已实现</div>
+          <div class="fv">已有</div>
+          <div class="fd"><code>KpiCards.vue</code> 已渲染 <code>?</code> 圆标 + 悬浮浮窗，直接消费同一个 <code>hint</code>。</div>
+        </div>
+        <div class="finding warn">
+          <div class="fk"><span class="dot r"></span>总览页未接</div>
+          <div class="fv">缺 18 处</div>
+          <div class="fd">卡片墙的 <code>CardKpi</code> 接口里<b>没有 <code>hint</code> 字段</b>，标签只挂了原生 <code>:title="k.label"</code>。这也是你截图里看不到入口的原因。</div>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:14px">
+        <b>结论：</b>同一份口径数据，「详情页有、总览页没有」——属于渲染层遗漏，不是能力缺失。
+        且《分析研究模块交互设计规范》§1.1 第 4 条早已写明「<b>每个指标旁边可查计算口径（tooltip/口径卡）</b>，杜绝"数字怎么来的"黑箱」，本次落地即补齐该条款。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 1. 体验台 ================= -->
+  <section>
+    <h2><span class="n">1</span>交互体验台（可实时切换，直接上手试）</h2>
+    <p class="h2sub">下面四个开关对应四个待定决策，任意组合后把鼠标移到卡片里的圆标上即可体验。</p>
+
+    <div class="panel">
+      <div class="console">
+        <div class="ctl">
+          <label>① 图标形态</label>
+          <div class="seg" id="seg-icon">
+            <button data-v="q">? 现状</button>
+            <button data-v="i" class="on">ⓘ 荐</button>
+            <button data-v="warn" class="gold">! 金</button>
+            <button data-v="dark">! 灰</button>
+          </div>
+          <div class="note">「! 金」为你的提议；「! 灰」是去警告语义后的版本</div>
+        </div>
+        <div class="ctl">
+          <label>② 显示时机</label>
+          <div class="seg" id="seg-reveal">
+            <button data-v="always">常显</button>
+            <button data-v="hover" class="on">悬停显形</button>
+          </div>
+          <div class="note">「悬停显形」不打扰 10 秒扫读，需要时才出现</div>
+        </div>
+        <div class="ctl">
+          <label>③ 触发方式</label>
+          <div class="seg" id="seg-trigger">
+            <button data-v="hover" class="on">悬浮</button>
+            <button data-v="click">点击固定</button>
+          </div>
+          <div class="note">点击固定同时覆盖键盘与触摸屏</div>
+        </div>
+        <div class="ctl">
+          <label>④ 浮窗风格</label>
+          <div class="seg" id="seg-tip">
+            <button data-v="card" class="on">白底信息卡</button>
+            <button data-v="dark">深色</button>
+          </div>
+          <div class="note">实测两者都可用；白底的加粗与 ⚠️ 层级更清楚</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="lg"><span class="lg-q v-q">?</span><span class="lg-t"><b>问号 · 详情页现状</b>与详情页现状一致，改动最小；但「?」的通用语义是「求助」而非「这里有权重解释」。浅底蓝字，14px 下可读。</span></div>
+        <div class="lg"><span class="lg-q v-i">i</span><span class="lg-t"><b>ⓘ 推荐</b>信息类通用符号，语义最准（「此处有更多信息」）；描边款视觉克制，不抢数字。需把描边加深到 #8D97A5 才够可见。</span></div>
+        <div class="lg"><span class="lg-q v-warn">!</span><span class="lg-t"><b>感叹号 · 琥珀（你的提议）</b>最醒目。但两点代价：一是琥珀 #B45309 在本项目已被「数据延迟／cron 无效」占用，易被读成「这个指标出问题了」；二是与卡片上「极值染金」的亮点信号竞争注意力。</span></div>
+        <div class="lg"><span class="lg-q v-dark">!</span><span class="lg-t"><b>感叹号 · 中性灰</b>保留感叹号的醒目感、去掉警告色带来的误读。若你偏好感叹号，这是更稳的形态。</span></div>
+      </div>
+    </div>
+
+    <!-- 真实卡片墙 -->
+    <div class="panel" style="margin-top:12px">
+      <div class="cw" id="cardwall"></div>
+      <div class="hintline">上排为「市场风向」整行主卡（6 个 KPI），下排为「钱贵不贵」半宽卡（3 个 KPI）——均按线上真实数据与真实排版还原。</div>
+    </div>
+  </section>
+
+  <!-- ================= 2. 浮窗内容结构 ================= -->
+  <section>
+    <h2><span class="n">2</span>浮窗里放什么：两条路线的取舍</h2>
+    <p class="h2sub">后端现有 <code>hint</code> 是<b>单段纯文本</b>，且实测混了两类内容，这决定了要不要顺带升级数据结构。</p>
+
+    <div class="panel">
+      <div class="callout amber">
+        <b>实测发现的文本质量问题：</b>现有 <code>hint</code> 里既有面向用户的「含义 + 怎么读」，也有面向开发/口径审计的实现备注。
+        例如「新启动回购」的 hint 末段是「⚠️ 不能用"最新公告日"统计——同一计划的公告日会被后续公告覆盖…（实测该口径分位恒为 100%，无区分度）」。
+        这段话对排查口径的人极有价值，但<b>直接展示给使用者会显得莫名其妙</b>。
+      </div>
+
+      <table style="margin-top:14px">
+        <thead>
+          <tr><th style="width:96px">路线</th><th style="width:34%">做法</th><th>优点 / 代价</th><th style="width:118px">工作量</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="pill ok">A · 最小改动</span></td>
+            <td>总览页 <code>CardKpi</code> 补一个 <code>hint?: string</code>，用现成 <code>RichText</code> 渲染（已能解析 <code>**加粗**</code>）；浮窗只做「指标名 + 当前值 + 原文」。</td>
+            <td><b>零后端改动</b>，5 个模块一个字不用动，当天可上线。代价：长文本与实现备注照搬展示，信息层次靠排版硬撑。</td>
+            <td><span class="pill gold">前端单文件<br>约 40 行</span></td>
+          </tr>
+          <tr>
+            <td><span class="pill gold">B · 结构化</span></td>
+            <td>把 <code>hint</code> 升级为四段：<code>what</code> 是什么 / <code>how</code> 怎么算 / <code>read</code> 怎么读 / <code>note</code> 口径备注（备注折叠或弱化）。浮窗分区渲染，备注默认收起。</td>
+            <td><b>信息层次清晰</b>，使用者只看前两段、审计者展开备注看全部；日后调用方也能按段取用。代价：需改 5 个模块的 KPI 定义 + 兼容旧字段。</td>
+            <td><span class="pill no">后端 5 文件<br>+ 前端组件</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout" style="margin-top:14px">
+        <b>我的建议：</b>先落 <b>路线 A</b> 拿到「有总比没有强」的即时收益，同时把路线 B 的字段形态写进规范留作下一步。
+        理由是 A 的边际成本几乎为零，而 B 若要做对，需要先和「口径该由谁写、写到多细」这个更上游的问题一起定，不适合捆在本次一起上。
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. 边界与无障碍 ================= -->
+  <section>
+    <h2><span class="n">3</span>边界情况与无障碍（这几点决定能不能上生产）</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th style="width:150px">场景</th><th>设计处置</th></tr></thead>
+        <tbody>
+          <tr><td>超长文本<br><span style="color:var(--t3);font-size:11.5px">ERP 243 字</span></td>
+              <td>浮窗限宽 <code>min(360px, 100vw−24px)</code>，不限高（口径要读全，不做内部滚动条）；字号 12.5px / 行高 1.62。已把 ERP 这条放进体验台，可直接试读。</td></tr>
+          <tr><td>屏幕右边缘<br>或下边缘</td>
+              <td>浮窗用 <code>position:fixed</code> 定位（不受卡片 <code>overflow</code> 裁剪），水平方向左右夹紧到视口内、垂直方向空间不足时自动翻到下方并翻转箭头。把鼠标移到<b>「政策敏感」</b>那格即可看到贴边效果。</td></tr>
+          <tr><td>卡片整体可点击</td>
+              <td>总览页卡片点击会进详情页。图标若支持点击固定，必须 <code>@click.stop</code> 阻止冒泡，否则一点说明就跳页。</td></tr>
+          <tr><td>键盘可达</td>
+              <td>图标给 <code>tabindex="0"</code> 并响应 <code>focus</code>/<code>blur</code>，浮窗带 <code>role="tooltip"</code>、触发元素带 <code>aria-describedby</code>。仅靠 hover 无法通过无障碍检查。</td></tr>
+          <tr><td>触摸屏无 hover</td>
+              <td>点击图标即打开（等同点击固定），点浮窗外部或 <code>Esc</code> 关闭。触屏设备上图标<b>必须常显</b>（悬停显形策略自动降级）。</td></tr>
+          <tr><td>无 <code>hint</code> 的 KPI</td>
+              <td>图标 <code>visibility:hidden</code> 占位而非不渲染——避免同一行卡片里图标忽有忽无导致标签长度跳动。当前 28/28 都有，此条是防御性设计。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 4. 待评审决策点 ================= -->
+  <section>
+    <h2><span class="n">4</span>需要你拍板的 5 件事</h2>
+    <p class="h2sub">每项都给了推荐值，你直接在体验台里试完再定即可。</p>
+    <div class="dec">
+      <div class="dec-row">
+        <div class="q-id">1</div>
+        <div class="q-body">
+          <div class="q-t">图标用哪个符号？</div>
+          <div class="q-d">你提的是感叹号。但两点需要先对齐：<b>①同一产品内一致性</b>——详情页与模块标题旁已在用 <code>?</code>，总览页换成 <code>!</code> 会形成两套符号表达同一件事；
+            <b>②语义准确度</b>——「!」在体感上是「这里有警告/异常」，而本功能的含义是「展开看看定义」；
+            且项目颜色规范里琥珀 <code>#B45309</code> 已被「数据延迟/cron 无效」占用，再用琥珀感叹号容易与「指标出问题了」混淆。</div>
+          <div class="q-rec">推荐 <span class="opt">ⓘ</span> 描边圆：信息类通用符号，语义最准、视觉克制。
+            若希望更醒目，可用 <span class="opt">!</span> 但建议走中性灰而非琥珀，以避开警告语义。</div>
+        </div>
+      </div>
+      <div class="dec-row">
+        <div class="q-id">2</div>
+        <div class="q-body">
+          <div class="q-t">图标常显还是悬停才显形？</div>
+          <div class="q-d">总览页的定位是「每天 10 秒扫一眼」（规范 §2.1 原话）。18 个 KPI 各挂一个常显图标，扫读时是纯噪声；但完全藏起来又会让功能不可发现。</div>
+          <div class="q-rec">推荐 <span class="opt">悬停显形</span>：鼠标进入卡片时 18 个图标同时淡入，需要时一眼可见、不需要时零干扰，触摸设备自动降级为常显。</div>
+        </div>
+      </div>
+      <div class="dec-row">
+        <div class="q-id">3</div>
+        <div class="q-body">
+          <div class="q-t">浮窗用白底信息卡还是深色浮窗？</div>
+          <div class="q-d">naive-ui 的 <code>NTooltip</code> 默认深色，短文本下它轻快合适。但本项目多数口径是 60~120 字、最长 243 字：深色把整段正文压在一块深灰上，加粗与 <code>⚠️</code> 的层级不如白底清晰。已在体验台并排实测，<b>两者都可用</b>，差别在气质——白底更像「信息卡」，与项目既有观感一致。</div>
+          <div class="q-rec">推荐 <span class="opt">白底信息卡</span>（白底 + 细边框 + 轻阴影），与项目「卡片即信息载体」的既有观感一致，也能容纳加粗、<code>⚠️</code> 强调与后续的结构化分区。</div>
+        </div>
+      </div>
+      <div class="dec-row">
+        <div class="q-id">4</div>
+        <div class="q-body">
+          <div class="q-t">这轮只补总览页，还是把详情页也一起统一？</div>
+          <div class="q-d">详情页现有实现是 <code>?</code> + 深色 <code>NTooltip</code>，且浮窗会把 <code>adj_note</code> 追加在 <code>hint</code> 后面（风偏分数那类会拼成两段长文）。若这轮统一了符号与浮窗风格，详情页不改就会出现两种观感。</div>
+          <div class="q-rec">推荐 <span class="opt">一起统一</span>：改的是一个共享组件，总览页本来就要新写渲染逻辑，顺手把 <code>KpiCards</code> 切到同一套浮窗即可，几乎不增加成本。</div>
+        </div>
+      </div>
+      <div class="dec-row">
+        <div class="q-id">5</div>
+        <div class="q-body">
+          <div class="q-t">这轮就上路线 A，还是等结构化一起做？</div>
+          <div class="q-d">路线 A 零后端改动、当天可见；路线 B 信息层次更好，但需要先定「口径文案由谁写、写到多细」。</div>
+          <div class="q-rec">推荐 <span class="opt">先 A 后 B</span>：A 的产出即可直接验收交互形态，B 作为独立小批次推进，避免把口径治理这个更上游的议题捆进来。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="callout gold">
+    <b>下一步：</b>你在上面体验台试完、就 5 个决策点给个方向，我再出 v0.2 定稿方案（含组件拆分与验收口径），确认后才动代码。
+  </div>
+
+  <div class="hintline" style="margin-top:16px">
+    说明：本页为独立静态原型，不依赖项目运行时；配色令牌与 <code>docs/design/颜色体系设计规范.md</code> v2.0 一致，卡片排版按 <code>AnalysisOverview.vue</code> 现状还原。
+  </div>
+</div>
+
+<!-- ================= tooltip 容器 ================= -->
+<div id="tip" role="tooltip" data-below="0"><span class="arw"></span><div class="tt-hd"><span class="hd-name"></span><span class="v"></span></div><div class="tt-bd"></div><div class="tt-ft"></div></div>
+
+<script>
+/* ===== 真实数据：取自 2026-09-19 线上 /api/analysis/* 响应（字段原样保留） ===== */
+const CARDS = [
+ {zh:'市场风向', icon:'🧭', full:true, verdict:'近一年偏低（26% 分位）、风险偏好偏防守、估值偏便宜', tone:'normal',
+  kpis:[
+   {label:'大势位置（250日分位）', value:25.78, unit:'%', status:'偏低', tone:'neutral', scale:{pct:25.78,label:'近 250 日'},
+    hint:'中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位（本身即分位，不再二次求分位）'},
+   {label:'风偏分数（20日）', value:-0.97, unit:'pp', status:'防守松动', tone:'diff', scale:{pct:36.8,label:'近一年'},
+    hint:'科技成长组 − 股息防守组 等权20日收益差；正=偏进攻，负=偏防守'},
+   {label:'股债性价比 ERP', value:6.21, unit:'pp', status:'偏便宜｜10Y 1.68%', tone:'neutral', scale:{pct:74.4,label:'近 250 个月末'},
+    hint:'ERP（股权风险溢价）= 盈利收益率 − 无风险利率 = 100 ÷ 沪深300 滚动市盈率 − 10Y 国债收益率。回答「买股票相对买国债多拿到的补偿够不够」——单看利率或单看 PE 都答不了这个问题。分位 ≥90% 通常对应中长期底部区域，≤10% 对应泡沫区。⚠️ 分位窗口是**近 250 个月末**（乐咕月末序列，约 20 年），不是 250 个交易日。⚠️ 估值腿用乐咕口径；中证官网口径同日滚动 PE 系统性更高（实测 16.92 vs 12.68），两套只可同源纵向比。'},
+   {label:'大小盘剪刀差（20日）', value:3.8, unit:'pp', status:'小盘占优·走扩', tone:'diff', scale:{pct:80.4,label:'近一年'},
+    hint:'(中证1000+中证2000) − (上证50+沪深300) 等权20日收益差；正=小盘占优'},
+   {label:'情绪温度（20日超额）', value:1.6, unit:'pp', status:'热度回落', tone:'diff', scale:{pct:78.8,label:'近一年'},
+    hint:'证券公司 − 中证全指 20 日超额；正=券商跑赢，视为市场情绪偏暖'},
+   {label:'政策敏感（20日超额）', value:4.21, unit:'pp', status:'政策走强', tone:'diff', scale:{pct:88.0,label:'近一年'},
+    hint:'中证全指房地产 − 中证全指 20 日超额；正=政策敏感板块占优'}
+  ]},
+ {zh:'钱贵不贵', icon:'💧', full:false, verdict:'资金价格偏松（近一年 36% 分位）、期限结构极度平坦（6% 分位）', tone:'normal',
+  kpis:[
+   {label:'Shibor 3M（资金价格）', value:1.43, unit:'%', status:'偏松｜20日 +0.0bp', tone:'neutral', scale:{pct:36.0,label:'近一年'},
+    hint:'3 个月期 Shibor（银行间同业拆借利率），是 A 股最上游的定价变量之一：利率是估值分母。⚠️ 绝对值跨期不可比，判断“贵不贵”一律看近一年分位'},
+   {label:'期限利差（3M − 隔夜）', value:1.3, unit:'bp', status:'极度平坦', tone:'neutral', scale:{pct:6.0,label:'近一年'}, highlight:true,
+    hint:'长端减短端的利差，衡量资金期限结构：越陡说明短端资金越宽裕、越平说明市场预期资金持续宽松；**倒挂**（3M 比隔夜还便宜）是流动性紧张的信号'},
+   {label:'LPR 1Y（政策利率）', value:3.0, unit:'%', status:'已连续 16 个月未动', tone:'neutral', scale:null,
+    hint:'贷款市场报价利率（1 年期），每月 20 日报价。它是政策姿态的观察窗，但与市场资金价格（Shibor）不同步——两者背离本身就是信息'}
+  ]}
+];
+
+/* ===== 渲染卡片墙 ===== */
+const fmt = (k)=>{
+  if(k.value==null) return '--';
+  const sign = (k.tone!=='neutral' && k.value>0) ? '+' : '';
+  return sign + k.value + (k.unit||'');
+};
+const cls = (k)=>{
+  if(k.value==null) return 'c-flat';
+  if(k.tone==='diff'||k.tone==='neutral') return 'c-primary';
+  return k.value>0?'c-up':k.value<0?'c-down':'c-flat';
+};
+/* markdown 粗体 + ⚠️ 强调 → HTML（等同项目 RichText.vue 的最小实现） */
+const rich = (s)=>{
+  if(!s) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+    .replace(/⚠️/g,'<span class="wn">⚠️</span>');
+};
+const dotLeft = (p)=> Math.min(95, Math.max(5, p)) + '%';
+
+document.getElementById('cardwall').innerHTML = CARDS.map(c=>{
+  const n = c.kpis.length;
+  const kpis = c.kpis.map((k,i)=>{
+    const hl = k.highlight ? ' is-hl' : '';
+    const scale = k.scale ? `
+      <div class="scale">
+        <span class="scale-track"><span class="scale-dot${k.highlight?' hl':''}" style="left:${dotLeft(k.scale.pct)}"></span></span>
+        <div class="scale-txt${k.highlight?' hl':''}">${k.scale.label} ${k.scale.pct}%</div>
+      </div>` : '';
+    return `<div class="kpi${hl}" data-card="${c.zh}" data-idx="${i}">
+      <div class="kpi-label"><span class="txt">${k.label}</span>${qIcon(k)}</div>
+      <div class="kpi-value ${cls(k)}">${fmt(k)}</div>
+      <div class="kpi-status">${k.status||''}</div>
+      ${scale}
+    </div>`;
+  }).join('');
+  return `<div class="card${c.full?' full':''}">
+    <div class="card-hd"><span class="ico">${c.icon}</span><span class="nm">${c.zh}</span><span class="more">详情 ›</span></div>
+    <div class="verdict${c.tone==='caution'?' caution':''}">${c.verdict}</div>
+    <div class="kpi-grid">${kpis}</div>
+  </div>`;
+}).join('');
+
+function qIcon(k){
+  return k.hint
+    ? `<span class="q" tabindex="0" role="button" aria-label="指标口径说明：${k.label}">${iconChar()}</span>`
+    : `<span class="q off" aria-hidden="true">${iconChar()}</span>`;
+}
+function iconChar(){
+  const m = document.body.dataset.icon;
+  return m==='i' ? 'i' : '!';
+}
+</script>
+
+<script>
+/* ===== 交互：控制台 + 浮窗定位 ===== */
+const tip = document.getElementById('tip');
+const tipName = tip.querySelector('.hd-name');
+const tipVal  = tip.querySelector('.v');
+const tipBd   = tip.querySelector('.tt-bd');
+const tipFt   = tip.querySelector('.tt-ft');
+let curAnchor=null, showTimer=null, hideTimer=null, pinned=false;
+
+function kpiOf(el){
+  const card = CARDS.find(c=>c.zh===el.dataset.card);
+  return card ? card.kpis[+el.dataset.idx] : null;
+}
+function findKpi(el){ return el.closest('.kpi[data-idx]'); }
+function qOf(el){ return el.closest('.q[tabindex]'); }
+
+function place(anchor){
+  const r = anchor.getBoundingClientRect();
+  tip.style.display='block';
+  tip.style.visibility='hidden';
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = r.left + r.width/2 - tw/2;
+  left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+  let top = r.top - th - 9, below='0';
+  if(top < 8){ top = r.bottom + 9; below='1'; }
+  tip.style.left = left+'px'; tip.style.top = top+'px';
+  tip.dataset.below = below;
+  // 箭头水平位置（跟随图标，且不超出浮窗圆角）
+  const arw = tip.querySelector('.arw');
+  const ax = Math.min(Math.max(r.left + r.width/2 - left, 12), tw - 12);
+  arw.style.left = (ax - 4.5) + 'px';
+  tip.style.visibility='visible';
+}
+function show(kpiEl, kpi){
+  clearTimeout(hideTimer); clearTimeout(showTimer);
+  const doShow = ()=>{
+    curAnchor = kpiEl;
+    tipName.textContent = kpi.label;
+    const v = kpi.value==null ? '' : (fmt(kpi)+ (kpi.unit? '' : ''));
+    tipVal.textContent = kpi.value==null ? '' : fmt(kpi);
+    tipBd.innerHTML = rich(kpi.hint);
+    tipFt.innerHTML = `<span>数据来源：后端 hint 字段</span><span>随响应下发，前端只透传</span>`;
+    place(kpiEl);
+  };
+  if(document.body.dataset.trigger==='click'){ if(pinned) doShow(); }
+  else showTimer = setTimeout(doShow, 140);   // 140ms：扫过时不乱闪，停下即显示
+}
+function hide(force){
+  clearTimeout(showTimer);
+  if(pinned && !force) return;
+  hideTimer = setTimeout(()=>{ if(!pinned||force){ tip.style.display='none'; curAnchor=null; } }, 90);
+}
+function unpin(){ pinned=false; tip.classList.remove('pinned'); tip.style.display='none'; }
+
+/* --- 事件委托 --- */
+document.addEventListener('mouseover', e=>{
+  const q = qOf(e.target);
+  if(!q) return;
+  const k = kpiOf(findKpi(q));
+  if(k && k.hint) show(findKpi(q), k);
+});
+document.addEventListener('mouseout', e=>{
+  const q = qOf(e.target);
+  if(!q) return;
+  hide(false);
+});
+/* 悬停整卡时也让浮窗保持（移向浮窗过程中不闪断） */
+tip.addEventListener('mouseenter', ()=>clearTimeout(hideTimer));
+tip.addEventListener('mouseleave', ()=>{ if(pinned) hide(false); });
+
+document.addEventListener('click', e=>{
+  const q = qOf(e.target);
+  if(q){
+    e.stopPropagation(); e.preventDefault();   // ★ 必须阻止冒泡，否则会跳进详情页
+    const k = kpiOf(findKpi(q));
+    if(k && k.hint){
+      if(document.body.dataset.trigger==='click'){
+        pinned = !pinned;
+        tip.classList.toggle('pinned', pinned);
+        pinned ? show(findKpi(q), k) : unpin();
+      }
+    }
+    return;
+  }
+  if(pinned && !e.target.closest('#tip')) unpin();
+});
+/* 键盘可达：Tab 聚焦即显示 */
+document.addEventListener('focusin', e=>{
+  const q = qOf(e.target);
+  if(!q) return;
+  const k = kpiOf(findKpi(q));
+  if(k && k.hint){
+    clearTimeout(hideTimer);
+    tipName.textContent = k.label; tipVal.textContent = fmt(k);
+    tipBd.innerHTML = rich(k.hint);
+    tipFt.innerHTML = '<span>Esc 关闭</span>';
+    place(findKpi(q));
+  }
+});
+document.addEventListener('focusout', e=>{ if(qOf(e.target)) hide(true); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') unpin(); });
+window.addEventListener('scroll', ()=>{ if(tip.style.display==='block' && curAnchor) place(curAnchor); }, true);
+window.addEventListener('resize', ()=>{ if(tip.style.display==='block' && curAnchor) place(curAnchor); });
+
+/* --- 控制台 --- */
+function seg(id, key, after){
+  const box = document.getElementById(id);
+  box.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    [...box.querySelectorAll('button')].forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.body.dataset[key] = b.dataset.v;
+    unpin();
+    // 图标字符/占位需要重绘
+    document.querySelectorAll('.q').forEach(q=>{
+      const k = kpiOf(findKpi(q));
+      q.textContent = iconChar();
+      q.classList.toggle('off', !(k && k.hint));
+    });
+    if(after) after();
+  });
+}
+seg('seg-icon','icon');
+seg('seg-reveal','reveal');
+seg('seg-trigger','trigger', ()=>{
+  const btn = document.querySelector('#seg-reveal button[data-v="always"]');
+  if(document.body.dataset.trigger==='click'){ unpin(); }
+});
+seg('seg-tip','tip');
+</script>
+</body>
+</html>
