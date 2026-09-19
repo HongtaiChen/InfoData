@@ -28,6 +28,11 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
                    turnover_med，配套 2 条规则（非空 / 取值域）。其中 range 一条兼作
                    **单位漂移守护**：源列 turnover_ratio 的单位曾于 2025-09 中旬切换
                    （百分数 → 小数，差 100 倍），源侧若再改口径而采集器未跟上，该规则立刻变红。
+- BLUEPRINT_RULES ：2026-09-19 蓝图 P2/P3 落地（估值/美债等 6 表 + 美债断供补盲点）。
+- CONSUMPTION_RULES：2026-09-19 Batch C 消费端守护 —— 5 张「只进不出」的表接上
+                   分析研究消费端（钱贵不贵 / 跨市场对照 / 资金温度）后，
+                   补「某一条腿、某一列还在更新吗」类规则（既有规则只守整表更新）。
+                   配套新增 `date_floor_where` 检查器（见 data_quality_check.py）。详细理由见该列表头部注释。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -575,6 +580,72 @@ BLUEPRINT_RULES = [
      "本规则把结论钉死：口径若日后漂移立刻变红"),
 ]
 
+# ============================================================================
+# 消费端守护规则（2026-09-19 Batch C）
+#
+# 起因：《未落地优化项盘点_2026-09-19》第三节列出 5 张「只进不出」的表
+#   （interbank_rate_daily / overseas_index_daily / currency_boc_daily
+#    + fund_new_issue + stock_repurchase）。本轮把它们接上了消费端
+#   （分析研究新增「钱贵不贵」「跨市场对照」「资金温度」三个模块）。
+#
+# ⚠️ 为什么这 5 张表**已有规则却仍要补**：
+#   既有规则都在守护「整表还在更新吗」（freshness_daily / date_floor / row_count_*），
+#   而新模块依赖的是**其中某一条腿、某一列**。以下三个失效模式
+#   在既有规则下会**静默通过**（这是本批的真实价值，不是凑数）：
+#     ① `overseas_index_daily` 的恒生腿整条停更 → 当日仍有 3 行（3 个美股），
+#        `overseas_rows_latest` 的 min_rows 只能设 3（港股与美股日历本就不同）→ 通过；
+#     ② `stock_repurchase` 的 **start_date 腿**停更 → `repurchase_fresh` 看的是
+#        announce_date，而它会被后续公告覆盖、永远新鲜 → 通过；
+#        但新模块只按 start_date 统计，腿死了模块会静默退化成 0；
+#     ③ `currency_boc_daily` 的 mid_price 整列变空 → `currency_usd_mid_range`
+#        把 `mid_price IS NOT NULL` 写成前置，违反数恒为 0 → **规则反而更绿**。
+#   ① ② 用新加的 `date_floor_where` 检查器；③ 用 `date_floor_where`；
+#   另补 `shibor_3m` 的水位列线（新模块最核心的 KPI 列）。
+# ============================================================================
+CONSUMPTION_RULES = [
+    # -- 「钱贵不贵」：3M 是新模块的核心 KPI 列，3M 断供会让分位静默失真 --
+    ("interbank_shibor3m_notnull", "interbank_rate_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "shibor_3m", "max_gap_rows": 1}, "warning", 1,
+     "Shibor 3M 列水位线（新模块「钱贵不贵」的核心 KPI 列）。既有 interbank_shibor_notnull "
+     "守的是 shibor_on，3M 断了它不会发现；而 Shibor 3M 断供时模块仍会算出"
+     "「近一年分位」—— 只是分位基于一段陈旧的窗口，不会报错、只会静默失真。"
+     "容忍 1 行 = 当日 Shibor 11:00 才发布、19:35 采集时的固有边界"),
+
+    # -- 「跨市场对照」：恒生腿是 4 个指数里唯一与 A股 时段部分重叠的 --
+    ("overseas_hsi_fresh", "overseas_index_daily", "date_floor_where",
+     {"date_col": "trade_date", "where": "index_code = 'HSI'", "days_back": 15}, "warning", 1,
+     "恒生腿新鲜度：子集内 MAX(trade_date) 不得早于今天-15 天。"
+     "**既有 overseas_rows_latest 看不见这条** —— 它数的是最新日的行数，"
+     "恒生停更当日仍有 3 个美股 → 计数 3、min_rows 3 → 照常通过。"
+     "15 天容忍：港股与 A股 假期不同步，且春节/圣诞前后各有长假"),
+
+    # -- 「资金温度」：汇率腿 --
+    ("currency_usd_mid_fresh", "currency_boc_daily", "date_floor_where",
+     {"date_col": "trade_date",
+      "where": "currency = 'USD' AND mid_price IS NOT NULL", "days_back": 10}, "warning", 1,
+     "美元中间价腿新鲜度：**不能靠 currency_usd_mid_range** —— 那条规则把 "
+     "`mid_price IS NOT NULL` 写成前置条件，整列变空时违反数恒为 0、规则反而更绿。"
+     "本规则限定在 mid_price 非空的子集上取 MAX(trade_date)，直接问「这条腿还活着吗」。"
+     "10 天容忍：mid_price 有空值且最新一日常为空（当日中间价发布晚于采集时刻，"
+     "实测 2026-09-19 为 NULL 而 ref_price 有值），叠加周末"),
+
+    # -- 「资金温度」：产业资本腿。模块按 start_date 统计，必须证明 start_date 腿活着 --
+    ("repurchase_start_fresh", "stock_repurchase", "date_floor_where",
+     {"date_col": "start_date", "where": "start_date IS NOT NULL", "days_back": 45}, "warning", 1,
+     "回购**起始日腿**新鲜度（不是公告日）：子集内 MAX(start_date) 不得早于今天-45 天。"
+     "⚠️ 既有 repurchase_fresh 看的是 announce_date —— 而 announce_date 会被后续公告"
+     "**覆盖成最新日期、永远新鲜**，所以它无法证明 start_date 腿还活着。"
+     "而新模块「资金温度」只按 start_date 统计（announce_date 口径实测分位恒为 100%、零区分度）。"
+     "45 天容忍：实测近 40 个月单月最低 15 个计划、从无空月"),
+
+    # -- 把「announce_date 口径不可用」这个实测结论钉死，防止后人改回 --
+    ("repurchase_announce_not_only", "stock_repurchase", "where_count",
+     {"where": "announce_date IS NULL", "max_count": 0}, "warning", 1,
+     "回购公告日非空（announce_date 是「最新公告日」、会被覆盖，不能用于时间序列统计；"
+     "本规则只保证它作为「这条计划有过公告」的标记是完整的。"
+     "按时间序列统计请用 start_date —— 见 table_meta 的 flow_desc 与资金温度模块文件头）"),
+]
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
     "frozen_dividend_rows",       # → dividend_fresh + dividend_rows
@@ -600,6 +671,7 @@ def main():
             + [(r, "daily") for r in RECOVERED_RULES]     # 2026-09-13 死表恢复（第 1 批）
             + [(r, "daily") for r in RECOVERED_RULES_B34]  # 2026-09-13 死表恢复（第 3/4 批）
             + [(r, "daily") for r in BLUEPRINT_RULES]      # 2026-09-19 蓝图 P2/P3 落地（6 表 + 美债补盲点）
+            + [(r, "daily") for r in CONSUMPTION_RULES]    # 2026-09-19 Batch C 消费端守护（5 表 3 模块）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:

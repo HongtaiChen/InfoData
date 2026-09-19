@@ -5,7 +5,10 @@
 """
 from fastapi import APIRouter, Query
 
+from ..analysis import cross_market as cross_market_mod
+from ..analysis import funding_temperature as funding_temperature_mod
 from ..analysis import market_wind as market_wind_mod
+from ..analysis import money_cost as money_cost_mod
 from ..analysis import sector_rotation as sector_rotation_mod
 from ..analysis.registry import REGISTRY
 
@@ -40,3 +43,32 @@ def sector_rotation(
     ⚠️ 行业排行需扫个股日线快照（约 8 秒），模块内已套 10 分钟 TTL 缓存（见 analysis/_cache.py）。
     """
     return sector_rotation_mod.sector_rotation(as_of, level)
+
+
+@router.get("/money-cost")
+def money_cost(
+    as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
+    trend_days: int = Query(500, ge=60, le=2000, description="时序图回看的交易日数"),
+):
+    """钱贵不贵：Shibor 期限结构 + 3M 近一年分位 + LPR 政策姿态 + 政策/市场背离 + 资金×权益位置
+    """
+    return money_cost_mod.money_cost(as_of, trend_days)
+
+
+@router.get("/cross-market")
+def cross_market(
+    as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
+    trend_days: int = Query(500, ge=60, le=1200, description="归一化走势回看的交易日数"),
+):
+    """跨市场对照：美股/中国香港/A股 20 日收益与基准超额 + 隔夜传导同向率（含近一年分位）
+    """
+    return cross_market_mod.cross_market(as_of, trend_days)
+
+
+@router.get("/funding-temperature")
+def funding_temperature(
+    as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
+):
+    """资金温度：人民币汇率 × 新发基金 × 上市公司回购，三条独立线索的交叉印证
+    """
+    return funding_temperature_mod.funding_temperature(as_of)

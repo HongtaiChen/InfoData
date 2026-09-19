@@ -106,4 +106,67 @@ REGISTRY: list[dict] = [
             {"label": "行情看板看大盘", "target": "/market"},
         ],
     },
+    # ---------- Batch C（2026-09-19）：三张"只进不出"的表接上消费端 ----------
+    # 背景：`interbank_rate_daily` / `overseas_index_daily` / `currency_boc_daily`
+    # + `fund_new_issue` + `stock_repurchase` 五张表此前各有采集器与 DQ 规则，
+    # 但**没有任何视图消费**（《未落地优化项盘点_2026-09-19》第三节）。
+    # 采集任务排期的注释里本来就叫「蓝图A 钱贵不贵」「蓝图E 发行冰点/人民币中间价」
+    # 「蓝图D 产业资本回购」—— 本轮就是把蓝图补齐。
+    {
+        "module_id": "money-cost",
+        "name": "钱贵不贵",
+        "group": "资金与情绪",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "回答三件事：**钱现在贵不贵、资金预期是松是紧、政策利率动没动**",
+        "as_of_source": "interbank_rate_daily.MAX(trade_date)",
+        "updated_cron": "35 19 * * 0-4",
+        "schedule_text": "每工作日 19:35（银行间市场收盘后）",
+        "params": [
+            {"key": "trend_days", "type": "select", "label": "时序窗口",
+             "options": [250, 500, 1000], "default": 500},
+        ],
+        "drilldown": [
+            {"label": "跨市场对照看外部环境", "target": "/analysis/cross-market"},
+            {"label": "市场风向看股债性价比", "target": "/analysis/market-wind"},
+        ],
+    },
+    {
+        "module_id": "cross-market",
+        "name": "跨市场对照",
+        "group": "市场风向",
+        "kind": "track",
+        "icon": "🌍",
+        "desc": "回答三件事：**外面在涨还是跌、我们相对外面强还是弱、外面的信息能不能传导进来**",
+        "as_of_source": "overseas_index_daily.MAX(trade_date)",
+        "updated_cron": "50 19 * * *",
+        "schedule_text": "每天 19:50（美股为中国香港/美国市场前一夜收盘）",
+        "params": [
+            {"key": "trend_days", "type": "select", "label": "对照窗口",
+             "options": [120, 250, 500], "default": 500},
+        ],
+        "drilldown": [
+            {"label": "市场风向看 A 股内部风格", "target": "/analysis/market-wind"},
+            {"label": "资金温度看汇率与增量资金", "target": "/analysis/funding-temperature"},
+        ],
+    },
+    {
+        "module_id": "funding-temperature",
+        "name": "资金温度",
+        "group": "资金与情绪",
+        "kind": "track",
+        "icon": "🌡️",
+        "desc": "回答三件事：**外部资金环境松不松、增量资金够不够、产业资本在不在场**",
+        "as_of_source": "currency_boc_daily.MAX(trade_date)",
+        "updated_cron": "35 20 * * *",
+        "schedule_text": "每天 20:05–20:35 依次更新（汇率 → 基金发行 → 回购）",
+        "params": [
+            {"key": "months", "type": "select", "label": "月度窗口",
+             "options": [24, 36, 60], "default": 36},
+        ],
+        "drilldown": [
+            {"label": "钱贵不贵看资金成本", "target": "/analysis/money-cost"},
+            {"label": "行情看板看大盘", "target": "/market"},
+        ],
+    },
 ]

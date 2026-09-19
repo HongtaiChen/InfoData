@@ -22,6 +22,7 @@ dq_rules.params（JSON）契约，按 check_type 分：
                                     落后 ≤warn_days 判 warning，否则 fail
   freshness_interval {time_col, pass_hours, fail_hours}    距当前时长分级
   date_floor        {date_col, days_back}                  MAX(date_col) >= 今天-days_back
+  date_floor_where  {date_col, where, days_back}           MAX(date_col) >= 今天-days_back（限 where 子集，专治"某条腿停更"）
   row_count_slice   {date_col, min_rows}                   最新切片行数下限
   row_count_total   {min_rows}                             总行数下限（防清空/大面积缺失）
   null_rate_slice   {date_col, col, max_pct}               最新切片空值率上限(%)
@@ -246,6 +247,43 @@ class DataQualityCheckCollector:
             max_date = str(row["d"])[:10]
         status = "pass" if max_date >= str(floor) else "fail"
         msg = f"最新 {max_date}，应不早于 {floor}" if status == "pass" else f"停更风险：最新 {max_date}，应 ≥ {floor}"
+        return {"status": status, "metric_value": max_date, "message": msg}
+
+    def _date_floor_where(self, conn, rule: dict) -> dict:
+        """**带条件**的日期下限：MAX(date_col) 限定在满足 where 的子集内，不得早于今天-days_back。
+
+        为什么需要（2026-09-19 立，随 Batch C 三个新分析模块一起加）：
+        `date_floor` / `freshness_daily` 只看**整表**的 MAX(date_col)，看不见
+        「多腿数据里某一条腿已停更」——因为另一条腿在更新，整表的 MAX 永远新鲜：
+
+          · `overseas_index_daily` 有 4 个指数（恒生 + 3 个美股）。美股与港股交易日历不同，
+            每日 3~4 行都算正常，故 `row_count_slice` 的 min_rows 只能设 3 ——
+            **恒生腿整条停更时计数恰好是 3，规则照常通过**；
+          · `stock_repurchase` 的既有规则 `repurchase_fresh` 看 announce_date，
+            而 announce_date 会被后续公告覆盖、永远新鲜 → 它无法证明
+            **start_date 这条腿**还活着，而新模块「资金温度」恰恰只按 start_date 统计；
+          · `currency_boc_daily` 的 `currency_usd_mid_range` 把 `mid_price IS NOT NULL`
+            写成前置条件 → mid_price 整列变空时违反数为 0，**规则反而更绿**。
+
+        故本检查器把 MAX(date_col) 限定在 where 子集内，专治"这条腿还活着吗"。
+        where 来自受控的 dq_rules，不接受外部输入。
+        """
+        p = rule.get("params") or {}
+        date_col = p.get("date_col", "trade_date")
+        where = p["where"]
+        days_back = int(p.get("days_back", 7))
+        table = rule["table_name"]
+        floor = (datetime.now() - timedelta(days=days_back)).date()
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT MAX(`{date_col}`) AS d FROM `{table}` WHERE {where}")
+            row = cur.fetchone()
+            if not row or row["d"] is None:
+                return {"status": "fail", "metric_value": "无数据",
+                        "message": f"子集内无任何数据 —— 该腿疑似整条停更（{where}）"}
+            max_date = str(row["d"])[:10]
+        status = "pass" if max_date >= str(floor) else "fail"
+        msg = (f"子集最新 {max_date}，应不早于 {floor}（{where}）" if status == "pass"
+               else f"停更风险：子集（{where}）最新 {max_date}，应 ≥ {floor}")
         return {"status": status, "metric_value": max_date, "message": msg}
 
     def _latest_slice(self, conn, table: str, date_col: str):
@@ -635,6 +673,7 @@ class DataQualityCheckCollector:
         "freshness_daily": _freshness_daily,
         "freshness_interval": _freshness_interval,
         "date_floor": _date_floor,
+        "date_floor_where": _date_floor_where,
         "row_count_slice": _row_count_slice,
         "row_count_total": _row_count_total,
         "null_rate_slice": _null_rate_slice,

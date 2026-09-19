@@ -24,6 +24,10 @@ const moduleMeta = ref<any>(null)
 const moduleViews: Record<string, any> = {
   'market-wind': defineAsyncComponent(() => import('./analysis/MarketWindView.vue')),
   'sector-rotation': defineAsyncComponent(() => import('./analysis/SectorRotationView.vue')),
+  // Batch C（2026-09-19）：把三张"只进不出"的表接上消费端
+  'money-cost': defineAsyncComponent(() => import('./analysis/MoneyCostView.vue')),
+  'cross-market': defineAsyncComponent(() => import('./analysis/CrossMarketView.vue')),
+  'funding-temperature': defineAsyncComponent(() => import('./analysis/FundingTemperatureView.vue')),
 }
 const viewComp = computed(() => moduleViews[moduleId.value])
 
