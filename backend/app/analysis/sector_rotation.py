@@ -190,6 +190,62 @@ def _card_verdict(compare: dict, industry: dict, concept: dict) -> dict:
     return {"headline": head, "detail": detail, "tone": tone}
 
 
+# ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询 ----
+
+def _verdict_flow(industry: dict, concept: dict) -> dict:
+    """q1 钱在往哪些行业和概念走 —— 行业中位 + 相对基准超额 + 上涨广度。
+
+    tone 保持 normal：资金流向是「观察」而非「异常信号」，颜色纪律见 _card_verdict 注释
+    （本模块唯一找背离的地方是口径互证，金色/琥珀不在此处消耗）。
+    """
+    im = industry.get("median")
+    if im is None:
+        return {"headline": "板块数据未就绪", "detail": "", "tone": "normal"}
+    head = f"申万{industry.get('level') or '一级'}中位 {im:+.2f}%（{industry.get('up_ratio')}% 行业上涨"
+    bench = industry.get("bench_ret_20")
+    if bench is not None:
+        excess = im - bench
+        head += f"、{'超基准' if excess >= 0 else '落后基准'} {abs(excess):.2f}pp"
+    head += "）"
+    items = industry.get("items") or []
+    detail = ""
+    if items:
+        detail = f"最强 {items[0]['name']} {items[0]['ret_20']:+.2f}%"
+        cm = concept.get("median")
+        if cm is not None:
+            detail += f"｜概念中位 {cm:+.2f}%"
+    return {"headline": head, "detail": detail, "tone": "normal"}
+
+
+def _verdict_speed(industry: dict) -> dict:
+    """q2 轮动快不快 —— 离散度 + 首尾差。
+
+    ⚠️ 行业/概念历史 20 日收益未物化、算不出分位，故不设 tone 判断（永远 normal），
+    只做口径陈述 —— 不拿「数值大」硬当「异常」。
+    """
+    d, s = industry.get("dispersion"), industry.get("spread")
+    if d is None:
+        return {"headline": "轮动数据未就绪", "detail": "", "tone": "normal"}
+    head = f"行业离散度 {d:.2f}pp"
+    if s is not None:
+        head += f"、首尾差 {s:.2f}pp"
+    detail = ("离散度越大 = 行业间分化越剧烈 = 轮动越快；与首尾差成对读："
+              "大离散 + 小首尾差 = 全面分化，小离散 + 大首尾差 = 个别行业极端")
+    return {"headline": head, "detail": detail, "tone": "normal"}
+
+
+def _verdict_compare(compare: dict) -> dict:
+    """q3 两个口径是否互证 —— 行业 vs 概念，本模块唯一用 tone 的地方"""
+    level = (compare or {}).get("level")
+    if level == "diverge":
+        return {"headline": "行业与概念两口径背离 —— 当前没有一致的市场叙事",
+                "detail": (compare or {}).get("reading") or "", "tone": "caution"}
+    if level == "agree":
+        return {"headline": "行业与概念双口径互证一致",
+                "detail": (compare or {}).get("reading") or "", "tone": "normal"}
+    return {"headline": "口径互证数据不足", "detail": "", "tone": "normal"}
+
+
 @ttl_cache(600)
 def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dict:
     """板块轮动模块数据装配（/api/analysis/sector-rotation）
@@ -268,20 +324,20 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
     # ⚠️ 本模块的 KPI **不带 scale**：行业/概念的历史 20 日收益没有物化，算不出分位。
     #    前端对缺失 scale 的 KPI 不渲染刻度条（优雅降级），不拿别的量纲硬凑一根刻度。
     kpis = [
-        {"key": "industry_median", "card_rank": 1, "label": f"申万{level}行业中位（20日）", "value": im, "unit": "%",
+        {"key": "industry_median", "card_rank": 1, "questions": ["q1", "q3"], "label": f"申万{level}行业中位（20日）", "value": im, "unit": "%",
          "tone": "diff", "status": f"{industry['up_ratio']}% 的行业上涨",
          "hint": f"申万{level}行业个股等权 20 日收益的中位数；上涨占比与它成对出现，"
                  "避免只看中位数而漏掉「一半以上行业在涨但被少数大跌拖累」"},
-        {"key": "dispersion", "card_rank": 2, "label": "行业离散度（20日）", "value": industry["dispersion"], "unit": "pp",
+        {"key": "dispersion", "card_rank": 2, "questions": ["q2"], "label": "行业离散度（20日）", "value": industry["dispersion"], "unit": "pp",
          "tone": "neutral", "status": "（越大=轮动越剧烈）",
          "hint": "各行业 20 日收益的标准差。数值越大说明行业间分化越剧烈、轮动越快；"
                  "越小说明齐涨齐跌。这是「轮动速度」的量化描述，单看排行看不出来"},
-        {"key": "industry_spread", "card_rank": 3, "label": "首尾差（20日）", "value": industry["spread"], "unit": "pp",
+        {"key": "industry_spread", "card_rank": 3, "questions": ["q2"], "label": "首尾差（20日）", "value": industry["spread"], "unit": "pp",
          "tone": "neutral",
          "status": f"{items[0]['name']} {items[0]['ret_20']:+.2f}% / {items[-1]['name']} {items[-1]['ret_20']:+.2f}%",
          "hint": "最强行业 − 最弱行业的 20 日收益差。配合离散度读：离散度大而首尾差小，"
                  "说明分化是全面的而非个别行业极端"},
-        {"key": "concept_median", "label": "概念中位（20日）", "value": cm, "unit": "%",
+        {"key": "concept_median", "questions": ["q1", "q3"], "label": "概念中位（20日）", "value": cm, "unit": "%",
          "tone": "diff", "status": f"{concept_out['count']} 个概念 · {concept_out['up_ratio']}% 上涨",
          "hint": "同花顺概念指数 20 日收益的中位数（已剔除 |收益|>60% 的异常样本）；"
                  "与申万行业口径互为正交验证"},
@@ -292,5 +348,11 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
         "kpis": kpis, "industry": industry, "concept": concept_out, "compare": compare,
         # 卡片墙的一句话结论（卡片专用；详情页有自己的完整面板，不重复渲染）
         "verdict": _card_verdict(compare, industry, concept_out),
+        # 三卡子判读（2026-09-19 拆卡）：总览页三张分卡按 question 各取一条
+        "verdicts": {
+            "q1": _verdict_flow(industry, concept_out),
+            "q2": _verdict_speed(industry),
+            "q3": _verdict_compare(compare),
+        },
         "note": ROTATION_NOTE,
     }

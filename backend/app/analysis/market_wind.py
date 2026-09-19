@@ -529,13 +529,32 @@ def _div_note(pct: float | None) -> str:
 # tone：位置 <=20 → 金（低位机会）；位置 >=80 或**背离数进 90% 分位** → 琥珀（提醒）；
 # 其余蓝。实测背离数这条规则在近 250 日只点亮 17 天（4 项 16 天 + 5 项 1 天，6.8%）
 # —— 亮得少才算信号。
-def _card_verdict(bp, ra, erp_pct, xcheck: dict, div: dict | None = None) -> dict:
+def _diverge_detail(xcheck: dict, div: dict | None) -> str:
+    """背离 detail 文案（_card_verdict 与 _verdict_structure 共用）。
+
+    背离数必须与**自身历史**比才有意义 —— 单说「4 项」读者无从判断多不多。
+    分位不可得时（market_xcheck_daily 尚未回填）退回纯计数表述，不阻断判读条。
+    """
     items = xcheck.get("items") or []
     n_all = len(items)
     n_div = (xcheck.get("summary") or {}).get("diverge") or 0
     div_labels = [i.get("label") for i in items
                   if i.get("level") == "diverge" and i.get("label")]
+    if not n_all:
+        return ""
+    joined = " · ".join(div_labels)
+    if div:
+        extra = ""
+        if div.get("higher") is not None:
+            extra = f"、更高仅 {div['higher']} 日" if div["higher"] <= 3 else ""
+        return (f"交叉印证 {n_div}/{n_all} 项背离 · 近一年 {div['pct']}% 分位"
+                f"{_div_note(div['pct'])}（中位 {div['median']} 项{extra}）"
+                f"：{joined or '无'}")
+    return (f"交叉印证 {n_all} 项中 {n_div} 项背离：{joined}"
+            if n_div and joined else f"交叉印证 {n_all} 项，当前无背离项")
 
+
+def _card_verdict(bp, ra, erp_pct, xcheck: dict, div: dict | None = None) -> dict:
     if bp is None:
         head = "位置数据未就绪"
     else:
@@ -550,21 +569,7 @@ def _card_verdict(bp, ra, erp_pct, xcheck: dict, div: dict | None = None) -> dic
     else:
         head += "、估值中性"
 
-    # 背离数必须与**自身历史**比才有意义 —— 单说「4 项」读者无从判断多不多。
-    # 分位不可得时（market_xcheck_daily 尚未回填）退回纯计数表述，不阻断判读条。
-    joined = " · ".join(div_labels)
-    if not n_all:
-        detail = ""
-    elif div:
-        extra = ""
-        if div.get("higher") is not None:
-            extra = f"、更高仅 {div['higher']} 日" if div["higher"] <= 3 else ""
-        detail = (f"交叉印证 {n_div}/{n_all} 项背离 · 近一年 {div['pct']}% 分位"
-                  f"{_div_note(div['pct'])}（中位 {div['median']} 项{extra}）"
-                  f"：{joined or '无'}")
-    else:
-        detail = (f"交叉印证 {n_all} 项中 {n_div} 项背离：{joined}"
-                  if n_div and joined else f"交叉印证 {n_all} 项，当前无背离项")
+    detail = _diverge_detail(xcheck, div)
 
     if bp is not None and bp <= 20:
         tone = "opportunity"
@@ -574,6 +579,46 @@ def _card_verdict(bp, ra, erp_pct, xcheck: dict, div: dict | None = None) -> dic
     else:
         tone = "normal"
     return {"headline": head, "detail": detail, "tone": tone}
+
+
+# ---- 三卡子判读（2026-09-19 拆卡）：把四合一判读按「回答三件事」拆开，每张卡只答一件事 ----
+# 底数与 _card_verdict 完全相同（bp / erp / xcheck），零额外查询；阈值也与其一致，仅拆分呈现。
+# 金色纪律不变：亮得少才算信号（位置 ≤20 / 估值分位 ≥80 / 背离 ≥90 分位才点亮）。
+
+
+def _verdict_position(bp, se, se_prev) -> dict:
+    """q1 现在处在什么位置 —— 大势位置分位 + 情绪温度方向"""
+    if bp is None:
+        return {"headline": "位置数据未就绪", "detail": "", "tone": "normal"}
+    head = f"近一年{_pos_status(bp)}（{bp:.0f}% 分位）"
+    if se is not None:
+        head += f"、情绪{_sent_status(se, se_prev)}"
+    tone = "opportunity" if bp <= 20 else "caution" if bp >= 80 else "normal"
+    return {"headline": head, "detail": "", "tone": tone}
+
+
+def _verdict_valuation(erp_val, erp_pct) -> dict:
+    """q2 估值贵不贵 —— 股债性价比 ERP 及其长窗口分位（近 250 个月末）"""
+    if erp_pct is None:
+        return {"headline": "估值数据未就绪", "detail": "", "tone": "normal"}
+    word = "偏便宜" if erp_pct >= 60 else "偏贵" if erp_pct <= 40 else "中性"
+    head = f"股债性价比{word}（月末序列 {erp_pct:.0f}% 分位）"
+    detail = "" if erp_val is None else f"ERP {erp_val:.2f}pp —— 分位越高 = 股票相对债券越便宜"
+    # 便宜到极值（≥80 分位）才是机会；贵到极值（≤20）才提醒 —— 与 KPI highlight 的 ≥90
+    # 略有差异是有意的：估值是慢变量，判读条阈值放宽一档增加可读性
+    tone = "opportunity" if erp_pct >= 80 else "caution" if erp_pct <= 20 else "normal"
+    return {"headline": head, "detail": detail, "tone": tone}
+
+
+def _verdict_structure(ra, sc, xcheck: dict, div: dict | None) -> dict:
+    """q3 内部结构有没有背离 —— 风偏方向 + 大小盘 + 交叉印证背离数的历史分位"""
+    if ra is None and sc is None:
+        return {"headline": "结构数据未就绪", "detail": "", "tone": "normal"}
+    head = "风险偏好" + ("待定" if ra is None else ("偏进攻" if ra >= 0 else "偏防守"))
+    if sc is not None:
+        head += f"、大小盘{'小盘占优' if sc >= 0 else '大盘占优'}"
+    tone = "caution" if (div and (div.get("pct") or 0) >= 90) else "normal"
+    return {"headline": head, "detail": _diverge_detail(xcheck, div), "tone": tone}
 
 
 # 进程内 TTL 缓存（2026-09-19）：与「板块轮动」同一策略（见 _cache.py 边界说明）。
@@ -659,31 +704,31 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     #   tone='neutral' —— 分位 / 占比 / 离散度等无量纲量，主色蓝且不带正号
     # 底层原则：**卡片墙的颜色只表达「异常程度」，不表达方向**（亮得少才算信号），与 verdict 同源。
     kpis = [
-        {"key": "risk_appetite", "card_rank": 2, "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "diff",
+        {"key": "risk_appetite", "card_rank": 2, "questions": ["q3"], "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "diff",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
          "pct": pct_ra, "scale": _scale(pct_ra, "近一年"),
          "z": z_of("risk_appetite_20"), "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
          "adj": ra_adj,
          "hint": "科技成长组 − 股息防守组 等权20日收益差；正=偏进攻，负=偏防守"},
-        {"key": "scissors", "card_rank": 4, "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "diff",
+        {"key": "scissors", "card_rank": 4, "questions": ["q3"], "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "diff",
          "status": _scissors_status(sc, prev5.get("scissors_20")),
          "pct": pct_sc, "scale": _scale(pct_sc, "近一年"),
          "z": z_of("scissors_20"), "highlight": _is_extreme(pct_sc), "anchor": "mw-gradient",
          "adj": sc_adj,
          "hint": "(中证1000+中证2000) − (上证50+沪深300) 等权20日收益差；正=小盘占优"},
-        {"key": "sentiment", "card_rank": 5, "label": "情绪温度（20日超额）", "value": se, "unit": "pp", "tone": "diff",
+        {"key": "sentiment", "card_rank": 5, "questions": ["q1"], "label": "情绪温度（20日超额）", "value": se, "unit": "pp", "tone": "diff",
          "status": _sent_status(se, prev5.get("sentiment_20")),
          "pct": pct_se, "scale": _scale(pct_se, "近一年"),
          "z": z_of("sentiment_20"), "highlight": _is_extreme(pct_se), "anchor": "mw-heat",
          "hint": "证券公司 − 中证全指 20 日超额；正=券商跑赢，视为市场情绪偏暖"},
-        {"key": "policy", "card_rank": 6, "label": "政策敏感（20日超额）", "value": po, "unit": "pp", "tone": "diff",
+        {"key": "policy", "card_rank": 6, "questions": ["q3"], "label": "政策敏感（20日超额）", "value": po, "unit": "pp", "tone": "diff",
          "status": _policy_status(po, prev5.get("policy_excess_20")),
          "pct": pct_po, "scale": _scale(pct_po, "近一年"),
          "z": z_of("policy_excess_20"), "highlight": _is_extreme(pct_po), "anchor": "mw-heat",
          "hint": "中证全指房地产 − 中证全指 20 日超额；正=政策敏感板块占优"},
         # 大势位置的 value 本身就是 250 日分位，故 scale.pct 与 value 同值 ——
         # 刻度条在此不是「再算一个分位」，而是把已有的分位画到 0~100 轴上（数字→位置的直接映射）。
-        {"key": "bench_pos", "card_rank": 1, "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
+        {"key": "bench_pos", "card_rank": 1, "questions": ["q1"], "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
          "status": _pos_status(bp), "pct": None, "scale": _scale(bp, "近 250 日"),
          "z": None, "highlight": _is_extreme(bp), "anchor": "mw-detail",
          "hint": "中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位（本身即分位，不再二次求分位）"},
@@ -694,7 +739,7 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
         # ⚠️ 不设 anchor：ERP 的论据在交叉印证面板里，不是本页独立图表。
         # 刻度 label 取乐咕序列的实际点数（「近 250 个月末」），由后端下发 ——
         # 前端写死「近一年」会把月频分位说成日频（见 _scale 的 ⚠️）。
-        {"key": "erp", "card_rank": 3, "label": "股债性价比 ERP", "value": erp_val, "unit": "pp", "tone": "neutral",
+        {"key": "erp", "card_rank": 3, "questions": ["q2"], "label": "股债性价比 ERP", "value": erp_val, "unit": "pp", "tone": "neutral",
          "status": erp_status, "pct": None,
          "scale": _scale(erp_pct, f"近 {_erp['samples']} 个月末" if _erp and _erp.get("samples") else "月末序列"),
          "z": None,
@@ -812,6 +857,13 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     return {"as_of": data_as_of, "is_replay": is_replay,
             # 卡片墙的一句话结论（卡片专用；详情页有自己的完整面板，不重复渲染）
             "verdict": _card_verdict(bp, ra, erp_pct, xcheck, div_stats),
+            # 三卡子判读（2026-09-19 拆卡）：总览页三张分卡按 question 各取一条；
+            # registry 的 market-wind-position/valuation/structure 三卡共用本响应
+            "verdicts": {
+                "q1": _verdict_position(bp, se, prev5.get("sentiment_20")),
+                "q2": _verdict_valuation(erp_val, erp_pct),
+                "q3": _verdict_structure(ra, sc, xcheck, div_stats),
+            },
             # 背离数及其历史位置（口径随响应下发，供详情页与前端直接使用）
             "cross_diverge": div_stats,
             # 回放模式下滞后无意义（数据天然落后于今天），固定报 0 避免误标琥珀

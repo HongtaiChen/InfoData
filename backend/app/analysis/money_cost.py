@@ -191,6 +191,43 @@ def _verdict_tone(level_pct, spread_bp) -> str:
     return "normal"
 
 
+# ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询 ----
+
+def _verdict_level(level_pct) -> dict:
+    """q1 钱现在贵不贵 —— Shibor 3M 的近一年分位"""
+    if level_pct is None:
+        return {"headline": "资金价格数据未就绪", "detail": "", "tone": "normal"}
+    head = f"资金价格{_level_word(level_pct)}（近一年 {level_pct:.0f}% 分位）"
+    tone = "opportunity" if level_pct <= 20 else "caution" if level_pct >= 80 else "normal"
+    return {"headline": head, "detail": "利率是估值分母：钱便宜对权益是顺风", "tone": tone}
+
+
+def _verdict_expectation(spread_bp, spread_pct) -> dict:
+    """q2 资金预期是松是紧 —— 期限利差（3M − 隔夜）的陡平与倒挂"""
+    if spread_bp is None:
+        return {"headline": "期限利差数据未就绪", "detail": "", "tone": "normal"}
+    head = f"期限结构{_shape_word(spread_bp, spread_pct)}"
+    if spread_pct is not None:
+        head += f"（近一年 {spread_pct:.0f}% 分位）"
+    # 倒挂不是「贵」而是「紧」—— 流动性紧张的定性，单独提级（与 _verdict_tone 同规）
+    tone = "caution" if spread_bp < 0 else "normal"
+    return {"headline": head,
+            "detail": "利差越陡 = 短端越宽裕；**倒挂**（3M 低于隔夜）= 流动性紧张信号",
+            "tone": tone}
+
+
+def _verdict_policy(lpr: dict) -> dict:
+    """q3 政策利率动没动 —— LPR 1Y 连续未动月数（政策姿态，非市场资金价格）"""
+    l1 = lpr.get("lpr_1y")
+    if l1 is None:
+        return {"headline": "LPR 数据未就绪", "detail": "", "tone": "normal"}
+    head = f"LPR 1Y {l1:.2f}%"
+    if lpr.get("idle_months") is not None:
+        head += f"、已连续 {lpr['idle_months']} 个月未动"
+    detail = f"政策报价自 {lpr['since']} 起未变；与市场利率（Shibor）背离本身就是信息" if lpr.get("since") else ""
+    return {"headline": head, "detail": detail, "tone": "normal"}
+
+
 # ---------------- 主装配 ----------------
 
 @ttl_cache(600)
@@ -327,21 +364,21 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
     #      利率上行/下行交给 status 文案与刻度条表达，染红绿会把"资金收紧"误读成"利好"。
     #      （见 registry.py 卡片墙契约第 ④ 条）
     kpis = [
-        {"key": "shibor_3m", "card_rank": 1, "label": "Shibor 3M（资金价格）",
+        {"key": "shibor_3m", "card_rank": 1, "questions": ["q1"], "label": "Shibor 3M（资金价格）",
          "value": r(s3_cur, 2), "unit": "%", "tone": "neutral",
          "status": f"{_level_word(pct_3m)}｜20日 {('%+.1fbp' % chg20) if chg20 is not None else '--'}",
          "pct": pct_3m, "scale": scale(pct_3m, "近一年"), "highlight": is_extreme(pct_3m),
          "anchor": "mc-trend",
          "hint": "3 个月期 Shibor（银行间同业拆借利率），是 A 股最上游的定价变量之一："
                  "利率是估值分母。⚠️ 绝对值跨期不可比，判断“贵不贵”一律看近一年分位"},
-        {"key": "term_spread", "card_rank": 2, "label": "期限利差（3M − 隔夜）",
+        {"key": "term_spread", "card_rank": 2, "questions": ["q2"], "label": "期限利差（3M − 隔夜）",
          "value": r(spread_cur, 1), "unit": "bp", "tone": "neutral",
          "status": f"{_shape_word(spread_cur, pct_spread)}",
          "pct": pct_spread, "scale": scale(pct_spread, "近一年"), "highlight": is_extreme(pct_spread),
          "anchor": "mc-curve",
          "hint": "长端减短端的利差，衡量资金期限结构：越陡说明短端资金越宽裕、"
                  "越平说明市场预期资金持续宽松；**倒挂**（3M 比隔夜还便宜）是流动性紧张的信号"},
-        {"key": "lpr", "card_rank": 3, "label": "LPR 1Y（政策利率）",
+        {"key": "lpr", "card_rank": 3, "questions": ["q3"], "label": "LPR 1Y（政策利率）",
          "value": r(lpr.get("lpr_1y"), 2), "unit": "%", "tone": "neutral",
          "status": (f"已连续 {lpr['idle_months']} 个月未动"
                     if lpr.get("idle_months") is not None
@@ -380,5 +417,11 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
         "chg20_bp": r(chg20, 1),
         "median_1y": r(median(s3_vals), 4),
         "verdict": _card_verdict(pct_3m, spread_cur, pct_spread, lpr),
+        # 三卡子判读（2026-09-19 拆卡）：总览页三张分卡按 question 各取一条
+        "verdicts": {
+            "q1": _verdict_level(pct_3m),
+            "q2": _verdict_expectation(spread_cur, pct_spread),
+            "q3": _verdict_policy(lpr),
+        },
         "note": MONEY_COST_NOTE,
     }

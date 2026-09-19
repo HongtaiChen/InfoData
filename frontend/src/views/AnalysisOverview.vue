@@ -14,11 +14,19 @@ interface RegistryItem {
   module_id: string
   name: string
   group: string
-  kind: 'track' | 'research'
+  /** track=卡片墙 / research=研究目录 / detail=详情型元数据（不上墙，2026-09-19 拆卡新增） */
+  kind: 'track' | 'research' | 'detail'
   icon?: string
   desc: string
   /** 'full' = 主卡占满整行（放下更多 KPI）；缺省为半宽卡。由后端声明，前端不硬编码模块名 */
   card_span?: 'full'
+  /**
+   * 拆卡字段（2026-09-19，registry 卡片墙契约 ⑦）：本卡回答第几件事 / 取数端点名 /
+   * 点击跳转的详情页。三张拆卡共用同一份模块响应（后端 ttl_cache），前端按 URL 去重。
+   */
+  question?: 'q1' | 'q2' | 'q3'
+  data?: string
+  detail?: string
 }
 /** 分位刻度：把「这个数在 0~100 轴上排第几」画出来。
  *  ⚠️ label（窗口口径）必须由后端下发 —— ERP 的分位窗口是「近 250 个月末」而非「近一年」，
@@ -47,6 +55,11 @@ interface CardKpi {
    * hint（实测 18/18 全覆盖）——纯前端接线即可，无需改后端。
    */
   hint?: string
+  /**
+   * 拆卡归属（后端下发，registry 契约 ⑦）：本 KPI 服务哪些「事」。一个 KPI 可属于多件
+   * （如「行业中位」既是流向读数也是互证一腿）；卡片墙按本卡 question 过滤后再套 card_rank
+   */
+  questions?: string[]
 }
 /**
  * 卡片顶部的一句话结论。**由后端生成**——口径随响应下发，前端只透传不手抄；
@@ -103,26 +116,50 @@ onMounted(async () => {
   try {
     const resp: any = await api.get('/analysis/registry')
     modules.value = resp.items ?? []
-    // 跟踪型卡片各自拉模块数据取 KPI 摘要（模块多了可改为专用 summary 接口）
+    // 跟踪型模块各自拉模块数据取 KPI 摘要（模块多了可改为专用 summary 接口）
     const tracks = modules.value.filter((x) => x.kind === 'track')
     tracks.forEach((m) => {
       kpiLoading.value[m.module_id] = true
     })
+    // 拆卡去重（2026-09-19，契约 ⑦）：同一家族三张卡共用同一个 data 端点 ——
+    // 后端 ttl_cache 命中虽然 <1ms，但省掉 2 次重复 HTTP 往返更干净。
+    // 按 URL 分组、每组只发一次请求，结果分发给组内各卡。
+    const byUrl = new Map<string, RegistryItem[]>()
+    for (const m of tracks) {
+      const url = `/analysis/${m.data ?? m.module_id}`
+      const list = byUrl.get(url)
+      if (list) list.push(m)
+      else byUrl.set(url, [m])
+    }
     // 并行发起、互不阻塞：耗时 = 最慢的一个，而非各模块之和。
     // silent：单卡取数失败只降级为「不显示 KPI」，不弹全局错误提示。
     void Promise.allSettled(
-      tracks.map(async (m) => {
+      [...byUrl.entries()].map(async ([url, cards]) => {
+        let r: any = null
         try {
-          const r: any = await api.get(`/analysis/${m.module_id}`, { silent: true })
-          cardKpis.value[m.module_id] = pickCardKpis(r.kpis ?? [], cardSpan(m))
-          // 判读条与 KPI 同源同请求，一起到达；没有 verdict 的模块只是不显示判读条
-          if (r.verdict?.headline) cardVerdicts.value[m.module_id] = r.verdict
-          else delete cardVerdicts.value[m.module_id]
+          r = await api.get(url, { silent: true })
         } catch {
-          cardKpis.value[m.module_id] = []
-          delete cardVerdicts.value[m.module_id]
-        } finally {
-          kpiLoading.value[m.module_id] = false
+          /* 整组降级：各卡不显示 KPI，finally 里收尾 */
+        }
+        for (const m of cards) {
+          try {
+            const kpis: CardKpi[] = r?.kpis ?? []
+            // 本卡只看自己那件事的 KPI（过滤口径在后端 questions，前端只透传）；
+            // 过滤后为空 = 后端尚未发布 questions 字段 → 回退全量 pick，优雅降级
+            const scoped = m.question
+              ? kpis.filter((k) => (k.questions ?? []).includes(m.question!))
+              : kpis
+            cardKpis.value[m.module_id] = pickCardKpis(scoped.length ? scoped : kpis, cardSpan(m))
+            // 判读条：拆卡优先取自己那件事的子判读；后端未发布 verdicts 时回退模块级 verdict
+            const v = (m.question ? r?.verdicts?.[m.question] : null) ?? r?.verdict
+            if (v?.headline) cardVerdicts.value[m.module_id] = v
+            else delete cardVerdicts.value[m.module_id]
+          } catch {
+            cardKpis.value[m.module_id] = []
+            delete cardVerdicts.value[m.module_id]
+          } finally {
+            kpiLoading.value[m.module_id] = false
+          }
         }
       }),
     )
@@ -143,7 +180,8 @@ const researchByGroup = computed(() => {
 })
 
 function open(m: RegistryItem) {
-  router.push(`/analysis/${m.module_id}`)
+  // 拆卡跳详情：三张分卡同进一个聚合详情页（registry 契约 ⑦ detail 字段）
+  router.push(m.detail ?? `/analysis/${m.module_id}`)
 }
 // 与 KpiCards 一致：只有 tone='updown' 才是行情涨跌语义（红涨绿跌）。
 // tone='diff'（组间收益差，如风偏分数）与 'neutral'（分位/离散度）一律主色蓝 ——

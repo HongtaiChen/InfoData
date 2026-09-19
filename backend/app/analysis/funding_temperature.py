@@ -324,6 +324,56 @@ def _card_verdict(fx: dict, fund: dict, rep: dict, temp: dict) -> dict:
     return {"headline": head, "detail": detail, "tone": temp["tone"]}
 
 
+# ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询。
+# 单线索卡不用金色 —— 模块的金色只留给「整体偏暖」(temperature tone)，单线不点亮，
+# 否则三张卡常年有金、「亮」就失去筛选意义。单线不顺风（supportive=False）→ 琥珀提醒。 ----
+
+def _verdict_fx(fx: dict) -> dict:
+    """q1 外部资金环境松不松 —— 人民币汇率（分位低 = 人民币强 = 顺风）"""
+    if fx.get("mid") is None:
+        return {"headline": "汇率数据未就绪", "detail": "", "tone": "normal"}
+    pct = fx.get("pct")
+    head = _fx_word(pct)
+    if pct is not None:
+        head += f"（近一年 {pct}% 分位）"
+    if fx.get("chg20") is not None:
+        head += f"，20 日 {'升值' if fx['chg20'] < 0 else '贬值'} {abs(fx['chg20'])}%"
+    tone = "normal" if (pct is None or pct <= 40) else "caution"
+    return {"headline": head, "detail": "汇率分位低 = 美元便宜 = 人民币强，对外资流入是顺风（资金面口径）",
+            "tone": tone}
+
+
+def _verdict_fund(fund: dict) -> dict:
+    """q2 增量资金够不够 —— 新发基金份额分位（分位 ≥50 视为顺风）"""
+    if fund.get("avg3") is None:
+        return {"headline": "新发基金数据未就绪", "detail": "", "tone": "normal"}
+    pct = fund.get("pct")
+    head = f"新发基金月均 {fund['avg3']} 亿份"
+    if pct is not None:
+        head += f"（近 {DEFAULT_MONTHS} 个月 {pct}% 分位）"
+    detail = ""
+    if fund.get("last3"):
+        detail = f"近 3 完整月合计 {fund['last3']['shares']:.0f} 亿份、权益占 {fund['last3']['eq_pct']}%——钱少而权益占比高 = 偏好进攻"
+    # 发行遇冷是过去赚钱效应差的结果，不是未来下跌的原因 —— 提醒而非看空
+    tone = "normal" if (pct is None or pct >= 50) else "caution"
+    return {"headline": head, "detail": detail, "tone": tone}
+
+
+def _verdict_rep(rep: dict) -> dict:
+    """q3 产业资本在不在场 —— 回购计划数分位（分位 ≥50 视为顺风）"""
+    if rep.get("last90") is None:
+        return {"headline": "回购数据未就绪", "detail": "", "tone": "normal"}
+    pct = rep.get("pct")
+    word = "升温" if (pct or 0) >= 70 else "降温" if (pct or 0) <= 30 else "平稳"
+    head = f"回购{word}：近 90 天新启动 {rep['last90']} 个计划"
+    if pct is not None:
+        head += f"（近 {DEFAULT_MONTHS} 个月 {pct}% 分位）"
+    tone = "normal" if (pct is None or pct >= 50) else "caution"
+    return {"headline": head,
+            "detail": "回购是产业资本的真金白银，但也是「股价跌到公司自己受不了」的产物——只作托底证据，不单独当看涨信号",
+            "tone": tone}
+
+
 # ---------------- 主装配 ----------------
 
 @ttl_cache(600)
@@ -392,7 +442,7 @@ def funding_temperature(as_of: str | None = None) -> dict:
     #      汇率染红绿会让"人民币贬值"看起来像利好（A 股铁律是红涨），语义会彻底错掉。
     #      （见 registry.py 卡片墙契约第 ④ 条）
     kpis = [
-        {"key": "fx_usdcny", "card_rank": 1, "label": "美元/人民币（中间价）",
+        {"key": "fx_usdcny", "card_rank": 1, "questions": ["q1"], "label": "美元/人民币（中间价）",
          "value": fx.get("mid"), "unit": "", "tone": "neutral",
          "status": (f"{_fx_word(fx['pct'])}｜20日 {('%+.2f%%' % fx['chg20']) if fx.get('chg20') is not None else '--'}"
                     if fx.get("pct") is not None else "数据未就绪"),
@@ -400,7 +450,7 @@ def funding_temperature(as_of: str | None = None) -> dict:
          "highlight": is_extreme(fx.get("pct")), "anchor": "ft-fx",
          "hint": "央行美元兑人民币中间价（元/1 美元）。⚠️ 分位越低 = 美元越便宜 = **人民币越强**，"
                  "方向与直觉相反，看刻度条时以「区间最低 = 人民币最强」为准"},
-        {"key": "fund_avg3", "card_rank": 2, "label": "新发基金份额（近3完整月月均）",
+        {"key": "fund_avg3", "card_rank": 2, "questions": ["q2"], "label": "新发基金份额（近3完整月月均）",
          "value": fund.get("avg3"), "unit": "亿份", "tone": "neutral",
          "status": (f"近3月合计 {fund['last3']['shares']:.0f} 亿份｜权益占 {fund['last3']['eq_pct']}%"
                     if fund.get("last3") else "数据未就绪"),
@@ -408,7 +458,7 @@ def funding_temperature(as_of: str | None = None) -> dict:
          "highlight": is_extreme(fund.get("pct")), "anchor": "ft-fund",
          "hint": "近 3 个**完整月**成立的基金募集份额月均值（成立口径，不是认购口径）。"
                  "它是居民增量资金最直接的读数；⚠️ 该指标滞后于行情 —— 发行遇冷是过去赚钱效应差的结果"},
-        {"key": "rep_last90", "card_rank": 3, "label": f"新启动回购（近{ROLL_DAYS}天）",
+        {"key": "rep_last90", "card_rank": 3, "questions": ["q3"], "label": f"新启动回购（近{ROLL_DAYS}天）",
          "value": rep.get("last90"), "unit": "个", "tone": "neutral",
          # ⚠️ status 里带"近 36 个月"是必须的：完成实施数/金额是**窗口内累计**，
          #    与 headline 的"近 90 天"差 12 倍，不标周期就会被读成"90 天回购了 3405 亿"。
@@ -422,13 +472,13 @@ def funding_temperature(as_of: str | None = None) -> dict:
                  "⚠️ 不能用“最新公告日”统计 —— 同一计划的公告日会被后续公告覆盖，"
                  "会让历史月份被抽空、近期永远处于最高分位（实测该口径分位恒为 100%，无区分度）"},
         # 未标 card_rank：详情页完整呈现
-        {"key": "fund_eq_pct", "label": "新发基金权益占比（近3完整月）",
+        {"key": "fund_eq_pct", "questions": ["q2"], "label": "新发基金权益占比（近3完整月）",
          "value": (fund["last3"]["eq_pct"] if fund.get("last3") else None), "unit": "%",
          "tone": "neutral", "status": "⑤ 结构分解：钱进了权益还是固收", "pct": None, "scale": None,
          "highlight": False, "anchor": "ft-fund",
          "hint": "近 3 个完整月新成立基金中，权益类（股票/偏股/灵活/平衡）份额占全部募集份额的比例。"
                  "与总份额配合读：总份额低而权益占比高，说明“钱少但偏好进攻”"},
-        {"key": "rep_progress", "label": "回购进度构成（实施中）",
+        {"key": "rep_progress", "questions": ["q3"], "label": "回购进度构成（实施中）",
          "value": next((x["n"] for x in (rep.get("progress") or []) if x["progress"] == "实施中"), None),
          "unit": "个", "tone": "neutral", "status": "⑤ 结构分解：在推进还是在收尾",
          "pct": None, "scale": None, "highlight": False, "anchor": "ft-rep",
@@ -443,5 +493,11 @@ def funding_temperature(as_of: str | None = None) -> dict:
         "fx": fx, "fund": fund, "repurchase": rep,
         "clues": clues, "temperature": temp,
         "verdict": _card_verdict(fx, fund, rep, temp),
+        # 三卡子判读（2026-09-19 拆卡）：总览页三张分卡按 question 各取一条
+        "verdicts": {
+            "q1": _verdict_fx(fx),
+            "q2": _verdict_fund(fund),
+            "q3": _verdict_rep(rep),
+        },
         "note": FUNDING_TEMPERATURE_NOTE,
     }

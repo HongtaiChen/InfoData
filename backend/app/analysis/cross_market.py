@@ -171,6 +171,53 @@ def _card_verdict(cn: dict, gap_us, overnight: dict) -> dict:
     return {"headline": head, "detail": detail, "tone": tone}
 
 
+# ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询 ----
+# 模块纪律不变：本模块是「对照」型、输出相对关系而非机会判断，三张卡都不用金色
+# （金专供亮点/极值信号），仅传导进极值区（≥90 / ≤10 分位）时转琥珀提醒。
+
+
+def _verdict_overseas(cn: dict, overseas: list) -> dict:
+    """q1 外面在涨还是跌 —— A 股与海外各市场 20 日收益的方向陈述"""
+    c = cn.get("ret_20")
+    if c is None:
+        return {"headline": "跨市场数据未就绪", "detail": "", "tone": "normal"}
+    head = f"A股 20 日 {c:+.2f}%"
+    names = "、".join(f"{m['name']} {m['ret_20']:+.2f}%" for m in overseas if m.get("ret_20") is not None)
+    if names:
+        head += f"｜{names}"
+    return {"headline": head, "detail": "行情方向陈述：涨跌语义由 KPI 数字的红绿承载，判读条不重复表态",
+            "tone": "normal"}
+
+
+def _verdict_relative(gap_us, gap_hk) -> dict:
+    """q2 我们相对外面强还是弱 —— A 股对各市场的 20 日超额"""
+    if gap_us is None and gap_hk is None:
+        return {"headline": "超额数据未就绪", "detail": "", "tone": "normal"}
+    bits = []
+    if gap_us is not None:
+        bits.append(f"{'跑赢' if gap_us >= 0 else '落后'}美股 {abs(gap_us):.2f}pp")
+    if gap_hk is not None:
+        bits.append(f"{'跑赢' if gap_hk >= 0 else '落后'}恒生 {abs(gap_hk):.2f}pp")
+    return {"headline": "、".join(bits),
+            "detail": "超额为正不一定代表「我们强」——普跌里跌得少也是正超额，与方向卡成对阅读",
+            "tone": "normal"}
+
+
+def _verdict_conduction(overnight: dict) -> dict:
+    """q3 外面的信息能不能传导进来 —— 隔夜传导同向率及其近一年分位"""
+    sr, sp = overnight.get("same_rate"), overnight.get("same_rate_pct")
+    if sr is None:
+        return {"headline": "传导数据未就绪", "detail": "", "tone": "normal"}
+    head = f"隔夜传导 {sr:.0f}%"
+    if sp is not None:
+        head += f"（近一年 {sp:.0f}% 分位）"
+    # 传导异常强（≥90）或几近失效（≤10）= 「外围影响」叙事在走样 → 提醒（与 _card_verdict 同规）
+    tone = "caution" if sp is not None and (sp >= 90 or sp <= 10) else "normal"
+    return {"headline": head,
+            "detail": f"近 {ROLL_DAYS} 个交易日「隔夜海外涨跌 → 当日 A 股同向跟随」的比例，衡量外部信息向内的传导强度",
+            "tone": tone}
+
+
 @ttl_cache(600)
 def cross_market(as_of: str | None = None, trend_days: int = 500) -> dict:
     """跨市场对照（/api/analysis/cross-market）
@@ -252,20 +299,20 @@ def cross_market(as_of: str | None = None, trend_days: int = 500) -> dict:
     #      gap_cn_us 是**跨市场收益差**→ diff（主色蓝 + 保留正负号，见契约第 ④ 条）；
       #      overnight_same 是占比类无量纲量 → neutral。
     kpis = [
-        {"key": "cn_ret20", "card_rank": 1, "label": "A股中证全指（20日）", "value": cn["ret_20"],
+        {"key": "cn_ret20", "card_rank": 1, "questions": ["q1"], "label": "A股中证全指（20日）", "value": cn["ret_20"],
          "unit": "%", "tone": "updown",
          "status": f"当日 {cn['change_pct']:+.2f}%" if cn["change_pct"] is not None else "数据未就绪",
          "pct": cn["ret_20_pct"], "scale": scale(cn["ret_20_pct"], "近一年"),
          "highlight": is_extreme(cn["ret_20_pct"]), "anchor": "cm-trend",
          "hint": "中证全指 20 个交易日收益。它是本模块的**基准腿**：所有“跑赢/落后”都以它为被减数"},
-        {"key": "gap_cn_us", "card_rank": 2, "label": "A股 − 标普500（20日超额）", "value": gap_us,
+        {"key": "gap_cn_us", "card_rank": 2, "questions": ["q2"], "label": "A股 − 标普500（20日超额）", "value": gap_us,
          "unit": "pp", "tone": "diff",
          "status": ("跑赢美股" if (gap_us or 0) >= 0 else "落后美股") if gap_us is not None else "数据未就绪",
          "pct": None, "scale": None, "highlight": False, "anchor": "cm-gap",
          "hint": "中证全指 20 日收益 − 标普500 同期 20 日收益。"
                  "⚠️ 正值不一定代表“我们强”——普跌行情里跌得少也会是正超额，"
                  "务必与第一个盒子（自身 20 日收益）成对阅读"},
-        {"key": "overnight_same", "card_rank": 3, "label": f"隔夜传导（滚动{ROLL_DAYS}日同向率）",
+        {"key": "overnight_same", "card_rank": 3, "questions": ["q3"], "label": f"隔夜传导（滚动{ROLL_DAYS}日同向率）",
          "value": overnight.get("same_rate"), "unit": "%", "tone": "neutral",
          "status": (f"近 250 日 {overnight['same_rate_250']}%｜相关系数 {overnight['corr']}"
                     if overnight.get("same_rate") is not None else "数据未就绪"),
@@ -276,13 +323,13 @@ def cross_market(as_of: str | None = None, trend_days: int = 500) -> dict:
                  "50% = 完全无关，持续高于 60% 说明外部信息确实在传导；"
                  "⚠️ 它衡量的是“跟不跟”，不衡量幅度（幅度看相关系数）"},
         # 未标 card_rank：详情页完整呈现
-        *[{"key": f"ret20_{m['code']}", "label": f"{m['name']}（20日）", "value": m["ret_20"],
+        *[{"key": f"ret20_{m['code']}", "questions": ["q1"], "label": f"{m['name']}（20日）", "value": m["ret_20"],
            "unit": "%", "tone": "updown",
            "status": f"当日 {m['change_pct']:+.2f}%" if m["change_pct"] is not None else "数据未就绪",
            "pct": m["ret_20_pct"], "scale": None, "highlight": False, "anchor": "cm-trend",
            "hint": f"{m['region']} · {m['name']} 20 个**当地交易日**收益（各市场交易日不同步，"
                    "不构成严格同期对比，故只作侧面参照）"} for m in markets],
-        {"key": "gap_cn_hk", "label": "A股 − 中国香港恒生（20日超额）", "value": gap_hk,
+        {"key": "gap_cn_hk", "questions": ["q2"], "label": "A股 − 中国香港恒生（20日超额）", "value": gap_hk,
          "unit": "pp", "tone": "diff", "status": "与港股比", "pct": None, "scale": None,
          "highlight": False, "anchor": "cm-gap",
          "hint": "中证全指 − 恒生指数 20 日收益。恒生与 A股 交易时段部分重叠，"
@@ -296,5 +343,11 @@ def cross_market(as_of: str | None = None, trend_days: int = 500) -> dict:
         "overnight": {k: v for k, v in overnight.items() if k not in ("overseas", "local")},
         "chart": chart,
         "verdict": _card_verdict(cn, gap_us, overnight),
+        # 三卡子判读（2026-09-19 拆卡）：总览页三张分卡按 question 各取一条
+        "verdicts": {
+            "q1": _verdict_overseas(cn, markets),
+            "q2": _verdict_relative(gap_us, gap_hk),
+            "q3": _verdict_conduction(overnight),
+        },
         "note": CROSS_MARKET_NOTE,
     }
