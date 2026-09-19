@@ -105,7 +105,18 @@ TASKS = [
     ("futures_sync", 1, "20 22 * * 0-4",                            # 每周一至周五 22:20（0-4=周一~周五！）
      {"chunk_days": 30, "max_days": 0, "sleep_sec": 0.5,
       "timeout_sec": 180, "first_lookback_days": 365, "from_date": None}),
-    ("capital_flow_sync", 0, "15 22 * * *",                         # 每天 22:15（禁用）
+    # 2026-09-19 定性：**明确废弃**（非「待启用」）。三条独立理由，任一都足以否掉启用：
+    #   ① 网络：需逐股打东财 push2his（400 只/轮），而该子域对本机是**间歇性 RST 风控**
+    #      ——关闭前实测首次直连通、连续请求随即被拒，跨 4 分钟 5 次重试全败；
+    #      逐股批量调用正是最容易触发风控的模式。同域 datacenter-web 却稳定 200，
+    #      说明不是整机断网，而是该行情子域对批量爬取不友好。
+    #   ② 口径：「主力净流入 = 超大单 + 大单」仅 90~93.8% 成立，源口径未与本地表完全对齐,
+    #      写进去的每一行都带 6~10% 的不确定性，会污染下游「杠杆/资金」类判读。
+    #   ③ cron `15 22 * * *` 与 financial_abstract_sync **完全撞车**（同一时刻两任务）。
+    # 处置：保留采集器代码与 stock_capital_flow 表（冻结监护，不 drop），
+    #      但 cron 由 `15 22 * * *` 改为「手动」——既如实表达「不排期」，
+    #      又顺手消除撞车；enabled 保持 0。
+    ("capital_flow_sync", 0, "手动",
      {"max_stocks": 400, "refresh_days": 7, "sleep_sec": 0.12,
       "timeout_sec": 30, "full_sweep": False}),
     # ---------- 月度（统一 21:00 后：无论 1 日是否周末都在线，原凌晨档命中率 0%） ----------
@@ -133,7 +144,12 @@ TASKS = [
     ("daily_recon_sample", 1, "0 10 * * 6",                         # 每周日 10:00
      {"sample_size": 50, "seed": 42, "adjust": "qfq"}),
     # ---------- 手动任务 ----------
-    ("ai_concept_analysis", 0, "手动",                                # 手动触发
+    # 2026-09-19 定性：**保持禁用**（用户拍板）。两个前置条件未闭环：
+    #   ① 费用——调用豆包方舟 AI 按 token 计费，属付费能力，须用户明确授权额度；
+    #   ② 安全——`doubaoai.py` 第 49 行曾硬编码 Volcano Engine API Key 并已泄露被禁，
+    #      需先确认已重构为从环境变量 ARK_API_KEY 读取、且旧 Key 已吊销，再谈启用。
+    # 写入目标 finance_concept_analysis 已为「占位降级态」（无 Key 时写占位结果）。
+    ("ai_concept_analysis", 0, "手动",                                # 手动触发（禁用：涉费用+密钥待闭环）
      {"limit": 20, "days_back": 30}),
     ("daily_backfill", 1, "手动",                                    # 手动触发
      {"source": "dq_gap", "risk": "all", "max_codes": 0, "adjust": "qfq"}),

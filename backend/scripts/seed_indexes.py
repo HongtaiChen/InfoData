@@ -24,13 +24,31 @@ import pymysql  # noqa: E402
 
 from app.db import get_db_config  # noqa: E402
 
-# (table, index_name, ddl_columns, 用途说明)
+# (table, index_name, ddl_columns, unique, 用途说明)
+# ⚠️ unique=True 的索引不只是性能，更是**数据完整性护栏**——见 stock_market_current 条目。
 INDEXES = [
     (
         "stock_market_daily",
         "idx_breadth_cover",
         "(stock_code, trade_date, close, change_pct)",
+        False,
         "市场宽度窗口函数覆盖索引：按分区键顺序流式读取，免 filesort + 免回表",
+    ),
+    (
+        # 2026-09-19 立。为什么必须有唯一键：
+        # market_current_sync 的写入语义是「TRUNCATE + 全量重建」，本身幂等；
+        # 但**并发两份同时跑**时，两边各自 TRUNCATE + INSERT 会交错写入，
+        # 结果是整表每只股票恰好重复 2 次（实测 10,242 = 5,121 × 2.00，
+        # 同一 update_time / 同一 data_source，仅 id 不同）。
+        # 触发条件 = 调度器 _execute 的 TOCTOU 竞态（链式线程与启动补跑线程同时进入），
+        # 该竞态已于同日修复（scheduler._task_lock），本唯一键是**第二道结构性防线**：
+        # 即便并发再现，第二次 INSERT 会直接报重复键失败，而不是静默把表写成双份。
+        "stock_market_current",
+        "uk_stock_code",
+        "(stock_code)",
+        True,
+        "幂等护栏：快照表 TRUNCATE+全量重建，无唯一键时并发/重复派发会双写；"
+        "2026-09-19 实测整表 2.00x 重复（10,242 行 / 5,121 只）",
     ),
 ]
 
@@ -54,21 +72,33 @@ def main() -> int:
     conn = pymysql.connect(**get_db_config().to_dict())
     try:
         with conn.cursor() as cur:
-            for table, name, cols, _purpose in INDEXES:
+            for table, name, cols, unique, _purpose in INDEXES:
                 have = current_indexes(cur, table)
                 want_cols = [c.strip() for c in cols.strip("()").split(",")]
+                kind = "唯一索引" if unique else "索引"
                 if name in have:
                     ok = have[name] == want_cols
                     print(f"[{'OK ' if ok else 'DRIFT'}] {table}.{name} 现存列 = {have[name]}"
                           + ("" if ok else f"，期望 {want_cols}"))
                     continue
-                print(f"[MISS] {table}.{name} 缺失，列 = {want_cols}")
+                print(f"[MISS] {table}.{name}（{kind}）缺失，列 = {want_cols}")
                 if not args.apply:
                     continue
-                print(f"   → 创建中（{table} 行数较多，可能需数分钟）…", flush=True)
+                # 唯一索引前置检查：存量重复会让 ALTER 直接失败，先给出可执行的诊断
+                if unique:
+                    key = ", ".join(f"`{c}`" for c in want_cols)
+                    cur.execute(
+                        f"SELECT COUNT(*) AS a, COUNT(DISTINCT {key}) AS b FROM `{table}`")
+                    a, b = cur.fetchone()
+                    if a != b:
+                        print(f"   ⛔ 无法创建唯一索引：{table} 现存 {a} 行但有 {b} 个不同键"
+                              f"（重复 {a / b:.2f}x）。请先用该表的采集器重建"
+                              f"（如 task market_current_sync）清理重复，再重跑本脚本。")
+                        continue
+                print("   → 创建中…", flush=True)
                 import time
                 t0 = time.time()
-                cur.execute(f"ALTER TABLE `{table}` ADD INDEX `{name}` {cols}")
+                cur.execute(f"ALTER TABLE `{table}` ADD {'UNIQUE ' if unique else ''}INDEX `{name}` {cols}")
                 conn.commit()
                 print(f"   ✅ 完成，耗时 {time.time() - t0:.1f}s")
 
@@ -76,7 +106,7 @@ def main() -> int:
                 print("\n（预览模式，未做任何改动；加 --apply 执行）")
             else:
                 print("\n=== 最终索引状态 ===")
-                for table, name, _cols, _purpose in INDEXES:
+                for table, name, _cols, _unique, _purpose in INDEXES:
                     have = current_indexes(cur, table)
                     print(f"  {table}.{name}: {'存在' if name in have else '缺失'}")
     finally:

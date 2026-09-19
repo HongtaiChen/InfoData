@@ -151,6 +151,32 @@ RULES = [
      "快照新鲜度（表无 trade_date，改以 update_time 判定）：快照更新日应对齐最近交易日，容忍 1 个交易日（2026-09-14 补盲点）"),
     ("current_code", "stock_market_current", "regex_count",
      {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1, "快照股票代码格式校验"),
+    # 2026-09-19 补盲点：本表「行数达标即 pass」曾掩盖**整表双写**。
+    # 实测 09-19 该表 10,242 行 / 仅 5,121 只股票 = 每只恰好重复 2 次
+    # （同一 update_time、同一 data_source=daily-agg，仅 id 不同），
+    # 而 current_rows(≥4500) 与 current_code 两条规则全都 pass —— 因为 10,242 也 ≥4500。
+    # 真因：market_current_sync 的写入是「TRUNCATE + 全量重建」，本身幂等，
+    # 但**并发两份同时跑**会让两边交错写入 → 双份。触发条件是调度器 _execute 的
+    # TOCTOU 竞态（链式线程 vs 启动补跑线程），已于同日修复。
+    # 本条是**结构性防线 + 回归探测器**：唯一键一旦缺失/被删，立刻变红。
+    # 2026-09-19 新增：total_captital / float_captital 由「恒 NULL」改为本地派生填充
+    # （market_current_sync 取 stock_shares 每只股票 MAX(change_date) 的最新股本）。
+    # 这两条是这个派生的守护：① 派生断供（列又空了）② 量纲/口径搞反（流通 > 总股本）。
+    # 背景：这两个列此前恒空，导致 api/market.py 的「按市值排序」静默失效（ORDER BY NULL）。
+    ("current_cap_notnull", "stock_market_current", "where_count",
+     {"where": "total_captital IS NULL OR total_captital <= 0", "max_count": 0}, "warning", 1,
+     "总股本（total_captital）非空且为正：本列由 stock_shares 本地派生（实测名单覆盖率 100%），"
+     "它同时是 api/market.py 「按市值排序」的依据——一旦回空，市值排序会静默失效"),
+    ("current_cap_order", "stock_market_current", "where_count",
+     {"where": "float_captital IS NOT NULL AND total_captital IS NOT NULL "
+               "AND float_captital > total_captital", "max_count": 0}, "warning", 1,
+     "股本科级自洽：A 股流通股（float_captital）不得大于总股本（total_captital），"
+     "越界说明 stock_shares 两列取错或量纲不一致"),
+    ("current_uniq_code", "stock_market_current", "unique_index",
+     {"cols": ["stock_code"], "expect": "exists"}, "critical", 1,
+     "快照必须存在 stock_code 唯一索引：本表 TRUNCATE+全量重建，"
+     "无唯一键时并发派发会把整表写成每只股票 2 份（2026-09-19 实测 10,242/5,121=2.00x，"
+     "且行数类规则全部无法察觉）。同时它也是 UI 侧 /api/market/list 总数翻倍的根因"),
     # ---------- 概念 ----------
     ("concept_market_freshness", "ths_concept_market", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 5}, "warning", 1,

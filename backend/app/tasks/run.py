@@ -609,9 +609,17 @@ def run_capital_flow_sync(params: dict) -> int:
 
     params: max_stocks(400) / refresh_days(7) / sleep_sec(0.12) /
             timeout_sec(30) / full_sweep(False)
-    ⚠️ 2026-09-13 状态：**默认禁用**（task_config.enabled=0）。原因：东财域名在本机
-       沙箱环境不可达，且「主力净流入 = 超大单 + 大单」仅 90~93.8% 成立，
-       源口径未完全对齐本地表 → 先实现不启用，待网络放行 + 口径复核后再开。
+    ⚠️ 2026-09-19 定性：**已明确废弃**（不再是「待启用」）。task_config.enabled=0 且
+       cron 已由 `15 22 * * *` 改为「手动」。三条独立理由（任一都足以否掉启用）：
+       ① 网络：逐股打东财 push2his（400 只/轮）。该子域对本机是**间歇性 RST 风控**——
+          关闭前实测首次直连可通、连续请求随即被拒，跨 4 分钟 5 次重试全败；
+          同域的 datacenter-web 却稳定 200（说明不是整机断网，是该行情子域不欢迎批量爬取）。
+          逐股批量调用正是最容易触发风控的模式，启用后大概率长期失败。
+       ② 口径：「主力净流入 = 超大单 + 大单」仅 90~93.8% 成立，源口径未与本地表完全对齐,
+          每行带 6~10% 不确定性，会污染下游「资金/杠杆」类判读。
+       ③ cron `15 22 * * *` 与 financial_abstract_sync **完全撞车**（改为「手动」后消除）。
+       处置：代码与 stock_capital_flow 表**保留为冻结态**（不 drop，748,019 行历史仍可读），
+       仅去掉排期与「待启用」的模糊表述。若要复活，须先解决 ①② 两条。
     """
     p = _task_params(params, {"max_stocks": 400, "refresh_days": 7, "sleep_sec": 0.12,
                               "timeout_sec": 30, "full_sweep": False})

@@ -53,8 +53,21 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["stock_daily_incr"], ""),
     ("stock_market_current", "行情",
      "本地聚合（无外部源）",
-     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,400 行，双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每工作日 20:15（**必须晚于 stock_daily_incr 跑完**——日线常态耗时 15~50 分钟，原 19:30 会读到半量数据，2026-09-16 因此写出 2820/5119 行残快照并毒害下游 stock_info_sync 名单）。",
-     ["market_current_sync"], ""),
+     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,121 行，双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每工作日 20:15（**必须晚于 stock_daily_incr 跑完**——日线常态耗时 15~50 分钟，原 19:30 会读到半量数据，2026-09-16 因此写出 2820/5119 行残快照并毒害下游 stock_info_sync 名单）。"
+     "⚠️ **8 个「东财实时专属列」的处置（2026-09-19）**：这 8 列是东财实时行情专属字段，"
+     "本表是「日线聚合」口径（data_source=daily-agg），源里本没有它们。按「能否本地精确派生」分两类："
+     "① **已补齐**——total_captital（总股本，股）与 float_captital（A 股流通股，股）"
+     "改由 stock_shares 每只股票 MAX(change_date) 的最新股本本地派生，名单覆盖率实测 100%，"
+     "并顺带修好了 api/market.py 里**静默失效**的「按市值排序」（原 `ORDER BY new × total_captital` "
+     "因列恒 NULL 而等于没排序）。② **仍为 NULL**——dynamic_pe / pb（需外部估值）、"
+     "volume_ratio（东财量比定义特殊，本地近似口径不一致，宁缺勿错）、rise_speed / 5m_change_pct"
+     "（需盘中分时）。**涉及 PE/PB 的判断不要读这几列**。"
+     "接实时源需走东财 push2，而该子域对本机是**间歇性 RST 风控**（非硬不可达：首次直连可通、"
+     "连续请求即被拒），不适合作为稳定依赖——故选择本地派生而非接源。"
+     "⚠️ **uk_stock_code 唯一索引是幂等护栏**：本表整表重建，并发两份同时跑会交错写入导致"
+     "整表双写（2026-09-19 实测 10,242 行 / 5,121 只 = 2.00x，且行数类 DQ 规则无法察觉），"
+     "唯一键让并发时第二次 INSERT 直接报错而非静默双份。",
+     ["market_current_sync"], "股本 2 列已本地派生补齐、余 6 列为东财专属仍 NULL；uk_stock_code 为幂等护栏"),
     ("dc_index_market", "指数",
      "中证官网;国证+腾讯;东财",
      "指数日线（21 个主流指数：市场基准 5 / 市值风格 5 / 科技成长 5 / 情绪温度 1 / 股息防守 4 / 政策周期 1，按指数实际体现的观察内容分组）：中证官网主源含全字段，国证+腾讯合并链（OHLCV 腾讯、成交额国证），东财降级；每工作日 18:30 增量。",
@@ -162,14 +175,26 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["futures_sync"], ""),
     ("stock_capital_flow", "资金",
      "历史导入;东财(akshare stock_capital_flow, 未启用)",
-     "日度资金流向（748k 行，停更于 2025-09-19）：capital_flow_sync 已实现"
-     "（逐股滚动 + uk_stock_date 幂等）但**默认禁用**——东财域名在本机沙箱不可达，"
-     "且「主力净流入=超大单+大单」仅 90~93.8% 成立、源口径未与本地表完全对齐，待复核后启用。",
-     ["capital_flow_sync"], "采集器已实现未启用（enabled=0）"),
+     "日度资金流向（748,019 行，停更于 2025-09-19）：capital_flow_sync 已实现"
+     "（逐股滚动 + uk_stock_date 幂等）但 **2026-09-19 已明确废弃**（enabled=0 + cron=「手动」）。"
+     "三条理由：① 需逐股打东财 push2his（400 只/轮），该子域对本机是**间歇性 RST 风控**"
+     "（实测首次直连可通、连续请求即被拒，5 次跨 4 分钟重试全败；同域 datacenter-web 却稳定 200），"
+     "批量调用必触发风控；② 「主力净流入=超大单+大单」仅 90~93.8% 成立、源口径未与本地表对齐；"
+     "③ 原 cron `15 22 * * *` 与 financial_abstract_sync 完全撞车。"
+     "本表与采集器代码**保留为冻结态**（不 drop，历史 748k 行仍可读），仅去掉排期。",
+     ["capital_flow_sync"], "已明确废弃（2026-09-19）：冻结保留，不排期"),
     ("securities_margin", "资金",
      "上交所;深交所;北交所(akshare)",
-     "沪深北三市两融合计：rzye=融资余额、rqye=融券余额、rzrqye=rzye+rqye、rzrqyecz=rzye-rqye（本地派生）。margin_sync 每日 20:00 从本地 MAX(trade_date) 次日增量补齐；单位归一——上交所为元、深交所为亿元(×1e8)、北交所取明细求和(元)。",
-     ["margin_sync"], ""),
+     "沪深北三市两融合计：rzye=融资余额、rqye=融券余额、rzrqye=rzye+rqye（余额合计）、"
+     "rzrqyecz=rzye-rqye（余额**净额**，本地派生）。margin_sync 每日 20:00 从本地 "
+     "MAX(trade_date) 次日增量补齐；单位归一——上交所为元、深交所为亿元(×1e8)、北交所取明细求和(元)。"
+     "⚠️ 口径已定论（2026-09-19 全表 3,980 行复核）：两条恒等式 rzrqyecz≡rzye−rqye、"
+     "rzrqye≡rzye+rqye **违反行数均为 0**，列名与值完全一致。"
+     "常有疑问「rzrqyecz/rzrqye 恒≈0.9778，像另一套口径」——这是**数学必然**："
+     "该比值 = (1−r)/(1+r)，其中 r=rqye/rzye≈1.12%（融券腿仅占融资余额约 1.1%），"
+     "实测比值与理论式吻合到 2e-6。**故 rzrqyecz 不是「余额」而是「净额」，"
+     "与 rzrqye 不可直接当同一量纲比较**；也因融券腿极小，该列相对 rzye 信息量有限。",
+     ["margin_sync"], "口径已定论：rzrqyecz=净额(融资−融券)"),
     ("stock_financial_abstract_ths", "财务",
      "同花顺(akshare stock_financial_abstract_ths)",
      "财务关键指标 8 列（34.4 万行 / 5,854 只）：financial_abstract_sync 每日 23:00 "

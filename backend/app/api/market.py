@@ -22,18 +22,25 @@ def market_current(
     if keyword:
         where = "WHERE c.stock_code LIKE %s OR c.stock_name LIKE %s"
         params = [f"%{keyword}%", f"%{keyword}%"]
-    # 市值 = 现价 × 总股本，库内无现成市值字段，用动态计算
+    # 市值 = 现价 × 总股本。
+    # ⚠️ 2026-09-19 前 total_captital 恒 NULL → 本行 `ORDER BY c.new * c.total_captital`
+    #    **静默失效**（ORDER BY NULL 等于没排序，却仍返回 200，前端「按市值」按钮点了没反应）。
+    #    market_current_sync 已改为用 stock_shares 本地派生填充 total_captital（覆盖率 100%），
+    #    排序现已真正生效；同时把市值一并返回，避免「排对了但看不到值」。
+    market_cap_expr = "c.new * c.total_captital"
     sort_col = {
         "change_pct": "c.change_pct",
         "amount": "c.amount",
         "ytd_change_pct": "c.ytd_change_pct",
-        "market_cap": "c.new * c.total_captital",
+        "market_cap": market_cap_expr,
     }.get(sort, "c.change_pct")
     sql = f"""
         SELECT c.stock_code, c.stock_name, c.new, c.change_pct, c.change_amount,
                c.open, c.high, c.low, c.pre_close, c.volume, c.amount,
                c.turnover_ratio, c.volume_ratio, c.dynamic_pe, c.pb,
-               c.ytd_change_pct, c.update_time
+               c.ytd_change_pct, c.update_time,
+               c.total_captital, c.float_captital,
+               ROUND({market_cap_expr} / 100000000, 2) AS market_cap_yi
         FROM stock_market_current c
         {where}
         ORDER BY {sort_col} {order}
