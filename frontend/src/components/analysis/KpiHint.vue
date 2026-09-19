@@ -1,3 +1,21 @@
+<script lang="ts">
+/**
+ * 白底信息卡主题（导出）：全站一切自定义浮窗都应复用它，而不是各写一份 ——
+ * 否则将来调阴影/圆角会出现两种浮窗观感。naive-ui Tooltip 的 self 变量只有这几个
+ * 可覆盖（padding / borderRadius / boxShadow / color / textColor，见 naive-ui 2.45.3
+ * es/tooltip/styles/light.mjs 与 _common.mjs），其余靠 .kh 内的局部样式。
+ * 刻意不加 1px 描边而只用阴影：naive-ui 的箭头是个不带边框的旋转方块，
+ * 若用 box-shadow 模拟描边，箭头根部会缺一条线。
+ */
+export const kpiHintTheme = {
+  color: '#FFFFFF',
+  textColor: '#1F2937',
+  boxShadow: '0 6px 20px rgba(15, 23, 42, 0.14)',
+  borderRadius: '8px',
+  padding: '10px 12px',
+}
+</script>
+
 <script setup lang="ts">
 /**
  * KpiHint —— 指标口径说明浮窗（总览页卡片墙 + 详情页 KpiCards 共用）
@@ -40,20 +58,7 @@ const props = withDefaults(
   { placement: 'top', footer: '口径由后端随响应下发，前端只透传' },
 )
 
-/**
- * 白底信息卡。Tooltip 的 self 变量只有这几个可覆盖
- * （padding / borderRadius / boxShadow / color / textColor，见 naive-ui 2.45.3
- *  es/tooltip/styles/light.mjs 与 _common.mjs），其余靠 .kh 内的局部样式。
- * 刻意不加 1px 描边而只用阴影：naive-ui 的箭头是个不带边框的旋转方块，
- * 若用 box-shadow 模拟描边，箭头根部会缺一条线。
- */
-const tipTheme = {
-  color: '#FFFFFF',
-  textColor: '#1F2937',
-  boxShadow: '0 6px 20px rgba(15, 23, 42, 0.14)',
-  borderRadius: '8px',
-  padding: '10px 12px',
-}
+// 白底主题复用导出的 kpiHintTheme（见文件顶部的普通 <script> 块）
 </script>
 
 <template>
@@ -61,7 +66,7 @@ const tipTheme = {
     trigger="hover"
     :placement="props.placement"
     :disabled="!props.hint"
-    :theme-overrides="tipTheme"
+    :theme-overrides="kpiHintTheme"
     :delay="150"
   >
     <template #trigger>

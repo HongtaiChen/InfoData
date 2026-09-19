@@ -5,9 +5,9 @@
  * 模块来源：GET /api/analysis/registry（配置文件版注册表）
  */
 import { computed, onMounted, ref } from 'vue'
-import { NCard, NEmpty, NSkeleton, NSpin, NTag } from 'naive-ui'
+import { NCard, NEmpty, NSkeleton, NSpin, NTag, NTooltip } from 'naive-ui'
 import { useRouter } from 'vue-router'
-import KpiHint from '../components/analysis/KpiHint.vue'
+import KpiHint, { kpiHintTheme } from '../components/analysis/KpiHint.vue'
 import api from '../api'
 
 interface RegistryItem {
@@ -167,7 +167,44 @@ function kpiText(k: CardKpi): string {
          （全站其余页面也都没有页内大标题，此处曾是唯一特例）。首行直接是「📊 跟踪」分节。 -->
 
     <!-- 跟踪卡片区 -->
-    <div class="ao-section">📊 跟踪</div>
+    <div class="ao-section">
+      <span>📊 跟踪</span>
+      <!-- 配色图例（2026-09-19）：用户反馈「浅黄/浅蓝判读条不知道什么寓意」。
+           判读条三态与 KPI 染金的语义是设计体系约定（蓝骨金魂），不是逐模块数据，
+           所以前端静态图例是正解（不违背「口径随响应下发」——那约束的是指标计算口径）。
+           浮窗复用 kpiHintTheme，全站浮窗观感一致。 -->
+      <NTooltip trigger="hover" placement="bottom-start" :theme-overrides="kpiHintTheme" :delay="150">
+        <template #trigger>
+          <span
+            class="ao-card-q"
+            role="button"
+            tabindex="0"
+            aria-label="卡片配色图例：判读条三色与 KPI 染金分别代表什么"
+          >i</span>
+        </template>
+        <div class="ao-lg">
+          <div class="ao-lg-t">判读条配色</div>
+          <div class="ao-lg-row">
+            <span class="ao-lg-sw" style="border-left-color: #185FA5; background: #E6F1FB" />
+            <div><b>蓝色 · 常态</b>中性结论，按口径陈述现状。</div>
+          </div>
+          <div class="ao-lg-row">
+            <span class="ao-lg-sw" style="border-left-color: #C9A227; background: #FAF3DF" />
+            <div><b>金黄 · 机会</b>出现值得关注的低位/背离信号；全站金色只用于亮点强调（≤10% 场景）。</div>
+          </div>
+          <div class="ao-lg-row">
+            <span class="ao-lg-sw" style="border-left-color: #B45309; background: #FAEEDA" />
+            <div><b>琥珀 · 提醒</b>指标处于高位或值得谨慎的状态。</div>
+          </div>
+          <div class="ao-lg-t" style="margin-top: 9px">KPI 刻度条</div>
+          <div class="ao-lg-row">
+            <span class="ao-lg-dot" />
+            <div><b>圆点染金</b>该值在统计窗口里排进前/后 10%（分位 ≤10 或 ≥90）—— 亮得少才算信号。</div>
+          </div>
+          <div class="ao-lg-ft">判读条与结论文案由后端随响应下发，前端只透传；管理界面刻意不用红绿 —— 红涨绿跌只属于行情数字与 K 线。</div>
+        </div>
+      </NTooltip>
+    </div>
     <div v-if="trackModules.length" class="ao-cards">
       <NCard
         v-for="m in trackModules"
@@ -311,7 +348,15 @@ function kpiText(k: CardKpi): string {
 <style scoped>
 /* 首个分节贴顶：页内无大标题，不需要额外上边距 */
 .ao-section:first-of-type { margin-top: 0; }
-.ao-section { font-size: 14px; font-weight: 600; color: #185FA5; margin: 18px 0 10px; }
+.ao-section { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #185FA5; margin: 18px 0 10px; }
+/* 配色图例浮窗内容（触发元素复用 .ao-card-q 样式） */
+.ao-lg { max-width: 330px; }
+.ao-lg-t { font-size: 11px; font-weight: 600; color: #9CA3AF; letter-spacing: 0.02em; margin-bottom: 6px; }
+.ao-lg-row { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 6px; font-size: 12px; color: #374151; line-height: 1.5; }
+.ao-lg-row b { color: #1F2937; margin-right: 2px; }
+.ao-lg-sw { flex: none; width: 18px; height: 12px; border-radius: 3px; border-left: 3px solid; margin-top: 2px; }
+.ao-lg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #C9A227; margin-top: 4px; }
+.ao-lg-ft { font-size: 10.5px; color: #9CA3AF; margin-top: 7px; padding-top: 6px; border-top: 1px solid #F1F4F8; }
 /* min(440px,100%)：窗口极窄时轨道不小于容器，避免卡片自身撑破内容区 */
 .ao-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr)); gap: 12px; }
 .ao-card { cursor: pointer; }
