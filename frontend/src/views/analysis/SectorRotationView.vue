@@ -26,7 +26,10 @@ import api from '../../api'
 
 interface Kpi {
   key: string; label: string; value: number | null; unit?: string
-  status?: string; hint?: string; tone?: 'updown' | 'neutral'
+  status?: string; hint?: string
+  tone?: 'updown' | 'diff' | 'neutral'   // diff = 收益中位等相对强弱，主色蓝+带符号（registry 契约 ④）
+  card_rank?: number | null
+  scale?: { pct: number; label: string } | null   // 本模块无历史行业收益序列 → 不下发
   pct?: number | null; highlight?: boolean; anchor?: string; adj?: number | null
 }
 interface IndRow { name: string; n: number; ret_20: number | null; excess: number | null }

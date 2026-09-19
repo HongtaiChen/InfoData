@@ -33,7 +33,9 @@ const router = useRouter()
 
 interface Kpi {
   key: string; label: string; value: number | null; unit?: string; status?: string; hint?: string
-  tone?: 'updown' | 'neutral'
+  tone?: 'updown' | 'diff' | 'neutral'   // diff = 组间收益差（主色蓝+带符号），见 registry 卡片墙契约 ④
+  card_rank?: number | null
+  scale?: { pct: number; label: string } | null   // 分位刻度条（窗口口径由后端下发）
   pct?: number | null   // 近 250 日分位（0~100）
   z?: number | null     // 近 250 日 z-score
   highlight?: boolean   // 分位进极值区 → 金色标记

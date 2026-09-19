@@ -42,6 +42,8 @@ from ..collectors.financial_abstract_sync import FinancialAbstractSyncCollector
 from ..collectors.stock_shares_sync import StockSharesSyncCollector
 from ..collectors.capital_flow_sync import CapitalFlowSyncCollector
 from ..collectors.market_style_sync import MarketStyleSyncCollector
+# 2026-09-19 分析侧派生物化：交叉印证背离数（market_wind 卡片分位用）
+from ..collectors.xcheck_sync import XcheckSyncCollector
 # 2026-09-19 市场风向蓝图 P2/P3 落地（估值→ERP / 拆借利率 / 跨市场 / 汇率 / 新基金 / 回购）
 from ..collectors.index_valuation_sync import IndexValuationSyncCollector
 from ..collectors.interbank_rate_sync import InterbankRateSyncCollector
@@ -218,6 +220,20 @@ def run_index_market_sync(params: dict) -> int:
 def run_market_style_sync(params: dict) -> int:
     """市场风格日频物化表计算（market_style_daily：纯库内，挂 index_market_sync 之后）"""
     collector = MarketStyleSyncCollector()
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_xcheck_sync(params: dict) -> int:
+    """交叉印证背离数物化（market_xcheck_daily，纯库内计算，22:30）
+
+    market_wind 卡片要回答「4 项背离算多吗」，必须有一条历史序列可比 ——
+    本任务每天记一行，逐日积累分布；一次性回填见 scripts/backfill_xcheck.py。
+    说明与「为何不挂链式」见 collectors/xcheck_sync.py 文件头。
+    params: as_of（仅运维回填用；日常不传 = 取全库最新）
+    """
+    p = _task_params(params, {"as_of": None})
+    collector = XcheckSyncCollector(as_of=p.get("as_of"))
     result = _collector_run(collector)
     return result["records_written"]
 
@@ -746,6 +762,8 @@ TASKS = {
     "capital_flow_sync": run_capital_flow_sync,
     # 2026-09-13 分析研究框架 · 市场风向模块（风格物化表计算，挂 index_market_sync 之后）
     "market_style_sync": run_market_style_sync,
+    # 2026-09-19 分析侧派生物化 · 交叉印证背离数（22:30，须晚于概念补班 22:00）
+    "xcheck_sync": run_xcheck_sync,
     # 2026-09-19 市场风向蓝图 P2/P3 落地（6 个采集器，对应报告 §5 全部 11 个可达接口）
     "index_valuation_sync": run_index_valuation_sync,
     "interbank_rate_sync": run_interbank_rate_sync,

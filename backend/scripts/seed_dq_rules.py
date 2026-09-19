@@ -124,6 +124,21 @@ RULES = [
      "critical", 1,
      "换手率中位数取值域（应为 0~10% 量级；>30 几乎必然是「源列单位漂移」——"
      "源列 2025-09 中旬由百分数改为小数，差 100 倍，见 market_style_sync 文件头）"),
+    # ---------- 交叉印证背离数物化（2026-09-19，market_wind 卡片分位的数据源） ----------
+    # ⚠️ 为什么必须显式报警：本表若停更，market_wind 的 `_xcheck_series` 会拿到空/短序列，
+    #    `_diverge_stats` 直接返回 None，判读条**静默退回纯计数**（「7 项中 4 项背离」）——
+    #    页面看起来完全正常，只是那个「99.6% 分位」悄悄没了。这是「优雅降级」的阴暗面：
+    #    降级太安静就没人会发现。故三条规则覆盖 停更 / 行数不足 / 数值越界。
+    ("xcheck_freshness", "market_xcheck_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 2}, "warning", 1,
+     "背离数对齐交易日历（每工作日 22:30 xcheck_sync 写入；须晚于概念补班 22:00）"),
+    ("xcheck_rows", "market_xcheck_daily", "row_count_total",
+     {"min_rows": 60}, "warning", 1,
+     "背离数物化行数下限（一次性回填 250 行；<60 行则分位样本不足，_diverge_stats 不判）"),
+    ("xcheck_range", "market_xcheck_daily", "violation_count",
+     {"where": "diverge_n > items_n OR diverge_n < 0 OR items_n < 5"},
+     "critical", 1,
+     "背离数越界（背离数不可能超过项数；项数 <5 说明交叉印证大面积降级）"),
     # ---------- 行情快照 ----------
     ("current_rows", "stock_market_current", "row_count_total",
      {"min_rows": 4500}, "critical", 1, "快照总行数（防日线缺口连带清空快照）"),

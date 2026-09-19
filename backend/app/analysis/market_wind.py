@@ -286,6 +286,24 @@ def _is_extreme(pct: float | None) -> bool:
     return pct is not None and (pct <= 10 or pct >= 90)
 
 
+def _scale(pct: float | None, label: str) -> dict | None:
+    """KPI 数字的分位刻度（2026-09-19 新增）
+
+    为什么需要：绝对 pp 跨期不可比（2008 年的 5pp 与现在的 5pp 意义完全不同），
+    分位才能回答「是否极端」—— 但只给一个「12%」的数字，读者仍要自己换算成高低。
+    刻度条把「这个数在 0~100 轴上的位置」直接画出来，数字与位置的对应关系一眼可见。
+
+    ⚠️ `label` 必须随分位一起下发，**不能由前端写死「近一年」**：ERP 的分位窗口是
+       「近 250 个月末」（乐咕月末序列，约 20 年），前端写死会把月频分位说成日频 ——
+       这是实打实的口径错误，不是文案问题。
+    ⚠️ 极值配色不在后端重复定义：KPI 上已有 `highlight`（分位 <=10 或 >=90），
+       前端把 highlight 映射成金即可，避免同一个口径两处维护。
+    """
+    if pct is None:
+        return None
+    return {"pct": pct, "label": label}
+
+
 def _stale_sessions(as_of) -> int:
     """as_of 之后还走出了几个交易日（0 = 最新）。用日线表当日历，避免周末误判。"""
     rows = query_all(
@@ -431,22 +449,87 @@ def _sign_bands(dates: list[str], values: list, min_len: int = 3) -> list[dict]:
     return out
 
 
+def _xcheck_series(days: int = 250, as_of: str | None = None) -> list[int]:
+    """背离数的历史序列（**升序**），来自 `market_xcheck_daily`。
+
+    ⚠️ 该表由 `xcheck_sync`（每工作日 22:30）与 `scripts/backfill_xcheck.py` 写入，
+       **首次部署或回填前不存在** —— 此时必须优雅降级为「不给分位」，
+       绝不能让卡片整块挂掉。故整体 fail-soft（表不存在 / 权限异常一律返回空序列）。
+    """
+    cond = "WHERE trade_date <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    try:
+        rows = query_all(
+            f"SELECT diverge_n FROM market_xcheck_daily {cond} "
+            "ORDER BY trade_date DESC LIMIT %s",
+            args + [days],
+        )
+    except Exception as e:                      # noqa: BLE001 —— 刻意 fail-soft，见 docstring
+        logger.info("market_xcheck_daily 不可用，背离数分位降级：%s: %s", type(e).__name__, e)
+        return []
+    return [int(r["diverge_n"]) for r in reversed(rows) if r["diverge_n"] is not None]
+
+
+def _diverge_stats(cur: int | None, series: list[int]) -> dict | None:
+    """当前背离数在自身历史中的位置 —— 让「4 项背离」从计数变成信号。
+
+    **为什么必须有这一步**（2026-09-19 实测，纠正了一个错误判断）：
+      卡片原先直接报「7 项中 4 项背离」。用**近 16 个交易日**回放，得到序列
+      `[4,3,4,3,2,3,3,4,4,4,4,4]` —— 看起来「4 就是常态」。但把窗口拉到 **250 日**：
+
+          0 项 23 日 | 1 项 77 日 | 2 项 90 日（中位）| 3 项 43 日 | 4 项 16 日 | 5 项 1 日
+
+      4 项实为 **99.6% 分位**（250 日中仅 1 日更多）—— 是**极值**，不是常态。
+      短窗口回放恰好整段落在高位区，于是得出了完全相反的结论。
+      → 教训：判「常态/异常」的窗口不能凭手感取，至少要覆盖一个完整市场周期（一年）。
+
+    series 少于 20 个点时不判（样本不足以谈分位）。
+    """
+    if cur is None or len(series) < 20:
+        return None
+    le = sum(1 for v in series if v <= cur)
+    return {
+        "pct": round(le / len(series) * 100, 1),
+        "days": len(series),
+        "higher": sum(1 for v in series if v > cur),
+        "median": sorted(series)[len(series) // 2],
+    }
+
+
+def _div_note(pct: float | None) -> str:
+    """分位的定性词（让「99.6%」不用读者自己换算成高低）"""
+    if pct is None:
+        return ""
+    if pct >= 90:
+        return "，处极值区"
+    if pct >= 75:
+        return "，偏高"
+    if pct <= 10:
+        return "，处低位"
+    if pct <= 25:
+        return "，偏低"
+    return "，属常态"
+
+
 # 卡片判读条（2026-09-19）：卡片墙的「一句话结论」，由后端生成。
 # 为什么放后端：本项目铁律是「口径随响应下发，前端只透传不手抄」（见 registry.py 第一原则）；
 # 结论句若在前端拼装，会立刻产生第二份口径，日后必然漂移。
 #
-# 三个「别凭直觉改」的实测依据（2026-09-19 回放 16 个交易日确定）：
-#   ❌ 背离项计数不做头条：近 16 日序列 [4,3,4,3,2,3,3,4,4,4,4,4]，中位即 4、最近连续 5 日
-#      为 4 —— 它是**常态不是信号**，当头条等于每天喊狼来了。（要让它成为真信号，需
-#      「背离数自身的历史分位」= market_style_daily 新列 + 六层落地，本轮不做。）
+# 四个「别凭直觉改」的实测依据（2026-09-19，最后一条经 250 日全窗口复核）：
+#   ✅ 背离项计数**加上自身历史分位后**可以进结论：计数本身（0~7）没有可比性，
+#      放进近一年分布就变成信号 —— 实测 250 日分布为中位 2、当前 4 项处 **99.6% 分位**
+#      （250 日中仅 1 日更多，见 _diverge_stats）。
+#      ⚠️ 早先「4 是常态」的结论是用**16 日窗口**回放得出的，**已被推翻**：短窗口恰好整段
+#      落在高位区。判常态/异常的窗口至少要覆盖一个完整市场周期，这是本次的教训。
 #   ❌ ERP 分位不做唯一头条：估值分母是乐咕「近 250 个月末」序列（月频），实测 71.6 连续
 #      14 个交易日不动 —— 在日频卡片上它几乎恒定，会退化成「永远偏便宜」。
 #   ✅ 大势位置分位是日频活信号：实测近 16 日 18.2~39.4、极差 21.2pp。
-# 故结论 = 位置（日频信号）+ 风险偏好方向（往哪走）+ 估值（慢变量锚）。
+# 故结论 = 位置（日频信号）+ 风险偏好方向（往哪走）+ 估值（慢变量锚）+ 内部背离（是否互相打架）。
 #
-# tone 只按位置分位切五分之一位（<=20 金 / >=80 琥珀 / 其余蓝）：实测该规则在近 16 日
-# 只触发 2 天（18.7 / 18.2）—— 亮得少才算信号。
-def _card_verdict(bp, ra, erp_pct, xcheck: dict) -> dict:
+# tone：位置 <=20 → 金（低位机会）；位置 >=80 或**背离数进 90% 分位** → 琥珀（提醒）；
+# 其余蓝。实测背离数这条规则在近 250 日只点亮 17 天（4 项 16 天 + 5 项 1 天，6.8%）
+# —— 亮得少才算信号。
+def _card_verdict(bp, ra, erp_pct, xcheck: dict, div: dict | None = None) -> dict:
     items = xcheck.get("items") or []
     n_all = len(items)
     n_div = (xcheck.get("summary") or {}).get("diverge") or 0
@@ -467,12 +550,26 @@ def _card_verdict(bp, ra, erp_pct, xcheck: dict) -> dict:
     else:
         head += "、估值中性"
 
-    detail = (f"交叉印证 {n_all} 项中 {n_div} 项背离：{' · '.join(div_labels)}"
-              if n_div and div_labels else f"交叉印证 {n_all} 项，当前无背离项")
+    # 背离数必须与**自身历史**比才有意义 —— 单说「4 项」读者无从判断多不多。
+    # 分位不可得时（market_xcheck_daily 尚未回填）退回纯计数表述，不阻断判读条。
+    joined = " · ".join(div_labels)
+    if not n_all:
+        detail = ""
+    elif div:
+        extra = ""
+        if div.get("higher") is not None:
+            extra = f"、更高仅 {div['higher']} 日" if div["higher"] <= 3 else ""
+        detail = (f"交叉印证 {n_div}/{n_all} 项背离 · 近一年 {div['pct']}% 分位"
+                  f"{_div_note(div['pct'])}（中位 {div['median']} 项{extra}）"
+                  f"：{joined or '无'}")
+    else:
+        detail = (f"交叉印证 {n_all} 项中 {n_div} 项背离：{joined}"
+                  if n_div and joined else f"交叉印证 {n_all} 项，当前无背离项")
 
     if bp is not None and bp <= 20:
         tone = "opportunity"
-    elif bp is not None and bp >= 80:
+    elif (bp is not None and bp >= 80) or (div and (div.get("pct") or 0) >= 90):
+        # 背离数进 90% 分位 = 各维度互相打架到了历史罕见程度 → 提醒级（琥珀）
         tone = "caution"
     else:
         tone = "normal"
@@ -547,41 +644,60 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     erp_val = _erp["erp"] if _erp else None
     erp_pct = _erp["erp_pct"] if _erp else None
     if _erp:
-        erp_status = (f"{_erp['level_text']}｜ERP 分位 {erp_pct}%"
-                      if erp_pct is not None else _erp["level_text"])
-        erp_status += f"｜10Y {_erp['bond_10y']}%"
+        # ⚠️ 不再把「ERP 分位」写进 status：分位已由刻度条承载（scale.label「近 250 个月末」
+        #    + 刻度文字里的百分数），写两遍既冗余、又会让 status 超出 KPI 盒子宽度被省略号
+        #    截断（整行卡 6 列时每列仅 ~185px，2026-09-19 实测截断）。status 只留「分级 + 利率」。
+        erp_status = f"{_erp['level_text']}｜10Y {_erp['bond_10y']}%"
     else:
         erp_status = "估值数据未就绪"
 
+    # KPI 配色分三类（2026-09-19 定稿，见 registry.py 卡片墙契约第 ④ 条）：
+    #   tone='updown'  —— 真正的行情涨跌数字（指数涨跌幅），红涨绿跌
+    #   tone='diff'    —— **组间收益差 / 相对强弱**（风偏、剪刀差、超额），它不是「某个资产在涨跌」，
+    #                     故用主色蓝 + 保留正负号。染红绿会让「防守占优」看起来像一条独立警报，
+    #                     且卡片上一蓝一绿会被误读成两类指标。方向交给符号、status 文案与刻度条。
+    #   tone='neutral' —— 分位 / 占比 / 离散度等无量纲量，主色蓝且不带正号
+    # 底层原则：**卡片墙的颜色只表达「异常程度」，不表达方向**（亮得少才算信号），与 verdict 同源。
     kpis = [
-        {"key": "risk_appetite", "card_rank": 2, "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
+        {"key": "risk_appetite", "card_rank": 2, "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "diff",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
-         "pct": pct_ra, "z": z_of("risk_appetite_20"), "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
+         "pct": pct_ra, "scale": _scale(pct_ra, "近一年"),
+         "z": z_of("risk_appetite_20"), "highlight": _is_extreme(pct_ra), "anchor": "mw-trend",
          "adj": ra_adj,
          "hint": "科技成长组 − 股息防守组 等权20日收益差；正=偏进攻，负=偏防守"},
-        {"key": "scissors", "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "updown",
+        {"key": "scissors", "card_rank": 4, "label": "大小盘剪刀差（20日）", "value": sc, "unit": "pp", "tone": "diff",
          "status": _scissors_status(sc, prev5.get("scissors_20")),
-         "pct": pct_sc, "z": z_of("scissors_20"), "highlight": _is_extreme(pct_sc), "anchor": "mw-gradient",
+         "pct": pct_sc, "scale": _scale(pct_sc, "近一年"),
+         "z": z_of("scissors_20"), "highlight": _is_extreme(pct_sc), "anchor": "mw-gradient",
          "adj": sc_adj,
          "hint": "(中证1000+中证2000) − (上证50+沪深300) 等权20日收益差；正=小盘占优"},
-        {"key": "sentiment", "label": "情绪温度（20日超额）", "value": se, "unit": "pp", "tone": "updown",
+        {"key": "sentiment", "card_rank": 5, "label": "情绪温度（20日超额）", "value": se, "unit": "pp", "tone": "diff",
          "status": _sent_status(se, prev5.get("sentiment_20")),
-         "pct": pct_se, "z": z_of("sentiment_20"), "highlight": _is_extreme(pct_se), "anchor": "mw-heat",
+         "pct": pct_se, "scale": _scale(pct_se, "近一年"),
+         "z": z_of("sentiment_20"), "highlight": _is_extreme(pct_se), "anchor": "mw-heat",
          "hint": "证券公司 − 中证全指 20 日超额；正=券商跑赢，视为市场情绪偏暖"},
-        {"key": "policy", "label": "政策敏感（20日超额）", "value": po, "unit": "pp", "tone": "updown",
+        {"key": "policy", "card_rank": 6, "label": "政策敏感（20日超额）", "value": po, "unit": "pp", "tone": "diff",
          "status": _policy_status(po, prev5.get("policy_excess_20")),
-         "pct": pct_po, "z": z_of("policy_excess_20"), "highlight": _is_extreme(pct_po), "anchor": "mw-heat",
+         "pct": pct_po, "scale": _scale(pct_po, "近一年"),
+         "z": z_of("policy_excess_20"), "highlight": _is_extreme(pct_po), "anchor": "mw-heat",
          "hint": "中证全指房地产 − 中证全指 20 日超额；正=政策敏感板块占优"},
+        # 大势位置的 value 本身就是 250 日分位，故 scale.pct 与 value 同值 ——
+        # 刻度条在此不是「再算一个分位」，而是把已有的分位画到 0~100 轴上（数字→位置的直接映射）。
         {"key": "bench_pos", "card_rank": 1, "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
-         "status": _pos_status(bp), "pct": None, "z": None, "highlight": False, "anchor": "mw-detail",
+         "status": _pos_status(bp), "pct": None, "scale": _scale(bp, "近 250 日"),
+         "z": None, "highlight": _is_extreme(bp), "anchor": "mw-detail",
          "hint": "中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位（本身即分位，不再二次求分位）"},
         # 股债性价比 ERP（2026-09-19 P2 落地）：估值分母此前完全缺失（stock_market_current 的 PE/PB
         # 全表为空），故这项当时做不出来、也没出现在页面上。index_valuation_sync 补齐后成立。
         # ⚠️ 分位窗口是「近 250 个月末」而非 250 个交易日 —— 长期估值分位本就该用长窗口，
         #    但不能塞进通用 pct 字段（前端会固定渲染成「近一年 N% 分位」），故写进 status 文案。
         # ⚠️ 不设 anchor：ERP 的论据在交叉印证面板里，不是本页独立图表。
+        # 刻度 label 取乐咕序列的实际点数（「近 250 个月末」），由后端下发 ——
+        # 前端写死「近一年」会把月频分位说成日频（见 _scale 的 ⚠️）。
         {"key": "erp", "card_rank": 3, "label": "股债性价比 ERP", "value": erp_val, "unit": "pp", "tone": "neutral",
-         "status": erp_status, "pct": None, "z": None,
+         "status": erp_status, "pct": None,
+         "scale": _scale(erp_pct, f"近 {_erp['samples']} 个月末" if _erp and _erp.get("samples") else "月末序列"),
+         "z": None,
          "highlight": bool(erp_pct is not None and erp_pct >= 90), "anchor": None,
          "hint": ERP_HINT},
     ]
@@ -687,9 +803,17 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     # 逐项 fail-soft（内部已处理），任一项数据源异常只降级自己，不影响本页其余部分。
     xcheck = cross_check.cross_checks(as_of)
 
+    # 背离数的历史位置（2026-09-19）：把「4 项背离」从计数变成信号 —— 见 _diverge_stats。
+    # 序列取自 market_xcheck_daily（xcheck_sync 每工作日 22:30 写入；历史由
+    # scripts/backfill_xcheck.py 一次性回填 250 日）。
+    div_cur = (xcheck.get("summary") or {}).get("diverge")
+    div_stats = _diverge_stats(div_cur, _xcheck_series(250, as_of))
+
     return {"as_of": data_as_of, "is_replay": is_replay,
             # 卡片墙的一句话结论（卡片专用；详情页有自己的完整面板，不重复渲染）
-            "verdict": _card_verdict(bp, ra, erp_pct, xcheck),
+            "verdict": _card_verdict(bp, ra, erp_pct, xcheck, div_stats),
+            # 背离数及其历史位置（口径随响应下发，供详情页与前端直接使用）
+            "cross_diverge": div_stats,
             # 回放模式下滞后无意义（数据天然落后于今天），固定报 0 避免误标琥珀
             "stale_sessions": 0 if is_replay else _stale_sessions(data_as_of),
             "kpis": kpis, "groups": groups,

@@ -262,9 +262,14 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
     #   industry_median 答「涨得广不广」／dispersion 答「轮动快不快」／industry_spread 答「分化有多极端」。
     # ⚠️ concept_median 刻意不上卡片：判读条已用「双口径互证一致/背离」+ 概念中位表述过，
     #    重复上卡片只会挤掉「轮动速度」这个独立维度。它仍完整出现在详情页。
+    # tone='diff'（2026-09-19）：中位数收益是「一批标的的收益中位」，不是某个资产在涨跌，
+    # 与 market-wind 的组间收益差同一类，故用主色蓝 + 保留正负号，不走红涨绿跌。
+    # 卡片墙颜色的语义是**异常程度**而非方向 —— 详见 registry.py 卡片墙契约第 ④ 条。
+    # ⚠️ 本模块的 KPI **不带 scale**：行业/概念的历史 20 日收益没有物化，算不出分位。
+    #    前端对缺失 scale 的 KPI 不渲染刻度条（优雅降级），不拿别的量纲硬凑一根刻度。
     kpis = [
         {"key": "industry_median", "card_rank": 1, "label": f"申万{level}行业中位（20日）", "value": im, "unit": "%",
-         "tone": "updown", "status": f"{industry['up_ratio']}% 的行业上涨",
+         "tone": "diff", "status": f"{industry['up_ratio']}% 的行业上涨",
          "hint": f"申万{level}行业个股等权 20 日收益的中位数；上涨占比与它成对出现，"
                  "避免只看中位数而漏掉「一半以上行业在涨但被少数大跌拖累」"},
         {"key": "dispersion", "card_rank": 2, "label": "行业离散度（20日）", "value": industry["dispersion"], "unit": "pp",
@@ -277,7 +282,7 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
          "hint": "最强行业 − 最弱行业的 20 日收益差。配合离散度读：离散度大而首尾差小，"
                  "说明分化是全面的而非个别行业极端"},
         {"key": "concept_median", "label": "概念中位（20日）", "value": cm, "unit": "%",
-         "tone": "updown", "status": f"{concept_out['count']} 个概念 · {concept_out['up_ratio']}% 上涨",
+         "tone": "diff", "status": f"{concept_out['count']} 个概念 · {concept_out['up_ratio']}% 上涨",
          "hint": "同花顺概念指数 20 日收益的中位数（已剔除 |收益|>60% 的异常样本）；"
                  "与申万行业口径互为正交验证"},
     ]
