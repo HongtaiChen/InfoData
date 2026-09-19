@@ -163,7 +163,8 @@ function kpiText(k: CardKpi): string {
 
 <template>
   <NSpin :show="loading">
-    <h2 class="ao-title">分析研究</h2>
+    <!-- 页面标题刻意没有：侧边栏导航已标明当前位置，页内再放「分析研究」h2 纯属重复
+         （全站其余页面也都没有页内大标题，此处曾是唯一特例）。首行直接是「📊 跟踪」分节。 -->
 
     <!-- 跟踪卡片区 -->
     <div class="ao-section">📊 跟踪</div>
@@ -308,7 +309,8 @@ function kpiText(k: CardKpi): string {
 </template>
 
 <style scoped>
-.ao-title { margin: 0 0 16px; color: #1F2937; }
+/* 首个分节贴顶：页内无大标题，不需要额外上边距 */
+.ao-section:first-of-type { margin-top: 0; }
 .ao-section { font-size: 14px; font-weight: 600; color: #185FA5; margin: 18px 0 10px; }
 /* min(440px,100%)：窗口极窄时轨道不小于容器，避免卡片自身撑破内容区 */
 .ao-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr)); gap: 12px; }
