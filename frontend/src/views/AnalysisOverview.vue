@@ -185,16 +185,16 @@ function kpiText(k: CardKpi): string {
         <div class="ao-lg">
           <div class="ao-lg-t">判读条配色</div>
           <div class="ao-lg-row">
-            <span class="ao-lg-sw" style="border-left-color: #185FA5; background: #E6F1FB" />
-            <div><b>蓝色 · 常态</b>中性结论，按口径陈述现状。</div>
+            <span class="ao-lg-sw" style="border-left-color: #8A919C; background: #F3F4F5" />
+            <div><b>灰色 · 常态</b>中性结论，按口径陈述现状——退后当背景，不抢注意力。</div>
           </div>
           <div class="ao-lg-row">
             <span class="ao-lg-sw" style="border-left-color: #C9A227; background: #FAF3DF" />
-            <div><b>金黄 · 机会</b>出现值得关注的低位/背离信号；全站金色只用于亮点强调（≤10% 场景）。</div>
+            <div><b>金黄 ✦ · 机会</b>出现值得关注的低位/背离信号；全站金色只用于亮点强调（≤10% 场景）。</div>
           </div>
           <div class="ao-lg-row">
-            <span class="ao-lg-sw" style="border-left-color: #B45309; background: #FAEEDA" />
-            <div><b>琥珀 · 提醒</b>指标处于高位或值得谨慎的状态。</div>
+            <span class="ao-lg-sw" style="border-left-color: #C2410C; background: #FBEAE2" />
+            <div><b>赭橙 ▲ · 提醒</b>指标处于高位或值得谨慎的状态——三态靠色相、明度、符号三重区分。</div>
           </div>
           <div class="ao-lg-t" style="margin-top: 9px">KPI 刻度条</div>
           <div class="ao-lg-row">
@@ -377,20 +377,26 @@ function kpiText(k: CardKpi): string {
   cursor: help; user-select: none; opacity: 0.75; transition: opacity 0.15s;
 }
 .ao-card-q:hover, .ao-card-q:focus-visible { opacity: 1; border-color: #185FA5; color: #185FA5; background: #E6F1FB; outline: none; }
-/* 判读条：卡片的一句话结论。三态配色沿用「蓝骨金魂」——
-   常态 = 主色蓝 / 低位机会 = 金（专用于亮点，≤10% 强调）/ 高位提醒 = 琥珀。
+/* 判读条：卡片的一句话结论。三态配色（2026-09-19 评审定稿方案二）——
+   常态 = 中性灰（大多数卡的状态，退后当背景，不抢注意力）/
+   低位机会 = 金（专用于亮点，≤10% 强调，叠加 ✦ 符号）/
+   高位提醒 = 赭橙 #C2410C（比琥珀深两档，与金在色相+明度双维拉开，叠加 ▲ 符号）。
+   三态在色相、明度、符号三个维度同时区分，色弱用户也能认读。
    这里**刻意不出现红绿**：红涨绿跌是行情数字与 K 线专用，管理 UI 不参与
-   （失败才用深红棕、警告用琥珀）。 */
-.ao-verdict { border-left: 3px solid #185FA5; background: #E6F1FB;
+   （失败才用深红棕）。注意：通用「警告」token 仍是琥珀 #B45309，
+   赭橙仅用于判读条三态语义（ao-verdict / ft-temp），勿混用。 */
+.ao-verdict { border-left: 3px solid #8A919C; background: #F3F4F5;
   border-radius: 0 6px 6px 0; padding: 8px 10px; margin-bottom: 10px; }
-.ao-verdict-headline { font-size: 13px; font-weight: 600; color: #0C447C; line-height: 1.45; }
-.ao-verdict-detail { font-size: 11px; color: #185FA5; margin-top: 4px; line-height: 1.5; }
+.ao-verdict-headline { font-size: 13px; font-weight: 600; color: #4B5563; line-height: 1.45; }
+.ao-verdict-detail { font-size: 11px; color: #6B7280; margin-top: 4px; line-height: 1.5; }
 .ao-verdict--opportunity { border-left-color: #C9A227; background: #FAF3DF; }
 .ao-verdict--opportunity .ao-verdict-headline { color: #7A5E12; }
+.ao-verdict--opportunity .ao-verdict-headline::before { content: '✦ '; }
 .ao-verdict--opportunity .ao-verdict-detail { color: #A4841F; }
-.ao-verdict--caution { border-left-color: #B45309; background: #FAEEDA; }
-.ao-verdict--caution .ao-verdict-headline { color: #633806; }
-.ao-verdict--caution .ao-verdict-detail { color: #854F0B; }
+.ao-verdict--caution { border-left-color: #C2410C; background: #FBEAE2; }
+.ao-verdict--caution .ao-verdict-headline { color: #7C2D12; }
+.ao-verdict--caution .ao-verdict-headline::before { content: '▲ '; }
+.ao-verdict--caution .ao-verdict-detail { color: #9A3412; }
 .ao-verdict-skel { margin-bottom: 10px; }
 /* auto-fit + 确定最小轨宽：KPI 等宽、自适应个数，且数学上不可能撑破卡片
    （曾因 flex:1 的 min-width:auto 溢出 36px，第三个盒子右侧压到页面底） */

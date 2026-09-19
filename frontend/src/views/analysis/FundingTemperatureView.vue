@@ -314,19 +314,21 @@ function clueText(c: Clue): string {
 .ft-two-col { display: grid; grid-template-columns: 1fr 1.1fr; gap: 16px; }
 @media (max-width: 1100px) { .ft-two-col { grid-template-columns: 1fr; } }
 
-/* 合成结论条 */
+/* 合成结论条 —— 三态配色与总览页判读条（ao-verdict）同语义同色（方案二，2026-09-19）：
+   常态 = 中性灰 / 机会 = 金 / 提醒 = 赭橙 #C2410C。
+   徽标自带语义文字（非纯靠颜色），故不另加 ✦/▲ 符号。 */
 .ft-temp {
   display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 6px;
-  border: 1px solid #EDEFF2; border-left: 3px solid #185FA5; background: #F8FAFC; margin-bottom: 12px;
+  border: 1px solid #EDEFF2; border-left: 3px solid #8A919C; background: #F3F4F5; margin-bottom: 12px;
 }
 .ft-temp--opportunity { border-left-color: #C9A227; background: #FAF3DF; }
-.ft-temp--caution { border-left-color: #B45309; background: #FAEEDA; }
+.ft-temp--caution { border-left-color: #C2410C; background: #FBEAE2; }
 .ft-temp-badge {
   font-size: 12px; font-weight: 600; border-radius: 3px; padding: 2px 8px; flex: none;
   background: #E6F1FB; color: #185FA5;
 }
 .ft-temp--opportunity .ft-temp-badge { background: #F5EBC8; color: #7A5E12; }
-.ft-temp--caution .ft-temp-badge { background: #FEF3C7; color: #B45309; }
+.ft-temp--caution .ft-temp-badge { background: #F9DCCB; color: #9A3412; }
 .ft-temp-text { font-size: 12px; color: #374151; line-height: 1.7; }
 
 /* 三条线索 */
