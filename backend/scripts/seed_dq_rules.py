@@ -646,6 +646,45 @@ CONSUMPTION_RULES = [
      "按时间序列统计请用 start_date —— 见 table_meta 的 flow_desc 与资金温度模块文件头）"),
 ]
 
+# ============================================================================
+# 已知技术债监控（2026-09-19 批次 D3 立）
+#
+# D3 的原始定性是「源列脏（turnover_ratio>1、概念异常收益 +110%）→ 只记录不修改」。
+# 逐条实测后**只留了第一半**，第二半定性被推翻（实证见下），所以这里加的两条都是
+# **监控**而非修复——报警即真实信号，别当成规则误报去放宽阈值。
+# ============================================================================
+DEBT_RULES = [
+    # 【保留】turnover_ratio > 1：确属源侧脏值，分析层已用中位数口径绕行（可接受的技术债）。
+    # 实测（2026-09-19）：stock_market_current 5,121 行中 25 行 >1、max 9.05。
+    # 注意只有本表有这个问题：stock_market_daily.turnover_ratio 是「百分比」量纲，
+    # 60% 的行 >1 属正常（max 2766.88 = 2766%），对它套 「>1 即脏」会全线误报。
+    ("current_turnover_dirty", "stock_market_current", "where_count",
+     {"where": "turnover_ratio IS NOT NULL AND turnover_ratio > 1", "max_count": 60},
+     "warning", 1,
+     "换手率越界行数（>1）上限 —— 源侧偶发脏值、分析层已用中位数口径绕行，只监控不改数据。"
+     "阈值 60 是实测值 25 的 ~2.4 倍留量，只在明显恶化时亮灯。"
+     "⚠️ 本表 turnover_ratio 是「比率」量纲（0~1 正常）；stock_market_daily 同名列是百分比量纲，不可同比"),
+
+    # 【推翻报告定性】概念「异常收益」不是源列脏，是**跨日/跨名拼接**。
+    # 实测（2026-09-19）：
+    #   ① ths_concept_market.change_pct 全史范围只有 -17.05% ~ +22.30%，ABS>60 的行数 = 0
+    #      —— 日频源列里根本不存在 >60% 的脏值；
+    #   ② 真因是概念改名留下的**孤儿 index_code**：`WiFi6` 的最后一行停在 2025-09-19，
+    #      现行序列是 `WiFi 6`（带空格）；任何「取每个概念自己的最新行」的关联都会把
+    #      一年前的涨跌幅拉进当日榜 —— 报告里的「WiFi6 20 日 +110.89%」就是这么拼出来的。
+    #      该缺陷已在 api/concept.py::concept_list 修掉（锚定全表最新交易日）；
+    #   ③ 另发现一个报告没抓到的活缺口：change_pct 自 09-03 起**间歇性大面积空**
+    #      （09-01/02 为 0%，09-15~09-18 达 99~100%），采集器 INSERT 是带该列的 → 源侧行为。
+    # 这条规则盯的是 ③：一旦空值率逼近 100%，任何按该列排序的榜单都会静默失真。
+    ("concept_change_pct_gap", "ths_concept_market", "null_rate_slice",
+     {"date_col": "trade_date", "col": "change_pct", "max_pct": 30},
+     "warning", 1,
+     "概念最新切片 change_pct 空值率上限（%）—— 源侧间歇性不返回涨跌幅，"
+     "空值率高时按该列排序会退化为任意序（分析层应以 close 自算收益）。"
+     "阈值 30% 是按实测如实设定，**刻意没有放宽到 100% 去换一个假 pass**："
+     "亮灯即代表源侧确有缺口，属真实信号"),
+]
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
     "frozen_dividend_rows",       # → dividend_fresh + dividend_rows
@@ -672,6 +711,7 @@ def main():
             + [(r, "daily") for r in RECOVERED_RULES_B34]  # 2026-09-13 死表恢复（第 3/4 批）
             + [(r, "daily") for r in BLUEPRINT_RULES]      # 2026-09-19 蓝图 P2/P3 落地（6 表 + 美债补盲点）
             + [(r, "daily") for r in CONSUMPTION_RULES]    # 2026-09-19 Batch C 消费端守护（5 表 3 模块）
+            + [(r, "daily") for r in DEBT_RULES]           # 2026-09-19 Batch D3 已知技术债监控
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:

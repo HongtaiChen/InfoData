@@ -36,6 +36,16 @@ MANUAL_MARK = "手动"
 # running 记录视为「仍在运行」的时间窗口（超过视为遗留脏记录，允许重跑）
 RUNNING_STALE_HOURS = 2
 
+# 开机后追加资讯回看的判定阈值（小时）。与 collectors/news_fetch 的
+# BACKFILL_TRIGGER_HOURS 同口径：资讯水位线比现在旧这么多，说明关机/睡眠时长
+# 已超出采集器的常规滚动窗口，需要开机即补一次。
+# 为什么单独做这件事：news_fetch 是 */30 的高频任务，被 CATCHUP_MIN_INTERVAL(2h)
+# 挡在启动补偿之外（设计如此，高频任务补跑会堆积）；而资讯是唯一「离线即永久
+# 丢失」的数据通道（日线可逐股补 500 天、指数回看 7 天、物化表可全史重算），
+# 因此不能像别的任务那样「等下一个班次」——开机后立即补一次，把缺口窗口压到最小。
+BOOT_NEWS_REVIEW_TASK = "news_fetch"
+BOOT_NEWS_REVIEW_STALE_HOURS = 2
+
 # 错过多少秒内仍补跑。原值 3600（1h）会让「睡眠超过 1 小时」的班次被 APScheduler 静默丢弃
 # （连日志都不留）。放宽到 6h 覆盖「头天没开机、次日才开机」的场景；coalesce=True 保证
 # 错过多次也只补一次，不会堆积。仍不设 None——唤醒瞬间全部 job 同时到期会造成
@@ -516,6 +526,7 @@ class SchedulerManager:
             todo.append({"task": name, "missed_at": last_naive.strftime("%Y-%m-%d %H:%M")})
         if not todo:
             logger.info(f"启动补偿：检查 {len(jobs)} 个任务，无遗漏班次")
+            self._spawn_boot_news_review()
             return {"checked": len(jobs), "todo": []}
         todo.sort(key=lambda x: x["missed_at"])
         logger.info(
@@ -523,6 +534,42 @@ class SchedulerManager:
         )
         threading.Thread(target=self._run_catchup, args=(todo,), daemon=True).start()
         return {"checked": len(jobs), "todo": todo}
+
+    def _spawn_boot_news_review(self):
+        """后台线程执行开机资讯回看（不阻塞 start()）"""
+        threading.Thread(target=self.review_news_after_boot, daemon=True).start()
+
+    def review_news_after_boot(self) -> dict:
+        """开机后追加一次资讯回看（见 BOOT_NEWS_REVIEW_STALE_HOURS 处的说明）。
+
+        只回答「该不该跑」，不做去重：幂等性由采集器自身保证
+        （(title, published_at) 判重 + 以库内 MAX(published_at) 为水位线往前回看）。
+        水位线新鲜时不跑，避免「正常重启」也白跑一轮。
+        """
+        row = query_all("SELECT MAX(published_at) AS mx FROM news")
+        watermark = row[0]["mx"] if row else None
+        if watermark is None:
+            logger.info("开机资讯回看：news 表为空，直接补采一次")
+            age_h = None
+        else:
+            age_h = (datetime.now(TZ).replace(tzinfo=None) - watermark).total_seconds() / 3600
+            if age_h < BOOT_NEWS_REVIEW_STALE_HOURS:
+                logger.info(
+                    f"开机资讯回看：水位线 {watermark} 距今 {age_h:.1f}h（< "
+                    f"{BOOT_NEWS_REVIEW_STALE_HOURS}h），无需补采"
+                )
+                return {"ran": False, "watermark": str(watermark), "age_hours": round(age_h, 1)}
+            logger.info(
+                f"开机资讯回看：水位线 {watermark} 距今 {age_h:.1f}h，追加一次资讯补采"
+            )
+        try:
+            res = self._execute(BOOT_NEWS_REVIEW_TASK)
+            logger.info(f"开机资讯回看完成: {res}")
+            return {"ran": True, "watermark": str(watermark) if watermark else None,
+                    "age_hours": round(age_h, 1) if age_h is not None else None, "result": res}
+        except Exception as e:
+            logger.exception(f"开机资讯回看失败: {e}")
+            return {"ran": False, "error": str(e)}
 
     def _run_catchup(self, todo: list[dict]):
         """后台串行补跑（按遗漏时刻升序），单任务 running 保护自动防重"""
@@ -532,6 +579,9 @@ class SchedulerManager:
                 logger.info(f"启动补偿完成: {it['task']}（遗漏 {it['missed_at']}）")
             except Exception as e:
                 logger.exception(f"启动补偿失败: {it['task']}: {e}")
+        # 补跑全部收尾后再补资讯：避免与补跑抢连接，且刻意排到最后——
+        # 资讯是唯一不可回补的通道，优先级的表达方式是「保证它一定会跑」。
+        self._spawn_boot_news_review()
 
     # ---------- 状态查询 ----------
 

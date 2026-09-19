@@ -16,30 +16,57 @@ def concept_list(
     sort: str = Query("change_pct", description="change_pct / amount"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
 ):
-    """概念板块列表（含最新交易日涨跌幅、成交额）"""
+    """概念板块列表（含最新交易日涨跌幅、成交额）
+
+    ⚠️ 必须锚定**全表最新交易日**，不能锚定「每个概念各自的 MAX(trade_date)」。
+    后者看似更贴心（每个概念都有值），实则把**不同交易日**的涨跌幅混进同一张榜排序：
+    概念改名/停更会在 ths_concept_market 里留下孤儿 index_code（实测 `WiFi6` 的最后一行
+    停在 2025-09-19，而现行序列是 `WiFi 6`），于是当日榜上会同时出现 2026-09-18 的
+    +2.00% 与 2025-09-19 的 -0.42% 并直接比大小 —— 排序结果无任何意义，且当天榜上
+    前几名会被一年前的旧值占据（2026-09-19 实测：limit=8 里 5 条来自 2025-09-19）。
+    这正是盘点报告 §2.5「概念异常收益 +110%」的真实成因：不是源列脏，是跨日/跨名拼接。
+    """
     where = ""
     params: list = []
     if keyword:
         where = "WHERE (i.concept_code LIKE %s OR i.concept_name LIKE %s)"
         params = [f"%{keyword}%", f"%{keyword}%"]
-    # 用最新交易日行情关联（一个概念一条）
+    # 用最新交易日行情关联（一个概念一条）。LATEST 子查询不相关 → 全表只取一个日期。
+    # change_pct 由源侧**间歇性不返回**（实测 09-15~09-18 空值率 99~100%，见 table_meta），
+    # 空值时用 `close / 上一交易日 close - 1` 兜底 —— 与 analysis/concept_rank 的区间涨幅同口径，
+    # 否则这一页会退化成「前 3 条有值、其余全是空」的假榜单（2026-09-19 实测）。
+    latest = query_all("SELECT MAX(trade_date) AS d FROM ths_concept_market")[0]["d"]
+    if latest is None:
+        return {"total": 0, "page": page, "page_size": page_size, "items": []}
+    prev = query_all(
+        "SELECT MAX(trade_date) AS d FROM ths_concept_market WHERE trade_date < %s", [latest]
+    )[0]["d"]
     sql = f"""
         SELECT i.index_code, i.concept_code, i.concept_name,
-               m.trade_date, m.close, m.change_pct, m.change_amount, m.amount
+               m.trade_date, m.close, m.amount,
+               COALESCE(m.change_pct,
+                        ROUND((m.close / NULLIF(p.close, 0) - 1) * 100, 4)) AS change_pct,
+               COALESCE(m.change_amount, ROUND(m.close - p.close, 4)) AS change_amount
         FROM ths_concept_info i
         JOIN ths_concept_market m
           ON m.index_code = i.index_code
-         AND m.trade_date = (SELECT MAX(m2.trade_date) FROM ths_concept_market m2
-                             WHERE m2.index_code = i.index_code)
+         AND m.trade_date = %s
+        LEFT JOIN ths_concept_market p
+          ON p.index_code = m.index_code AND p.trade_date = %s
         {where}
-        ORDER BY m.change_pct {order}
+        ORDER BY change_pct {order}
         LIMIT %s OFFSET %s
     """
+    # total 必须与 items 同口径（同样锚定最新交易日），否则分页会多出永远取不到的页
     total = query_all(
-        f"SELECT COUNT(*) AS n FROM ths_concept_info i {where}",
-        params,
+        f"""SELECT COUNT(*) AS n FROM ths_concept_info i
+            JOIN ths_concept_market m
+              ON m.index_code = i.index_code
+             AND m.trade_date = %s
+            {where}""",
+        [latest] + params,
     )[0]["n"]
-    rows = query_all(sql, params + [page_size, (page - 1) * page_size])
+    rows = query_all(sql, [latest, prev] + params + [page_size, (page - 1) * page_size])
     return {"total": total, "page": page, "page_size": page_size, "items": rows}
 
 

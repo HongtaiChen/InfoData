@@ -53,20 +53,23 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["stock_daily_incr"], ""),
     ("stock_market_current", "行情",
      "本地聚合（无外部源）",
-     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,121 行，双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每工作日 20:15（**必须晚于 stock_daily_incr 跑完**——日线常态耗时 15~50 分钟，原 19:30 会读到半量数据，2026-09-16 因此写出 2820/5119 行残快照并毒害下游 stock_info_sync 名单）。"
-     "⚠️ **8 个「东财实时专属列」的处置（2026-09-19）**：这 8 列是东财实时行情专属字段，"
-     "本表是「日线聚合」口径（data_source=daily-agg），源里本没有它们。按「能否本地精确派生」分两类："
-     "① **已补齐**——total_captital（总股本，股）与 float_captital（A 股流通股，股）"
-     "改由 stock_shares 每只股票 MAX(change_date) 的最新股本本地派生，名单覆盖率实测 100%，"
-     "并顺带修好了 api/market.py 里**静默失效**的「按市值排序」（原 `ORDER BY new × total_captital` "
-     "因列恒 NULL 而等于没排序）。② **仍为 NULL**——dynamic_pe / pb（需外部估值）、"
-     "volume_ratio（东财量比定义特殊，本地近似口径不一致，宁缺勿错）、rise_speed / 5m_change_pct"
-     "（需盘中分时）。**涉及 PE/PB 的判断不要读这几列**。"
-     "接实时源需走东财 push2，而该子域对本机是**间歇性 RST 风控**（非硬不可达：首次直连可通、"
-     "连续请求即被拒），不适合作为稳定依赖——故选择本地派生而非接源。"
-     "⚠️ **uk_stock_code 唯一索引是幂等护栏**：本表整表重建，并发两份同时跑会交错写入导致"
-     "整表双写（2026-09-19 实测 10,242 行 / 5,121 只 = 2.00x，且行数类 DQ 规则无法察觉），"
-     "唯一键让并发时第二次 INSERT 直接报错而非静默双份。",
+     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,121 行，"
+     "双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每工作日 20:15"
+     "（**必须晚于 stock_daily_incr 跑完**——日线常态 15~50 分钟，原 19:30 会读到半量数据："
+     "2026-09-16 写出 2820/5119 行残快照并毒害下游 stock_info_sync 名单）。"
+     "⚠️ **8 个「东财实时专属列」的处置（2026-09-19）**：本表是「日线聚合」口径（data_source=daily-agg），"
+     "源里本没有这 8 列，按「能否本地精确派生」分两类："
+     "① **已补齐**——total_captital / float_captital 改由 stock_shares 每只 MAX(change_date) 的最新股本"
+     "本地派生（名单覆盖 100%），并顺带修好 api/market.py 里**静默失效**的「按市值排序」"
+     "（原因列恒 NULL 等于没排序）；② **仍为 NULL**——dynamic_pe / pb / volume_ratio / rise_speed /"
+     " 5m_change_pct。**涉及 PE/PB 的判断不要读这几列**。"
+     "不接实时源的原因：东财 push2 子域对本机是**间歇性 RST 风控**（首连可通、连续请求即被拒），"
+     "不适合作稳定依赖。"
+     "⚠️ **uk_stock_code 唯一索引是幂等护栏**：并发双跑会交错写入致整表双写"
+     "（实测 10,242/5,121=2.00x，行数类 DQ 规则察觉不到），唯一键让第二次 INSERT 直接报错而非静默双份。"
+     "⚠️ `turnover_ratio` 少量 >1 属源侧脏值（实测 25/5,121、max 9.05），分析层已用中位数口径绕行；"
+     "`stock_market_daily` 同名列是**百分比**量纲（>1 属正常、max 2766%），两表不可同比。"
+     "监控：DQ 规则 current_turnover_dirty。",
      ["market_current_sync"], "股本 2 列已本地派生补齐、余 6 列为东财专属仍 NULL；uk_stock_code 为幂等护栏"),
     ("dc_index_market", "指数",
      "中证官网;国证+腾讯;东财",
@@ -100,7 +103,13 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "⚠️ 2026-09-19 §7-⑧ 改造：唯一键由 (index_code, stock_code) 改为 "
      "**uk_index_stock_date(index_code, stock_code, trade_date)**，DELETE 只删**本快照日**的行 → "
      "历史快照保留，可回溯「某只股票何时进出某指数」；trade_date=快照日（本轮采集日），"
-     "源侧样本日期另存 sample_date（国证源无则 NULL）。",
+     "源侧样本日期另存 sample_date（国证源无则 NULL）。"
+     "📌 快照日数量 = **实际成功执行次数**，不是 cron 频次的推导值（D2 结论，2026-09-19）："
+     "改造前唯一键不含 trade_date，同 (index_code, stock_code) 的后一次运行会**覆盖**前一次，"
+     "所以 09-13/09-15 两次成功运行没留下快照日、只剩最后一次的 09-17；"
+     "改造后按日留档，当前 09-17 / 09-19 两日属**正常起点**。"
+     "决策：**不回补历史快照** —— csindex 只提供当前成分，历史成分无法同源回取，"
+     "回补需付费第三方源，成本远超收益；往后按月度自然积累即可。",
      ["index_cons_sync"], ""),
     ("index_profile", "指数",
      "中证指数官网",
@@ -113,7 +122,16 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["concept_market_sync"], ""),
     ("ths_concept_market", "概念",
      "同花顺",
-     "概念指数日线（2018-04-12~，398 概念）：每工作日 20:00 增量；失败单概念不阻断整轮。",
+     "概念指数日线（2018-04-12~，398 概念）：每工作日 20:00 增量；失败单概念不阻断整轮。"
+     "⚠️ 消费方两条坑（D3，2026-09-19）："
+     "① **改名会留孤儿 index_code**——同花顺改名后在新名重建序列、旧名停更（实测 `WiFi6` 末行停在 "
+     "2025-09-19，现行是 `WiFi 6`）。故**禁止**按「每个概念各自的 MAX(trade_date)」关联当日行情："
+     "会把一年前的涨跌幅拉进当日榜一起比大小（api/concept.py::concept_list 已修为锚定全表最新交易日）。"
+     "报告 §2.5 的「WiFi6 20 日 +110.89%」实为此因，**不是源列脏**。"
+     "② **change_pct 由源侧间歇性不返回**——2026-09-01/02 空值率 0%，09-15~09-18 达 99~100%"
+     "（采集器 INSERT 是带该列的，属源侧行为）。按它排序会退化为任意序 → 需长期序列请用 `close` "
+     "自算收益（concept_rank 的区间涨幅已是 close 口径），勿直接依赖 change_pct。"
+     "监控见 DQ 规则 concept_change_pct_gap。",
      ["concept_market_sync"], ""),
     ("ths_stock_concepts", "概念",
      "同花顺;新浪",
