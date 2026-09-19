@@ -1662,9 +1662,9 @@ onMounted(async () => {
                   style="display:flex;align-items:center;gap:6px;border:1px solid #eef1f5;border-left:2.5px solid #B5D4F4;border-radius:6px;padding:4px 8px;background:#FAFBFC;"
                 >
                   <span style="font-size:10.5px;color:#aaa;font-family:Consolas,Menlo,monospace;flex-shrink:0;">{{ s.no }}</span>
-                  <span style="font-size:12px;color:#333;min-width:0;">{{ s.name }}</span>
-                  <span v-if="s.value" style="margin-left:auto;font-size:10.5px;color:#185FA5;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap;">{{ s.value }}</span>
-                  <span v-else style="margin-left:auto;font-size:10.5px;color:#c0c6cc;">—</span>
+                  <span style="font-size:12px;color:#333;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</span>
+                  <span v-if="s.value" :title="s.value" style="margin-left:auto;flex:0 1 auto;max-width:62%;font-size:10.5px;color:#185FA5;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.value }}</span>
+                  <span v-else style="margin-left:auto;flex-shrink:0;font-size:10.5px;color:#c0c6cc;">—</span>
                 </div>
               </div>
               <div style="font-size:10.5px;color:#a0a6ad;line-height:1.5;">
@@ -1802,9 +1802,9 @@ onMounted(async () => {
                     style="display:flex;align-items:center;gap:6px;border:1px solid #eef1f5;border-left:2.5px solid #B5D4F4;border-radius:6px;padding:3px 8px;background:#FAFBFC;"
                   >
                     <span style="font-size:10.5px;color:#aaa;font-family:Consolas,Menlo,monospace;flex-shrink:0;">{{ s.no }}</span>
-                    <span style="font-size:12px;color:#333;min-width:0;">{{ s.name }}</span>
-                    <span v-if="s.value" style="margin-left:auto;font-size:10.5px;color:#185FA5;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap;">{{ s.value }}</span>
-                    <span v-else style="margin-left:auto;font-size:10.5px;color:#c0c6cc;">—</span>
+                    <span style="font-size:12px;color:#333;flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</span>
+                    <span v-if="s.value" :title="s.value" style="margin-left:auto;flex:0 1 auto;max-width:62%;font-size:10.5px;color:#185FA5;background:#E6F1FB;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.value }}</span>
+                    <span v-else style="margin-left:auto;flex-shrink:0;font-size:10.5px;color:#c0c6cc;">—</span>
                   </div>
                 </div>
                 <div
