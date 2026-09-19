@@ -5,7 +5,7 @@
  * 模块来源：GET /api/analysis/registry（配置文件版注册表）
  */
 import { computed, onMounted, ref } from 'vue'
-import { NCard, NEmpty, NSpin, NTag } from 'naive-ui'
+import { NCard, NEmpty, NSkeleton, NSpin, NTag } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import RichText from '../components/analysis/RichText.vue'
 import api from '../api'
@@ -29,24 +29,39 @@ interface CardKpi {
 const GROUP_ORDER = ['市场风向', '板块与概念', '个股基本面', '资金与情绪', '跟踪清单']
 
 const router = useRouter()
+// loading 只表示「注册表本身」的加载——它是最轻的一次请求（实测 ~70ms）。
+// 卡片区的 KPI 摘要另用 kpiLoading 逐卡标记，**不再阻塞整页**：
+// 原先 loading 覆盖全页且串行 await 各模块数据（market-wind 4.6s），
+// 用户要盯着转圈近 5 秒才看到页面结构。现在结构秒出、KPI 区各自补位。
 const loading = ref(false)
 const modules = ref<RegistryItem[]>([])
 const cardKpis = ref<Record<string, CardKpi[]>>({})
+const kpiLoading = ref<Record<string, boolean>>({})
 
 onMounted(async () => {
   loading.value = true
   try {
     const resp: any = await api.get('/analysis/registry')
     modules.value = resp.items ?? []
-    // 跟踪型卡片拉各自模块数据取 KPI 摘要（模块多了可改为专用 summary 接口）
-    for (const m of modules.value.filter((x) => x.kind === 'track')) {
-      try {
-        const r: any = await api.get(`/analysis/${m.module_id}`)
-        cardKpis.value[m.module_id] = (r.kpis ?? []).slice(0, 3)
-      } catch {
-        cardKpis.value[m.module_id] = []
-      }
-    }
+    // 跟踪型卡片各自拉模块数据取 KPI 摘要（模块多了可改为专用 summary 接口）
+    const tracks = modules.value.filter((x) => x.kind === 'track')
+    tracks.forEach((m) => {
+      kpiLoading.value[m.module_id] = true
+    })
+    // 并行发起、互不阻塞：耗时 = 最慢的一个，而非各模块之和。
+    // silent：单卡取数失败只降级为「不显示 KPI」，不弹全局错误提示。
+    void Promise.allSettled(
+      tracks.map(async (m) => {
+        try {
+          const r: any = await api.get(`/analysis/${m.module_id}`, { silent: true })
+          cardKpis.value[m.module_id] = (r.kpis ?? []).slice(0, 3)
+        } catch {
+          cardKpis.value[m.module_id] = []
+        } finally {
+          kpiLoading.value[m.module_id] = false
+        }
+      }),
+    )
   } catch (e) {
     console.error('[analysis-registry]', e)
   } finally {
@@ -92,12 +107,18 @@ function kpiText(k: CardKpi): string {
           <NTag size="tiny" :bordered="false" type="info">跟踪</NTag>
         </div>
         <div class="ao-card-desc"><RichText :text="m.desc" /></div>
-        <div class="ao-card-kpis" v-if="cardKpis[m.module_id]?.length">
-          <div v-for="k in cardKpis[m.module_id]" :key="k.label" class="ao-kpi">
-            <div class="ao-kpi-label" :title="k.label">{{ k.label }}</div>
-            <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
-            <div class="ao-kpi-status">{{ k.status }}</div>
-          </div>
+        <!-- KPI 区独立占位：骨架高度对齐 .ao-kpi（8+10+行高×3+8），避免数据到达时布局跳动 -->
+        <div class="ao-card-kpis" v-if="kpiLoading[m.module_id] || cardKpis[m.module_id]?.length">
+          <template v-if="kpiLoading[m.module_id]">
+            <NSkeleton v-for="i in 3" :key="i" height="68px" :sharp="false" />
+          </template>
+          <template v-else>
+            <div v-for="k in cardKpis[m.module_id]" :key="k.label" class="ao-kpi">
+              <div class="ao-kpi-label" :title="k.label">{{ k.label }}</div>
+              <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
+              <div class="ao-kpi-status">{{ k.status }}</div>
+            </div>
+          </template>
         </div>
       </NCard>
     </div>

@@ -44,6 +44,7 @@ import logging
 
 from ..db import query_all
 from . import cross_check
+from ._cache import ttl_cache
 
 logger = logging.getLogger(__name__)
 
@@ -430,6 +431,12 @@ def _sign_bands(dates: list[str], values: list, min_len: int = 3) -> list[dict]:
     return out
 
 
+# 进程内 TTL 缓存（2026-09-19）：与「板块轮动」同一策略（见 _cache.py 边界说明）。
+# market_style_daily 是日频盘后物化的，同一交易日内结果确定不变；而本接口会被
+# 「分析研究总览页卡片墙」和「市场风向详情页」重复请求，且每次要跑 36 条查询 +
+# 7 项交叉印证。实测：无缓存 1.55s → 有缓存首次 0.92s、后续命中 <1ms。
+# 参数 trend_days / as_of 参与 key，切窗口与历史回放互不污染。
+@ttl_cache(600)
 def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     """市场风向模块数据装配（/api/analysis/market-wind）
 

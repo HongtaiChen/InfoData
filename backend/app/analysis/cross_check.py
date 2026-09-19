@@ -46,6 +46,7 @@ import logging
 from bisect import bisect_right
 
 from ..db import query_all
+from ._cache import ttl_cache
 
 logger = logging.getLogger(__name__)
 
@@ -702,6 +703,10 @@ def _latest_dividend_yield(as_of: str | None) -> tuple[float | None, str | None]
     return float(rows[0]["dividend_yield"]), str(rows[0]["trade_date"])
 
 
+# TTL 缓存（2026-09-19）：同一份 ERP 被两处消费——本模块第 ⑦ 项「估值印证」
+# 与 market_wind 的 KPI 卡片，未缓存时一次请求内要重算两遍（实测 0.39s）。
+# 估值/利率两腿均为日频数据，缓存 600s 与 market_wind 同 TTL。
+@ttl_cache(600)
 def erp_snapshot(as_of: str | None = None) -> dict | None:
     """ERP 快照 —— 供 /api/analysis/market-wind 的 `erp` 字段与 KPI 卡片。
 
