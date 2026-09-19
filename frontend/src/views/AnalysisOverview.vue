@@ -7,7 +7,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { NCard, NEmpty, NSkeleton, NSpin, NTag } from 'naive-ui'
 import { useRouter } from 'vue-router'
-import RichText from '../components/analysis/RichText.vue'
 import KpiHint from '../components/analysis/KpiHint.vue'
 import api from '../api'
 
@@ -179,10 +178,26 @@ function kpiText(k: CardKpi): string {
         @click="open(m)"
       >
         <div class="ao-card-head">
-          <span class="ao-card-name">{{ m.icon }} {{ m.name }}</span>
+          <span class="ao-card-name">
+            {{ m.icon }} {{ m.name }}
+            <!-- 模块定位说明入口（2026-09-19）：原「回答三件事：…」整行独占卡片高度，
+                 收进标题旁 ⓘ 悬浮说明（与 KPI 口径同一款 KpiHint 白底信息卡），
+                 卡片更整洁、判读条上移成为首屏信息。
+                 ⚠️ 点击必须 .stop —— 卡片本身是 @click=open(m) 的跳转按钮。 -->
+            <KpiHint :label="m.name" :hint="m.desc" footer="模块定位说明由后端统一下发">
+              <template #trigger>
+                <span
+                  class="ao-card-q"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`「${m.name}」回答哪三件事`"
+                  @click.stop
+                >i</span>
+              </template>
+            </KpiHint>
+          </span>
           <NTag size="tiny" :bordered="false" type="info">跟踪</NTag>
         </div>
-        <div class="ao-card-desc" :title="m.desc"><RichText :text="m.desc" /></div>
 
         <!-- 判读条（2026-09-19）：卡片最前的一句话结论。**文案由后端生成**——
              口径随响应下发、前端只透传不手抄（见 backend/app/analysis/registry.py 卡片墙契约）。
@@ -269,8 +284,21 @@ function kpiText(k: CardKpi): string {
         <div class="ao-group-name">{{ g }}</div>
         <div class="ao-group-items">
           <NCard v-for="m in researchByGroup[g]" :key="m.module_id" size="small" hoverable class="ao-item" @click="open(m)">
-            <b>{{ m.icon }} {{ m.name }}</b>
-            <div class="ao-item-desc"><RichText :text="m.desc" /></div>
+            <!-- 与跟踪卡同一处理：desc 收进 ⓘ，目录条目只留一行名称 -->
+            <span class="ao-item-name">
+              <b>{{ m.icon }} {{ m.name }}</b>
+              <KpiHint :label="m.name" :hint="m.desc" footer="模块定位说明由后端统一下发">
+                <template #trigger>
+                  <span
+                    class="ao-card-q"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="`「${m.name}」的模块说明`"
+                    @click.stop
+                  >i</span>
+                </template>
+              </KpiHint>
+            </span>
           </NCard>
         </div>
       </div>
@@ -287,9 +315,21 @@ function kpiText(k: CardKpi): string {
 .ao-card { cursor: pointer; }
 /* 主卡占满整行（跨所有列）。宽度由后端 card_span 声明，前端不硬编码模块名 */
 .ao-card--full { grid-column: 1 / -1; }
-.ao-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.ao-card-name { font-size: 15px; font-weight: 600; color: #1F2937; }
-.ao-card-desc { font-size: 12px; color: #6B7280; margin: 4px 0 8px; }
+.ao-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  /* 「回答三件事」整行收进 ⓘ 后，判读条/KPI 直接跟随标题 —— 原-desc 行的
+     8px 下间距移到这里，首行信息不至于贴着标题 */
+  margin-bottom: 10px; }
+.ao-card-name { display: inline-flex; align-items: center; gap: 5px; font-size: 15px; font-weight: 600; color: #1F2937; }
+/* 模块定位说明的 ⓘ：与 .ao-kpi-q 同款描边（#8D97A5，实测更淡的 #B8BEC9 不可见），
+   但**常显**——每卡只有 1 个图标（不像 KPI 一卡 6 个），不存在「与数字抢注意力」，
+   而它是模块说明的唯一入口，常显才有可发现性。略大于 KPI 版以配标题字号。 */
+.ao-card-q {
+  flex: none; width: 14px; height: 14px; line-height: 12px; text-align: center;
+  border-radius: 50%; border: 1px solid #8D97A5; color: #6B7280;
+  font-size: 10px; font-weight: 600; font-style: italic;
+  cursor: help; user-select: none; opacity: 0.75; transition: opacity 0.15s;
+}
+.ao-card-q:hover, .ao-card-q:focus-visible { opacity: 1; border-color: #185FA5; color: #185FA5; background: #E6F1FB; outline: none; }
 /* 判读条：卡片的一句话结论。三态配色沿用「蓝骨金魂」——
    常态 = 主色蓝 / 低位机会 = 金（专用于亮点，≤10% 强调）/ 高位提醒 = 琥珀。
    这里**刻意不出现红绿**：红涨绿跌是行情数字与 K 线专用，管理 UI 不参与
@@ -355,5 +395,6 @@ function kpiText(k: CardKpi): string {
 .ao-group-name { font-size: 12px; color: #6B7280; margin-bottom: 6px; }
 .ao-group-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .ao-item { cursor: pointer; }
-.ao-item-desc { font-size: 12px; color: #6B7280; margin-top: 4px; }
+.ao-item-name { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.ao-item-name b { font-size: 13.5px; color: #1F2937; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

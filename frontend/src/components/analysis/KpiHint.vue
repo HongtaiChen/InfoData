@@ -32,9 +32,12 @@ const props = withDefaults(
     value?: string
     /** 附加说明（可选，如详情页的「风险调整」口径 ADJ_NOTE） */
     note?: string
+    /** 浮窗落款（可选覆盖；传空串隐藏。默认口径措辞只适合 KPI 场景，
+     *  模块定位说明等其它场景传自己的落款） */
+    footer?: string
     placement?: 'top' | 'bottom'
   }>(),
-  { placement: 'top' },
+  { placement: 'top', footer: '口径由后端随响应下发，前端只透传' },
 )
 
 /**
@@ -72,7 +75,7 @@ const tipTheme = {
       </div>
       <div class="kh-bd"><RichText :text="props.hint" /></div>
       <div v-if="props.note" class="kh-note"><RichText :text="props.note" /></div>
-      <div class="kh-ft">口径由后端随响应下发，前端只透传</div>
+      <div v-if="props.footer" class="kh-ft">{{ props.footer }}</div>
     </div>
   </NTooltip>
 </template>
