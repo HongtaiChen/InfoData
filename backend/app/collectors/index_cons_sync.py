@@ -15,8 +15,13 @@ InvestBuddy 指数成分股同步（index_constituents 表快照重建）
 4. 上证指数（000001）：全市场指数，不入成分表——详情接口按「沪市全部上市股」实时派生
 
 调度契约：
-- 指数每月定期调样，cron 建议月度（task_config: index_cons_sync '30 8 15 * *'）；
-- 每轮对每个指数 DELETE 旧快照后批量重建，幂等；
+- 指数每月定期调样，cron 建议月度（task_config: index_cons_sync '30 21 15 * *'）；
+- **快照留档（2026-09-19 改造，报告 §7-⑧）**：`trade_date` 语义 = **快照日（本轮采集日）**，
+  同一 (index_code, stock_code) 允许按快照日多份并存（唯一键 uk_index_stock_date）。
+  每轮**只删除「本轮快照日」的行**后重建，历史快照永久保留 —— 这样才能做「指数级分组归因」
+  的历史回溯（原实现每轮 DELETE 全表，只留最新一份，永远无法回答「上月这天是哪 300 只」）。
+  源侧自己的样本日期另存 `sample_date`（中证官网返回的「日期」列），供核对调样是否生效；
+  国证/members 兜底路径无该字段，留 NULL。
 - 权重字段用于前端「行业分布」加权统计，NULL 时前端按等权处理。
 """
 import logging
@@ -57,8 +62,8 @@ RUN_STEPS = [
     {"no": 1, "name": "构建同步清单", "params": "中证系 7 + 深证系 4 + 北证50（上证指数派生不入表）"},
     {"no": 2, "name": "逐指数拉取成分", "params": "csindex 成分+权重 → cni 样本（列名 样本简称）→ index_members 精确反查"},
     {"no": 3, "name": "名称兜底回填", "params": "stock_name 为空时用 stock_info.short_name 补齐（防源列名变动）"},
-    {"no": 4, "name": "快照重建", "params": "DELETE 旧快照 → 批量 INSERT（uk_index_stock 幂等）"},
-    {"no": 5, "name": "结果巡检", "params": "逐指数行数汇总，失败项计入 errors"},
+    {"no": 4, "name": "按快照日留档重建", "params": "DELETE 本快照日旧行 → 批量 INSERT（uk_index_stock_date 幂等）；历史快照保留"},
+    {"no": 5, "name": "结果巡检", "params": "逐指数行数汇总（按本次快照日过滤），失败项计入 errors"},
 ]
 
 # 中证系：成分 + 权重双接口
@@ -86,7 +91,7 @@ class IndexConsSyncCollector:
     """指数成分股快照同步"""
 
     # ---------- 中证系 ----------
-    def _fetch_csindex(self, code: str) -> tuple[list[dict] | None, str]:
+    def _fetch_csindex(self, code: str, snapshot: date) -> tuple[list[dict] | None, str]:
         """成分名单 + 权重（权重接口失败仅降级为无权重）。返回 (rows, source)"""
         try:
             df = _call_with_timeout(lambda: ak.index_stock_cons_csindex(symbol=code), 90)
@@ -114,16 +119,19 @@ class IndexConsSyncCollector:
             sc = str(r.get("成分券代码") or "")
             if not sc:
                 continue
+            sd = str(r.get("日期") or "")[:10] or None
             rows.append({
                 "stock_code": sc,
                 "stock_name": str(r.get("成分券名称") or "") or None,
                 "weight": weights.get(sc),
-                "trade_date": str(r.get("日期") or date.today().isoformat())[:10],
+                # trade_date = 快照日（本轮采集日），保证三个来源口径一致、可做历史留档
+                "trade_date": snapshot.isoformat(),
+                "sample_date": sd,
             })
         return rows, "csindex"
 
     # ---------- 国证系 ----------
-    def _fetch_cni(self, code: str) -> list[dict] | None:
+    def _fetch_cni(self, code: str, snapshot: date) -> list[dict] | None:
         """akshare 国证样本详情（当前版本 Excel 解析 bug，失败返回 None）"""
         try:
             df = _call_with_timeout(lambda: ak.index_detail_cni(symbol=code), 40)
@@ -150,11 +158,12 @@ class IndexConsSyncCollector:
                 # 国证接口实际列名为「样本简称」（2026-09-13 修复：原先读 单元格名称/样本名称 → 750 行名称全空）
                 "stock_name": str(r.get("样本简称") or r.get("单元格名称") or r.get("样本名称") or "") or None,
                 "weight": w,
-                "trade_date": date.today().isoformat(),
+                "trade_date": snapshot.isoformat(),
+                "sample_date": None,     # 国证源不给样本日期
             })
         return rows
 
-    def _fallback_members(self, cur, code: str, name: str) -> list[dict]:
+    def _fallback_members(self, cur, code: str, name: str, snapshot: date) -> list[dict]:
         """stock_info.index_members 反查兜底：FIND_IN_SET 精确匹配（防 深证100/100R 误匹配）"""
         cur.execute(
             """
@@ -165,7 +174,8 @@ class IndexConsSyncCollector:
             (name,),
         )
         return [
-            {"stock_code": sc, "stock_name": sn, "weight": None, "trade_date": date.today().isoformat()}
+            {"stock_code": sc, "stock_name": sn, "weight": None,
+             "trade_date": snapshot.isoformat(), "sample_date": None}
             for sc, sn in cur.fetchall()
         ]
 
@@ -195,6 +205,7 @@ class IndexConsSyncCollector:
 
     # ---------- 主流程 ----------
     def run(self) -> dict:
+        snapshot = date.today()          # 本轮快照日（三个来源统一口径）
         conn = pymysql.connect(**get_db_config().to_dict())
         written = 0
         notes: list[str] = []
@@ -212,16 +223,16 @@ class IndexConsSyncCollector:
                     rows: list[dict] | None = None
                     source = ""
                     if code in CSINDEX_CONS:
-                        rows, source = self._fetch_csindex(code)
+                        rows, source = self._fetch_csindex(code, snapshot)
                     elif code in CNINDEX_CONS:
-                        rows = self._fetch_cni(code)
+                        rows = self._fetch_cni(code, snapshot)
                         if rows is not None and rows:
                             source = "cni"
                         else:
-                            rows = self._fallback_members(cur, code, name)
+                            rows = self._fallback_members(cur, code, name, snapshot)
                             source = "stock_info_members"
                     else:  # 899050
-                        rows = self._fetch_cni(code)
+                        rows = self._fetch_cni(code, snapshot)
                         source = "cni"
 
                     if rows is None:
@@ -235,21 +246,27 @@ class IndexConsSyncCollector:
                     if filled:
                         notes.append(f"{name} 名称兜底回填 {filled} 只")
 
-                    cur.execute("DELETE FROM index_constituents WHERE index_code=%s", (code,))
+                    # ⚠️ 只删「本快照日」的行：历史快照必须留下（§7-⑧ 的核心）
+                    cur.execute(
+                        "DELETE FROM index_constituents WHERE index_code=%s AND trade_date=%s",
+                        (code, snapshot),
+                    )
                     cur.executemany(
                         """
                         INSERT INTO index_constituents
-                            (index_code, stock_code, stock_name, weight, trade_date, source, data_source)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            (index_code, stock_code, stock_name, weight, trade_date,
+                             sample_date, source, data_source)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON DUPLICATE KEY UPDATE
                             stock_name = VALUES(stock_name),
                             weight = VALUES(weight),
-                            trade_date = VALUES(trade_date)
+                            sample_date = VALUES(sample_date),
+                            source = VALUES(source)
                         """,
                         [
                             (
                                 code, r["stock_code"], r["stock_name"], r["weight"],
-                                r["trade_date"], source, source,
+                                r["trade_date"], r.get("sample_date"), source, source,
                             )
                             for r in rows
                         ],
@@ -259,14 +276,16 @@ class IndexConsSyncCollector:
                     w_tag = "含权重" if rows[0]["weight"] is not None else "无权重"
                     notes.append(f"{name} {len(rows)} 只({source}/{w_tag})")
 
-                # 巡检：13 个指数的成分覆盖情况
+                # 巡检：13 个指数在**本快照日**的成分覆盖情况
                 cur.execute(
                     """
                     SELECT p.index_code, p.index_name, COUNT(c.id)
                     FROM index_profile p
-                    LEFT JOIN index_constituents c ON c.index_code = p.index_code
+                    LEFT JOIN index_constituents c
+                           ON c.index_code = p.index_code AND c.trade_date = %s
                     GROUP BY p.index_code, p.index_name
-                    """
+                    """,
+                    (snapshot,),
                 )
                 for c, n, cnt in cur.fetchall():
                     if c == "000001":
@@ -280,7 +299,7 @@ class IndexConsSyncCollector:
         finally:
             conn.close()
 
-        msg = f"指数成分快照 {written} 行 / {len(per_index)} 个指数"
+        msg = f"指数成分快照 {written} 行 / {len(per_index)} 个指数（快照日 {snapshot}）"
         if errors:
             msg += f"；异常 {len(errors)} 项"
         logger.info(f"✅ {msg}")
@@ -291,6 +310,6 @@ class IndexConsSyncCollector:
                 1: f"清单 {len(CSINDEX_CONS) + len(CNINDEX_CONS) + len(CNI_ONLY)} 个",
                 2: f"成功 {len(per_index)} 个（csindex / cni / members 兜底）",
                 3: f"写入 {written} 行",
-                4: f"异常 {len(errors)} 项",
+                4: f"快照日 {snapshot}（历史快照保留，仅重建当日）",
             },
         )

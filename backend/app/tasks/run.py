@@ -42,6 +42,13 @@ from ..collectors.financial_abstract_sync import FinancialAbstractSyncCollector
 from ..collectors.stock_shares_sync import StockSharesSyncCollector
 from ..collectors.capital_flow_sync import CapitalFlowSyncCollector
 from ..collectors.market_style_sync import MarketStyleSyncCollector
+# 2026-09-19 市场风向蓝图 P2/P3 落地（估值→ERP / 拆借利率 / 跨市场 / 汇率 / 新基金 / 回购）
+from ..collectors.index_valuation_sync import IndexValuationSyncCollector
+from ..collectors.interbank_rate_sync import InterbankRateSyncCollector
+from ..collectors.overseas_index_sync import OverseasIndexSyncCollector
+from ..collectors.currency_boc_sync import CurrencyBocSyncCollector
+from ..collectors.fund_new_issue_sync import FundNewIssueSyncCollector
+from ..collectors.stock_repurchase_sync import StockRepurchaseSyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -605,6 +612,98 @@ def run_capital_flow_sync(params: dict) -> int:
     return result["records_written"]
 
 
+# ============ 市场风向蓝图 P2/P3 落地（2026-09-19） ============
+# 依据 docs/市场风向数据蓝图落地审计_2026-09-19.md §5「建议下一步」。
+# 六个采集器覆盖报告 §5 实测可达的**全部** 11 个候选接口，并把蓝图 A/B/D/E 四块补齐。
+
+def run_index_valuation_sync(params: dict) -> int:
+    """指数估值同步（index_valuation_daily：中证官网 + 乐咕 + 全A 三源）
+
+    蓝图 B「股债性价比」的估值分母 —— 没有它，ERP 永远做不出来（报告 §7-① 的根源）。
+    params: timeout_sec(60) / lookback_days(0=不截断，**必须保留乐咕完整历史**，
+            否则 ERP 分位样本只剩十几个点、失去意义)
+    """
+    p = _task_params(params, {"timeout_sec": 60, "lookback_days": 0})
+    collector = IndexValuationSyncCollector(
+        timeout_sec=float(p.get("timeout_sec", 60)),
+        lookback_days=int(p.get("lookback_days", 0)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 指数估值 {result['error_count']} 项异常（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_interbank_rate_sync(params: dict) -> int:
+    """银行间拆借利率 + LPR 同步（interbank_rate_daily）
+
+    蓝图 A「钱贵不贵」维度（报告 §6 蓝图 A 唯一的数据缺口）。
+    params: timeout_sec(90)
+    """
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = InterbankRateSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 拆借利率 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_overseas_index_sync(params: dict) -> int:
+    """海外/港股指数日线同步（overseas_index_daily：恒生 + 道指/标普/纳指）
+
+    蓝图 E「跨市场与外部情绪」—— 没有外部参照物，「A 股抗跌」这个判断无从谈起。
+    params: timeout_sec(60)
+    """
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = OverseasIndexSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 海外指数 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_currency_boc_sync(params: dict) -> int:
+    """人民币外汇牌价同步（currency_boc_daily：美元/欧元/日元/港元）
+
+    蓝图 E 汇率腿 —— 汇率破位 = 外资流出压力。
+    params: timeout_sec(60) / first_lookback_days(1825 首次回扫 5 年) / from_date(运维显式起点)
+    """
+    p = _task_params(params, {"timeout_sec": 60, "first_lookback_days": 1825, "from_date": None})
+    collector = CurrencyBocSyncCollector(
+        timeout_sec=float(p.get("timeout_sec", 60)),
+        first_lookback_days=int(p.get("first_lookback_days", 1825)),
+        from_date=p.get("from_date"),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 外汇牌价 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_fund_new_issue_sync(params: dict) -> int:
+    """新基金发行同步（fund_new_issue：东财全量）
+
+    蓝图 E 基金腿 —— 发行冰点 = 反向底部信号（散户情绪极值）。
+    params: timeout_sec(120)
+    """
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = FundNewIssueSyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_stock_repurchase_sync(params: dict) -> int:
+    """股票回购同步（stock_repurchase：东财全量）
+
+    蓝图 D「机构与产业资本」的回购腿（另两腿为库内 stock_jgdy_detail / stock_shares）。
+    params: timeout_sec(240 源需翻 12 页)
+    """
+    p = _task_params(params, {"timeout_sec": 240})
+    collector = StockRepurchaseSyncCollector(timeout_sec=float(p.get("timeout_sec", 240)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -647,6 +746,13 @@ TASKS = {
     "capital_flow_sync": run_capital_flow_sync,
     # 2026-09-13 分析研究框架 · 市场风向模块（风格物化表计算，挂 index_market_sync 之后）
     "market_style_sync": run_market_style_sync,
+    # 2026-09-19 市场风向蓝图 P2/P3 落地（6 个采集器，对应报告 §5 全部 11 个可达接口）
+    "index_valuation_sync": run_index_valuation_sync,
+    "interbank_rate_sync": run_interbank_rate_sync,
+    "overseas_index_sync": run_overseas_index_sync,
+    "currency_boc_sync": run_currency_boc_sync,
+    "fund_new_issue_sync": run_fund_new_issue_sync,
+    "stock_repurchase_sync": run_stock_repurchase_sync,
 }
 
 

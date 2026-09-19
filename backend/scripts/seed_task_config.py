@@ -71,6 +71,21 @@ TASKS = [
     ("concept_market_sync", 1, "0 21,22 * * 0-4",                   # 每周一至周五 21:00、22:00
      {"days_back": 15}),
     ("concept_sync", 1, "0 21 * * 0", {}),                          # 每周一 21:00
+    # ---------- 蓝图 P2/P3 六采集器（2026-09-19 落地，见 docs/市场风向数据蓝图落地审计_2026-09-19.md） ----------
+    # 全部是**纯外部取数**，不依赖个股日线，故用固定时刻（无需链式）；
+    # 时刻刻意避开 19:20 日线启动后的写库高峰，且彼此错峰 10~15 分钟防止并发风暴。
+    ("index_valuation_sync", 1, "25 19 * * 0-4",                    # 每周一至周五 19:25（P2 估值→ERP）
+     {"timeout_sec": 60, "lookback_days": 0}),
+    ("interbank_rate_sync", 1, "35 19 * * 0-4",                     # 每周一至周五 19:35（蓝图A 钱贵不贵）
+     {"timeout_sec": 90}),
+    ("overseas_index_sync", 1, "50 19 * * *",                       # 每天 19:50（蓝图E 恒生+美股，美股为前一夜收盘）
+     {"timeout_sec": 60}),
+    ("currency_boc_sync", 1, "5 20 * * *",                          # 每天 20:05（蓝图E 人民币中间价）
+     {"timeout_sec": 60, "first_lookback_days": 1825, "from_date": None}),
+    ("fund_new_issue_sync", 1, "20 20 * * *",                       # 每天 20:20（蓝图E 发行冰点）
+     {"timeout_sec": 120}),
+    ("stock_repurchase_sync", 1, "35 20 * * *",                     # 每天 20:35（蓝图D 产业资本回购）
+     {"timeout_sec": 240}),
     # ---------- 资讯（高频，靠窗口内自然触发；已支持回看补采） ----------
     ("news_fetch", 1, "*/30 * * * *",                               # 每 30 分钟
      {"sources": ["em", "cls"], "max_pages": 3}),

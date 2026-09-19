@@ -240,8 +240,8 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
       </div>
     </NCard>
 
-    <!-- 交叉印证（2026-09-15 P1）：参照系第 ④ 类。六项里每一项都是
-         「股票市场内的一个维度 × 一个独立外部维度」，用途只有一个——发现背离。 -->
+    <!-- 交叉印证（2026-09-15 P1 六项 → 2026-09-19 加「估值印证」为七项）：参照系第 ④ 类。
+         七项里每一项都是「股票市场内的一个维度 × 一个独立外部维度」，用途只有一个——发现背离。 -->
     <NCard id="mw-cross" size="small" class="mw-card" title="交叉印证（拿股票市场内的维度，去跟外部独立维度比 —— 专门找「背离」）">
       <CrossCheckPanel :items="crossChecks" :note="crossNote" />
     </NCard>

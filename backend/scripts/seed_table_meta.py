@@ -73,13 +73,21 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["market_style_sync"], ""),
     ("bond_profit_daily", "债券",
      "中债;美债(akshare bond_zh_us_rate)",
-     "中美国债 2/5/10/30y 收益率 + spread 日线，自本地 max 日起增量补齐；每工作日 18:15。",
+     "中美国债 2/5/10/30y 收益率 + spread 日线；每工作日 19:15。"
+     "⚠️ **两腿独立水位线**（2026-09-19 修复）：中债腿与美债腿各自算最后非空日，"
+     "起点取两者**较早**者（不再一律 MAX(trade_date)）——原先只看全表最大日，"
+     "晚间 19:15 跑到时美债当日尚未发布、写入 NULL 行后水位即被推高，"
+     "美债列因此自 2026-09-07 起全 NULL 断供 10 天且无规则报警。"
+     "同时 INSERT 改 Upsert（uk_trade_date），已回填的历史非空值不再被 NULL 冲掉。",
      ["bond_profit_sync"], ""),
     ("index_constituents", "指数",
      "中证指数官网;国证;csindex members",
-     "指数成分股快照（11 指数 ~2,819 行）：index_cons_sync 每月 15 日 08:30 全量刷新"
-     "（指数月度调样）；csindex 主源 → cni/members 降级；stock_name 缺失时以 stock_info 兜底回填；"
-     "uk_index_stock 幂等。",
+     "指数成分股快照（11 指数 ~2,819 行/快照日，**按日留档**）：index_cons_sync 每月 15 日 21:30 "
+     "全量刷新（覆盖月度调样）；csindex 主源 → cni/members 降级；stock_name 缺失时以 stock_info 兜底回填。"
+     "⚠️ 2026-09-19 §7-⑧ 改造：唯一键由 (index_code, stock_code) 改为 "
+     "**uk_index_stock_date(index_code, stock_code, trade_date)**，DELETE 只删**本快照日**的行 → "
+     "历史快照保留，可回溯「某只股票何时进出某指数」；trade_date=快照日（本轮采集日），"
+     "源侧样本日期另存 sample_date（国证源无则 NULL）。",
      ["index_cons_sync"], ""),
     ("index_profile", "指数",
      "中证指数官网",
@@ -128,7 +136,8 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["ai_concept_analysis"], "当前为占位降级态"),
     ("dq_report", "质量",
      "自产(data_quality_check)",
-     "数据质量体检结果快照：每日 20:30 读 dq_rules（73 条规则）逐条执行写入；大表限定最新时间切片秒级完成；同轮运行中保护。",
+     "数据质量体检结果快照：每日 21:50（主触发=链式）读 dq_rules（104 条规则）逐条执行写入；"
+     "大表限定最新时间切片秒级完成；同轮运行中保护。",
      ["data_quality_check"], ""),
     # ---- 无采集任务（历史导入/静态/系统） ----
     ("stock_market_daily_ex", "行情",
@@ -159,7 +168,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["capital_flow_sync"], "采集器已实现未启用（enabled=0）"),
     ("securities_margin", "资金",
      "上交所;深交所;北交所(akshare)",
-     "沪深北三市两融合计：rzye=融资余额、rqye=融券余额、rzrqye=rzye+rqye、rzrqyecz=rzye-rqye（本地派生）。margin_sync 每日 09:00 从本地 MAX(trade_date) 次日增量补齐；单位归一——上交所为元、深交所为亿元(×1e8)、北交所取明细求和(元)。",
+     "沪深北三市两融合计：rzye=融资余额、rqye=融券余额、rzrqye=rzye+rqye、rzrqyecz=rzye-rqye（本地派生）。margin_sync 每日 20:00 从本地 MAX(trade_date) 次日增量补齐；单位归一——上交所为元、深交所为亿元(×1e8)、北交所取明细求和(元)。",
      ["margin_sync"], ""),
     ("stock_financial_abstract_ths", "财务",
      "同花顺(akshare stock_financial_abstract_ths)",
@@ -199,15 +208,15 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 系统表 ----
     ("task_config", "系统",
      "手动维护;作业监控前端",
-     "采集任务配置（29 任务：enabled/cron/params）；作业监控栏目可热改，调度器实时同步。⚠️ cron 的 day_of_week 为 APScheduler 语义（0=周一、6=周日，与 Unix crontab 相反），界面与调度日志会同时显示 cron_human 中文语义。",
+     "采集任务配置（35 任务：enabled/cron/params，列名就是 `cron`）；作业监控栏目可热改，调度器实时同步。⚠️ cron 的 day_of_week 为 APScheduler 语义（0=周一、6=周日，与 Unix crontab 相反），界面与调度日志会同时显示 cron_human 中文语义。⚠️ 主触发=链式：19:20 日线 success 后自动接力 market_style → market_current → data_quality_check，表内时刻（21:30/21:40/21:50）仅兜底。",
      [], ""),
     ("task_runs", "系统",
      "自产(TaskRecorder)",
-     "作业运行记录：每次执行 running→success/failed + 写入条数/错误信息；保留最近 ~100 条。",
+     "作业运行记录：每次执行 running→success/failed/**blocked**（blocked=数据未就绪，非失败、不计入失败率）+ 写入条数/错误信息；保留最近 ~100 条。",
      [], ""),
     ("dq_rules", "质量",
      "手动维护;seed_dq_rules",
-     "数据质量规则配置（73 条 / 14 类检查器，daily 68 + weekly 5）；数据质量栏目可维护。",
+     "数据质量规则配置（104 条 / 15 类检查器，daily 99 + weekly 5；2026-09-19 新增 column_watermark 检查器专治「有列无值」）；数据质量栏目可维护。",
      [], ""),
     ("stock_company_profile_bak_20260905", "资料",
      "备份(巨潮)",
@@ -225,12 +234,58 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 系统与配置表 ----
     ("table_meta", "系统",
      "手动维护;seed_table_meta",
-     "表级元数据：category/source_desc/flow_desc/writers/writer_cols；数据中心右侧「数据流」折叠卡与本表双向引用；当前 37 张表（29 业务 + 8 系统/质量）。",
+     "表级元数据：category/source_desc/flow_desc/writers/writer_cols；数据中心右侧「数据流」折叠卡与本表双向引用；当前本表登记 43 张表（库内共 44 张：29 业务 + 新增 6 + 系统/质量）。",
      [], "元数据自身"),
     ("user_prefs", "系统",
      "手动维护;前端 SortPrefsModal",
      "用户偏好：数据中心表格默认排序（按表持久化）；DataView 「默认排序」弹窗可改。",
      [], ""),
+    # ---- 2026-09-19 市场风向蓝图 P2/P3 落地（6 张新表）----
+    ("index_valuation_daily", "估值",
+     "中证指数官网;乐咕乐股;全A等权(akshare)",
+     "指数估值日频三源（1,281 行）：**source 列区分三套口径、绝不可跨源比较**——"
+     "csindex=`stock_zh_index_value_csindex`（中证官网，滚动 PE 整体法）；"
+     "legu=`stock_index_pe_lg`（乐咕，上证50/沪深300/中证500/中证1000，**含近 250 个月末历史**，"
+     "ERP 分位窗口的唯一来源，故 lookback_days=0 不截断）；all_a=`stock_a_ttm_lyr`（全A等权）。"
+     "⚠️ 实测同日中证滚动 PE 系统性高于乐咕（16.92 vs 12.68）→ 只可同源纵向比。"
+     "uk_index_date_source 幂等 upsert；每工作日 19:25。消费方：ERP（100/滚动PE − 10Y 国债）。",
+     ["index_valuation_sync"], ""),
+    ("interbank_rate_daily", "利率",
+     "上海银行同业拆借市场(Shibor);全国银行间同业拆借中心(LPR)",
+     "银行间拆借利率 + LPR（4,984 行）：Shibor 隔夜/1周/1月/3月 走 "
+     "`rate_interbank(market='上海银行同业拆借市场')`；LPR 1Y/5Y 走 `macro_china_lpr`。"
+     "⚠️ LPR 是**月度报价**（每月 20 日公布），采集器按「公布后生效至下次公布」"
+     "**顺延填充到每个自然日**，否则按日 join 会大面积缺值。"
+     "PRIMARY KEY(trade_date) 幂等 upsert；每工作日 19:35。回答蓝图A「钱贵不贵」。",
+     ["interbank_rate_sync"], ""),
+    ("overseas_index_daily", "海外",
+     "新浪财经(akshare stock_hk_index_daily_sina / index_us_stock_sina)",
+     "海外与港股指数日线（20,367 行）：HSI 恒生（`stock_hk_index_daily_sina`）"
+     "+ DJI/SPX/IXIC 道指·标普500·纳指（`index_us_stock_sina`）。"
+     "uk_code_date 幂等增量；每自然日 19:50（美股为 T-1 收盘，源侧天然滞后一天，别当缺数）。"
+     "回答蓝图E「外围环境」。",
+     ["overseas_index_sync"], ""),
+    ("currency_boc_daily", "汇率",
+     "新浪财经-中行人民币牌价(akshare currency_boc_sina)",
+     "人民币外汇牌价与中间价（5,615 行 / 4 币种 USD·EUR·JPY·HKD）："
+     "mid_price=央行中间价（政策意图）、spot_buy/sell=中行汇买/汇卖（市场实现），"
+     "两者背离本身即信息（中间价稳而即期弱 = 贬值压力靠逆周期因子硬压）。"
+     "⚠️ 源按**每 100 外币**报价，采集器已 ÷100 归一为**元/1 外币**（下游无需再除）。"
+     "⚠️ 源 symbol 必须逐字对齐（'港币' 而非 '港元'，拼错在映射表里抛 KeyError）。"
+     "uk_currency_date 幂等；每自然日 20:05。回答蓝图E「汇率破位=外资流出压力」。",
+     ["currency_boc_sync"], ""),
+    ("fund_new_issue", "基金",
+     "东财数据中心(akshare fund_new_found_em)",
+     "新基金发行（6,848 只）：含认购期/募集份额/成立日/经理/申购状态，"
+     "回答蓝图E「新增资金供给」。全量 upsert（PRIMARY KEY fund_code，整表仅数千行，不做增量）；"
+     "每自然日 20:20。⚠️ establish_date 为 NULL = 仍在发行未成立，属正常态而非缺数。",
+     ["fund_new_issue_sync"], ""),
+    ("stock_repurchase", "回购",
+     "东财数据中心(akshare stock_repurchase_em)",
+     "股票回购明细（5,513 条 / 12 页）：预案价上下限、计划金额与占比、已完成金额/股数/均价、进度。"
+     "回答蓝图D「产业资本态度」。全量 upsert（uk_code_start(stock_code, start_date)，"
+     "源会回溯修订进度，故必须覆盖写而非 INSERT IGNORE）；每自然日 20:35。",
+     ["stock_repurchase_sync"], ""),
 ]
 
 # 列级血缘：table_name -> { 任务名: {source, cols[], derived[], note?, col_notes{}} }
@@ -560,6 +615,91 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                      "lg_net_inflow", "mid_net_inflow", "sm_net_inflow"],
             "note": "已实现但默认禁用（enabled=0）：东财域沙箱不可达；"
                     "「主力净流入=超大单+大单」仅 90~93.8% 成立，源口径待复核后启用",
+        },
+    },
+    # ---- 2026-09-19 市场风向蓝图 P2/P3 落地 ----
+    "index_valuation_daily": {
+        "index_valuation_sync": {
+            "source": "中证官网;乐咕;全A等权",
+            "cols": ["index_code", "index_name", "trade_date", "source", "pe_lyr", "pe_ttm",
+                     "pe_ttm_median", "pe_lyr_median", "dividend_yield", "dividend_yield2",
+                     "pe_ttm_pct10y", "close_point"],
+            "note": "三源同表以 source 区分（csindex/legu/all_a）；乐咕源保留全历史"
+                    "（ERP 分位窗口依赖近 250 个月末），故 lookback_days=0 不截断",
+            "col_notes": {
+                "pe_ttm": "滚动市盈率 TTM（整体法）：中证「市盈率2」/ 乐咕「滚动市盈率」；"
+                          "⚠️ 三源口径不可比，只可同源纵向比",
+                "pe_lyr": "静态市盈率：中证「市盈率1」/ 乐咕「静态市盈率」",
+                "dividend_yield": "中证源股息率1（近12个月）",
+                "dividend_yield2": "中证源股息率2（近12个月，分母口径不同）",
+                "pe_ttm_pct10y": "近10年 PE 分位（仅乐咕源提供）",
+                "close_point": "指数点位（乐咕/全A 源提供，供与 dc_index_market 勾稽）",
+            },
+        },
+    },
+    "interbank_rate_daily": {
+        "interbank_rate_sync": {
+            "source": "上海银行同业拆借市场;全国银行间同业拆借中心",
+            "cols": ["trade_date", "shibor_on", "shibor_1w", "shibor_1m", "shibor_3m",
+                     "lpr_1y", "lpr_5y"],
+            "note": "Shibor 为日频（rate_interbank）、LPR 为月度报价（macro_china_lpr）；"
+                    "PRIMARY KEY(trade_date) 幂等 upsert",
+            "col_notes": {
+                "lpr_1y": "月度报价（每月20日公布）→ 采集器按「公布后生效至下次公布」"
+                          "顺延填充到每个自然日，否则按日 join 大面积缺值",
+                "lpr_5y": "同 lpr_1y，5年期报价（房贷利率锚）",
+            },
+        },
+    },
+    "overseas_index_daily": {
+        "overseas_index_sync": {
+            "source": "akshare 新浪外盘指数",
+            "cols": ["index_code", "index_name", "trade_date", "open", "high", "low", "close",
+                     "volume", "amount"],
+            "note": "HSI 走 stock_hk_index_daily_sina；DJI/SPX/IXIC 走 index_us_stock_sina；"
+                    "uk_code_date 幂等增量",
+            "col_notes": {
+                "trade_date": "当地交易日；美股为 T-1 收盘，源侧天然滞后一天（非缺数）",
+            },
+        },
+    },
+    "currency_boc_daily": {
+        "currency_boc_sync": {
+            "source": "akshare currency_boc_sina(新浪-中行牌价)",
+            "cols": ["currency", "currency_name", "trade_date", "mid_price", "spot_buy",
+                     "spot_sell", "ref_price"],
+            "derived": ["mid_price", "spot_buy", "spot_sell", "ref_price"],
+            "note": "uk_currency_date(currency, trade_date) 幂等 upsert；4 币种 USD/EUR/JPY/HKD",
+            "col_notes": {
+                "mid_price": "央行中间价，**元/1 外币**——源按每 100 外币报价，已 ÷100 归一",
+                "spot_buy": "中行汇买价（元/1 外币，已 ÷100）",
+                "spot_sell": "中行钞卖价/汇卖价（元/1 外币，已 ÷100）",
+                "ref_price": "中行折算价（元/1 外币，已 ÷100）",
+                "currency_name": "⚠️ 源 symbol 必须逐字对齐 akshare 合法取值：'港币' 而非 '港元'，"
+                                 "拼错在 _currency_boc_sina_map 抛 KeyError（不报「不支持」）",
+            },
+        },
+    },
+    "fund_new_issue": {
+        "fund_new_issue_sync": {
+            "source": "akshare fund_new_found_em(东财)",
+            "cols": ["fund_code", "fund_name", "company", "fund_type", "subs_period",
+                     "raise_share", "establish_date", "manager", "purchase_status"],
+            "note": "全量 upsert（PRIMARY KEY fund_code，整表仅数千行）",
+            "col_notes": {
+                "establish_date": "NULL = 仍在发行未成立，属正常态而非缺数",
+            },
+        },
+    },
+    "stock_repurchase": {
+        "stock_repurchase_sync": {
+            "source": "akshare stock_repurchase_em(东财)",
+            "cols": ["stock_code", "stock_name", "start_date", "announce_date", "progress",
+                     "plan_price_low", "plan_price_high", "plan_amount_low", "plan_amount_high",
+                     "plan_pct_low", "plan_pct_high", "done_amount", "done_shares",
+                     "done_price_low", "done_price_high"],
+            "note": "全量 upsert（uk_code_start(stock_code, start_date)）；"
+                    "源会回溯修订回购进度，故必须覆盖写而非 INSERT IGNORE",
         },
     },
 }

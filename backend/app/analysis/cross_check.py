@@ -20,6 +20,7 @@
   concept    指数六组口径     × 概念板块口径            两个独立数据源互证或打架
   micro      涨停/跌停        × 换手率中位数            恐慌缩量 = 抛压衰竭前兆
   pxvol      大盘 20 日收益   × 成交额量比              缩量上涨 = 虚涨
+  valuation  估值分位        × 大势位置                越跌越贵（EPS 下滑盖过跌价）
 
 **判定用「方向背离法」，不做加权打分**——打分说不清分数怎么来的，而方向背离可解释、可复核：
   ① 每一维先算自己的变化量（20 日）；
@@ -33,12 +34,16 @@
 不能让页面等。唯一的例外是换手率——`stock_market_daily` 按 trade_date 取该列是随机回表
 （单日 15 秒），故**已物化**为 `market_style_daily.turnover_med`（见 market_style_sync 文件头）。
 
-⚠️ 已知缺口（诚实标注，不假装有）：库内**没有指数估值分母**（PE/PB 全表为空），
-故本模块**不做 ERP（股权风险溢价）**，股债项只做方向性判读。接入指数估值后应升级为 ERP 分位。
+⚠️ 已知缺口的历史与关闭（2026-09-19 更新）：
+  本模块 2026-09-15 首次落地时，库内**没有指数估值分母**（`stock_market_current` 的 PE/PB
+  等 8 列全表为空），故股债项刻意**不做 ERP**，只做方向性判读，并在文档里诚实标注了这一点。
+  2026-09-19 新增 `index_valuation_sync`（中证官网 + 乐咕 + 全A 三源）后该缺口已关闭：
+  第 ⑦ 项「估值印证」给出 **ERP（股权风险溢价）分位**，见 `_valuation` 与 `erp_snapshot`。
 """
 from __future__ import annotations
 
 import logging
+from bisect import bisect_right
 
 from ..db import query_all
 
@@ -56,10 +61,12 @@ CHG_LAG = 20
 # 交叉印证清单说明（随响应下发，前端只透传不手抄 —— 设计规范 §1.0 硬性约束 ②）
 FRAMEWORK_NOTE = (
     "交叉印证 = 五类参照系的第 ④ 类：拿股票市场内部的一个维度，去跟另一个**独立维度**比。"
-    "6 项里每一项都配了外部参照物（杠杆资金 / 无风险利率 / 商品实体 / 概念口径 / 微观结构 / 量能），"
+    "7 项里每一项都配了外部参照物（杠杆资金 / 无风险利率 / 商品实体 / 概念口径 / 微观结构 / 量能 / 估值），"
     "用途只有一个——发现**背离**：两个本该同向的维度不同向。"
     "判定用方向背离法：每维取自身 20 日变化，以「自身近一年变化幅度的中位数」的一半为死区，"
     "两维方向相反即背离。不做加权打分，因为打分说不清分数怎么来的。"
+    "第 ⑦ 项「估值印证」另附 ERP（股权风险溢价）分位 —— 由 index_valuation_daily（中证官网/乐咕/全A 三源）"
+    "提供估值分母后，2026-09-19 才得以成立。"
 )
 
 
@@ -174,7 +181,10 @@ def _leverage(ctx: dict) -> dict:
     key, label, pair = "leverage", "杠杆印证", "风偏分数 × 两融余额"
     hint = ("风偏分数 = 科技成长组 − 股息防守组 20 日等权收益差（pp）；两融余额取 securities_margin.rzrqye。"
             "两者衡量「想法」与「真金白银」，实测相关系数仅约 0.33 —— 它们是两件事，不是同一信号的两种写法。"
-            "⚠️ 该表不含可用占比列（rzrqyecz 存值 ≈ 余额而非占流通市值比，列名与值不符，已刻意不用）。")
+            "⚠️ 该表不含「占流通市值比」列，故杠杆水平只能看**绝对额的历史分位**，不能与市值规模联动判读。"
+            "（原勘察报告曾怀疑 rzrqyecz 口径错配，2026-09-19 全表 3,980 行复核："
+            "`rzrqyecz − (rzye − rqye) ≡ 0`，即它确实等于「融资余额 − 融券余额」，列名与值一致，"
+            "只是融券腿占比仅 1% 量级、信息量低。该列无缺陷，见 docs/市场风向数据蓝图落地审计_2026-09-19.md §6。）")
     srows = _style_series(ctx["as_of"], ["risk_appetite_20"], 320)
     srows.reverse()                                     # 升序，便于 i-20 取值
     if len(srows) < 40:
@@ -280,9 +290,10 @@ def _bond(ctx: dict) -> dict:
     key, label, pair = "bond", "股债印证", "大势位置 × 10Y 国债收益率"
     hint = ("10Y 国债收益率取 bond_profit_daily.cn_bond_10y（中债），分位为近一年口径；"
             "大势位置 = 中证全指在近 250 日高低区间的分位。"
-            "⚠️ 库内**无指数估值分母**（stock_market_current 的 PE/PB 等 8 列全表为空），"
-            "故本项**不做 ERP（股权风险溢价）**，只做「利率水平 × 股指位置」的方向性判读；"
-            "接入指数估值后应升级为 ERP 分位（通常 ERP≥90% 分位对应中长期底部区域）。")
+            "⚠️ 美债腿（us_bond_*）此前因「增量起点只看表最新日 + 裸 INSERT」断供 10 天，"
+            "2026-09-19 已改为「两腿独立水位线 + Upsert 回填」并补 DQ 规则 bond_us_notnull，"
+            "现最多滞后 1 个交易日（当日美债尚未发布）。中美利差判读已可用。"
+            "本项只做「利率水平 × 股指位置」的方向判读；**ERP 分位见第 ⑦ 项「估值印证」**。")
     brows = query_all(
         "SELECT trade_date, cn_bond_10y, cn_bond_10y_2y_spread FROM bond_profit_daily "
         "WHERE cn_bond_10y IS NOT NULL AND trade_date <= %s ORDER BY trade_date DESC LIMIT %s",
@@ -643,6 +654,206 @@ def _pxvol(ctx: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------- ⑦ 估值印证（2026-09-19 P2 落地）
+
+ERP_INDEX_CODE = "000300"
+ERP_INDEX_NAME = "沪深300"
+# 估值腿用乐咕：唯一给出长历史的源（中证官网只回溯 20 个交易日，做不出分位）
+ERP_SOURCE = "legu"
+# 分位窗口（点）。乐咕是「月末 + 最新」序列，250 点 ≈ 20 年，故窗口标签必须写成「月末」而非「近一年」
+ERP_PCT_WINDOW = 250
+# 股息率腿用中证官网（官方口径、逐日），但其历史只有 20 个交易日 → 只给当前值，不做分位
+DY_SOURCE = "csindex"
+
+ERP_NOTE = (
+    "ERP（股权风险溢价）= 盈利收益率 − 无风险利率 = 100 ÷ 滚动市盈率 − 10Y 国债收益率。"
+    "它回答的是「买股票相对买国债，多拿到的补偿够不够」——单看利率或单看 PE 都答不了。"
+    "读法（报告 §6 蓝图 B）：ERP 分位 ≥90% 通常对应中长期底部区域，≤10% 对应泡沫区。"
+    "⚠️ 估值腿取**乐咕口径**（沪深300 整体法，剔除负值与微利极端值）；同一天中证官网口径的滚动 PE "
+    "系统性更高（实测同日 16.92 vs 12.68）——两套口径**数值不可直接比**，只可同源纵向比。"
+    "本模块同时下发两套仅供交叉核对，判定一律基于乐咕口径。"
+    "⚠️ 分位窗口为「近 250 个月末」（乐咕为月末序列，约 20 年），不是 250 个交易日——"
+    "长期估值分位本就该用长窗口，但读的时候别与页面上其它「近一年分位」混为一谈。"
+)
+
+
+def _pe_series(as_of: str | None, source: str = ERP_SOURCE) -> list[dict]:
+    """沪深300 的 (日期, 滚动PE, 静态PE) 序列（指定源，按日期升序）"""
+    cond, args = ("AND trade_date <= %s", [as_of]) if as_of else ("", [])
+    return query_all(
+        "SELECT trade_date, pe_ttm, pe_lyr FROM index_valuation_daily "
+        f"WHERE index_code = %s AND source = %s AND pe_ttm IS NOT NULL AND pe_ttm > 0 {cond} "
+        "ORDER BY trade_date",
+        [ERP_INDEX_CODE, source] + args,
+    )
+
+
+def _latest_dividend_yield(as_of: str | None) -> tuple[float | None, str | None]:
+    """最新可得的中证官网口径股息率（截面列，非历史序列）"""
+    cond, args = ("AND trade_date <= %s", [as_of]) if as_of else ("", [])
+    rows = query_all(
+        "SELECT trade_date, dividend_yield FROM index_valuation_daily "
+        f"WHERE index_code = %s AND source = %s AND dividend_yield IS NOT NULL {cond} "
+        "ORDER BY trade_date DESC LIMIT 1",
+        [ERP_INDEX_CODE, DY_SOURCE] + args,
+    )
+    if not rows:
+        return None, None
+    return float(rows[0]["dividend_yield"]), str(rows[0]["trade_date"])
+
+
+def erp_snapshot(as_of: str | None = None) -> dict | None:
+    """ERP 快照 —— 供 /api/analysis/market-wind 的 `erp` 字段与 KPI 卡片。
+
+    估值腿与利率腿按时点对齐：估值序列是月末点，利率取「该月末当日或之前最近一个交易日」的
+    10Y 国债收益率（用 bisect 在已排序的利率序列上做前缀查找，避免逐点相关子查询）。
+    """
+    prows = _pe_series(as_of)
+    if len(prows) < 20:
+        return None
+    brows = query_all(
+        "SELECT trade_date, cn_bond_10y FROM bond_profit_daily "
+        "WHERE cn_bond_10y IS NOT NULL ORDER BY trade_date"
+    )
+    if not brows:
+        return None
+    bdates = [str(r["trade_date"]) for r in brows]
+    bvals = [float(r["cn_bond_10y"]) for r in brows]
+
+    pts = []
+    for r in prows:
+        d = str(r["trade_date"])
+        i = bisect_right(bdates, d) - 1
+        if i < 0:
+            continue
+        pe = float(r["pe_ttm"])
+        ey = 100.0 / pe                      # 盈利收益率（%）
+        y = bvals[i]
+        pts.append({"date": d, "pe": pe, "ey": ey, "bond": y, "erp": ey - y})
+    if len(pts) < 20:
+        return None
+
+    win = pts[-ERP_PCT_WINDOW:]
+    cur = pts[-1]
+    erp_pct = _pctile([p["erp"] for p in win], cur["erp"])
+    pe_pct = _pctile([p["pe"] for p in win], cur["pe"])
+    dy, dy_date = _latest_dividend_yield(as_of)
+    dy_spread = round(dy - cur["bond"], 4) if dy is not None else None
+
+    # 口径互证：同日两源的滚动 PE（乐咕 vs 中证官网），差距过大说明某源方法论漂移
+    cs = query_all(
+        "SELECT pe_ttm FROM index_valuation_daily WHERE index_code = %s AND source = %s "
+        + ("AND trade_date <= %s " if as_of else "")
+        + "ORDER BY trade_date DESC LIMIT 1",
+        ([ERP_INDEX_CODE, DY_SOURCE, as_of] if as_of else [ERP_INDEX_CODE, DY_SOURCE]),
+    )
+    cs_pe = float(cs[0]["pe_ttm"]) if cs and cs[0]["pe_ttm"] is not None else None
+
+    if erp_pct is None:
+        level, level_text = "nodata", "数据缺失"
+    elif erp_pct >= 90:
+        level, level_text = "cheap", "中长期底部区域"
+    elif erp_pct >= 70:
+        level, level_text = "cheap", "偏便宜"
+    elif erp_pct <= 10:
+        level, level_text = "expensive", "泡沫区"
+    elif erp_pct <= 30:
+        level, level_text = "expensive", "偏贵"
+    else:
+        level, level_text = "neutral", "中性区间"
+
+    return {
+        "anchor": ERP_INDEX_NAME,
+        "anchor_code": ERP_INDEX_CODE,
+        "as_of": cur["date"],
+        "erp": round(cur["erp"], 2),
+        "erp_pct": erp_pct,
+        "pe_ttm": round(cur["pe"], 2),
+        "pe_pct": pe_pct,
+        "earnings_yield": round(cur["ey"], 2),
+        "bond_10y": round(cur["bond"], 2),
+        "bond_date": bdates[bisect_right(bdates, cur["date"]) - 1],
+        "dividend_yield": dy,
+        "dividend_date": dy_date,
+        "dy_spread": dy_spread,
+        "pe_ttm_csindex": None if cs_pe is None else round(cs_pe, 2),
+        "samples": len(win),
+        "window_label": f"近 {len(win)} 个月末（乐咕口径，约 {len(win)//12} 年）",
+        "level": level,
+        "level_text": level_text,
+        "note": ERP_NOTE,
+    }
+
+
+def _valuation(ctx: dict) -> dict:
+    """估值分位 × 大势位置 —— 「越跌越贵」还是「越跌越便宜」
+
+    这是 ④ 交叉印证里最难替代的一项：股价位置和估值分位**本该同向**（跌下来就该更便宜），
+    但两者由不同的量驱动 —— 位置只由价格决定，估值分位由「价格 ÷ 盈利」决定。
+    于是当盈利下滑得比价格更快时，就会出现「指数在低位、估值却不便宜」的**背离**，
+    这正是不看估值分母时完全看不见的东西。反之「位置高、估值分位低」= 盈利修复主导的上涨。
+    """
+    key, label, pair = "valuation", "估值印证", "估值分位 × 大势位置"
+    hint = ERP_NOTE
+    snap = erp_snapshot(ctx["as_of"])
+    if not snap or snap.get("pe_pct") is None:
+        return _nodata(key, label, pair, hint)
+
+    pe_pct, erp_pct = snap["pe_pct"], snap.get("erp_pct")
+    bench = _f(ctx["cur"].get("bench_pos_pct"))
+    if bench is None:
+        return _nodata(key, label, pair, hint)
+
+    lo_pe, hi_pe = pe_pct <= 30, pe_pct >= 70
+    lo_b, hi_b = bench <= 30, bench >= 70
+    if lo_pe and lo_b:
+        level = AGREE
+        reading = (f"股指处近 250 日 {bench}% 低位，估值分位也只有 {pe_pct}% —— "
+                   "跌价把估值一起压下来了，**是真便宜**，两维互相确认。")
+    elif hi_pe and hi_b:
+        level = AGREE
+        reading = (f"股指处 {bench}% 高位、估值分位 {pe_pct}% —— 涨得贵且确实贵，"
+                   "两维一致；此时的风险来自估值本身，不是流动性。")
+    elif lo_b and hi_pe:
+        level = DIVERGE
+        reading = (f"股指已在近 250 日 **{bench}% 低位**，但估值分位仍高达 **{pe_pct}%** —— "
+                   "**越跌越贵**：盈利下滑的幅度盖过了价格下跌，估值并没有被跌便宜。"
+                   "这种形态下「跌多了所以便宜」的直觉是错的。")
+    elif hi_b and lo_pe:
+        level = DIVERGE
+        reading = (f"股指处 {bench}% 高位，但估值分位仅 {pe_pct}% —— "
+                   "**越涨越便宜**：盈利修复跑在价格前面，上涨有业绩支撑而非纯估值扩张。")
+    else:
+        level = NEUTRAL
+        reading = (f"估值分位 {pe_pct}% 与股指位置 {bench}% 均处中位，"
+                   "未形成可判读的背离或共振。")
+
+    evidence = [
+        _ev("ERP（盈利收益率−10Y）", None if snap["erp"] is None else f"{snap['erp']}pp"),
+        _ev("ERP 分位", None if erp_pct is None else f"{erp_pct}%（{snap['window_label']}）"),
+        _ev("盈利收益率", f"{snap['earnings_yield']}%"),
+        _ev("10Y 国债", f"{snap['bond_10y']}%（{snap['bond_date']}）"),
+        _ev("滚动 PE（乐咕）", f"{snap['pe_ttm']}"),
+        _ev("滚动 PE（中证官网）", None if snap["pe_ttm_csindex"] is None else f"{snap['pe_ttm_csindex']}"),
+        _ev("股息率", None if snap["dividend_yield"] is None else f"{snap['dividend_yield']}%"),
+        _ev("股息率−10Y 利差", None if snap["dy_spread"] is None else f"{snap['dy_spread']}pp"),
+        _ev("估值判读", snap["level_text"]),
+    ]
+    return {
+        "key": key, "label": label, "pair": pair,
+        "level": level, "verdict": VERDICT_TEXT[level], "reading": reading,
+        "dims": [
+            _dim("大势位置（250日分位）", bench, "%", "neutral", None, None,
+                 as_of=ctx["as_of"], sub="80+ 高位 / 20- 低位"),
+            _dim(f"{ERP_INDEX_NAME} 滚动PE", snap["pe_ttm"], "倍", "neutral", pe_pct, None,
+                 as_of=snap["as_of"], sub=f"分位越低越便宜（{snap['window_label']}）"),
+        ],
+        "evidence": evidence,
+        "hint": hint, "as_of": snap["as_of"],
+        "stale": _lag(ctx["dates"], snap["as_of"]),
+    }
+
+
 # ---------------------------------------------------------------- 入口
 
 
@@ -656,7 +867,7 @@ def cross_checks(as_of: str | None = None) -> dict:
         return {"items": [], "summary": {"agree": 0, "diverge": 0, "neutral": 0, "nodata": 0},
                 "note": FRAMEWORK_NOTE, "as_of": None}
     items: list[dict] = []
-    for fn in (_leverage, _bond, _commodity, _concept, _micro, _pxvol):
+    for fn in (_leverage, _bond, _commodity, _concept, _micro, _pxvol, _valuation):
         try:
             it = fn(ctx)
         except Exception as e:                          # noqa: BLE001 —— 刻意 fail-soft

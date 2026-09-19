@@ -40,8 +40,21 @@ KPI 结论规则：
 """
 from __future__ import annotations
 
+import logging
+
 from ..db import query_all
 from . import cross_check
+
+logger = logging.getLogger(__name__)
+
+# ERP 卡片口径说明（随响应下发给前端做 tooltip，前端只透传不手抄）
+ERP_HINT = (
+    "ERP（股权风险溢价）= 盈利收益率 − 无风险利率 = 100 ÷ 沪深300 滚动市盈率 − 10Y 国债收益率。"
+    "回答「买股票相对买国债多拿到的补偿够不够」——单看利率或单看 PE 都答不了这个问题。"
+    "分位 ≥90% 通常对应中长期底部区域，≤10% 对应泡沫区。"
+    "⚠️ 分位窗口是**近 250 个月末**（乐咕月末序列，约 20 年），不是 250 个交易日。"
+    "⚠️ 估值腿用乐咕口径；中证官网口径同日滚动 PE 系统性更高（实测 16.92 vs 12.68），两套只可同源纵向比。"
+)
 
 # 风险调整口径说明（随响应下发给前端做 tooltip，避免前后端各抄一份口径）
 ADJ_NOTE = (
@@ -462,6 +475,22 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
     pct_ra, pct_sc = _pctile("risk_appetite_20", 250, as_of), _pctile("scissors_20", 250, as_of)
     pct_se, pct_po = _pctile("sentiment_20", 250, as_of), _pctile("policy_excess_20", 250, as_of)
 
+    # 股债性价比 ERP（2026-09-19 新增，P2）：交叉印证第 ⑦ 项与本 KPI 卡片共用同一份计算。
+    # 取不到就整项优雅降级（value=None → 前端渲染 "--"），绝不让单点缺数据拖垮整页。
+    try:
+        _erp = cross_check.erp_snapshot(as_of)
+    except Exception as e:                          # noqa: BLE001 —— 刻意 fail-soft
+        logger.warning("ERP 快照计算失败，KPI 卡片降级：%s: %s", type(e).__name__, e)
+        _erp = None
+    erp_val = _erp["erp"] if _erp else None
+    erp_pct = _erp["erp_pct"] if _erp else None
+    if _erp:
+        erp_status = (f"{_erp['level_text']}｜ERP 分位 {erp_pct}%"
+                      if erp_pct is not None else _erp["level_text"])
+        erp_status += f"｜10Y {_erp['bond_10y']}%"
+    else:
+        erp_status = "估值数据未就绪"
+
     kpis = [
         {"key": "risk_appetite", "label": "风偏分数（20日）", "value": ra, "unit": "pp", "tone": "updown",
          "status": _risk_status(ra, prev5.get("risk_appetite_20")),
@@ -484,6 +513,15 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
         {"key": "bench_pos", "label": "大势位置（250日分位）", "value": bp, "unit": "%", "tone": "neutral",
          "status": _pos_status(bp), "pct": None, "z": None, "highlight": False, "anchor": "mw-detail",
          "hint": "中证全指在近 250 日高低区间的分位，80+ 高位 / 20- 低位（本身即分位，不再二次求分位）"},
+        # 股债性价比 ERP（2026-09-19 P2 落地）：估值分母此前完全缺失（stock_market_current 的 PE/PB
+        # 全表为空），故这项当时做不出来、也没出现在页面上。index_valuation_sync 补齐后成立。
+        # ⚠️ 分位窗口是「近 250 个月末」而非 250 个交易日 —— 长期估值分位本就该用长窗口，
+        #    但不能塞进通用 pct 字段（前端会固定渲染成「近一年 N% 分位」），故写进 status 文案。
+        # ⚠️ 不设 anchor：ERP 的论据在交叉印证面板里，不是本页独立图表。
+        {"key": "erp", "label": "股债性价比 ERP", "value": erp_val, "unit": "pp", "tone": "neutral",
+         "status": erp_status, "pct": None, "z": None,
+         "highlight": bool(erp_pct is not None and erp_pct >= 90), "anchor": None,
+         "hint": ERP_HINT},
     ]
 
     # 六组收益热力条（附各自的近 250 日分位与 z-score —— 让「+3.5%」有可比基准）
@@ -596,4 +634,5 @@ def market_wind(trend_days: int = 250, as_of: str | None = None) -> dict:
             "breadth": breadth, "volume": volume, "breadth_trend": breadth_trend,
             "cross_checks": xcheck["items"], "cross_summary": xcheck["summary"],
             "cross_note": xcheck["note"],
+            "erp": _erp, "erp_note": ERP_HINT,
             "adj_note": ADJ_NOTE}

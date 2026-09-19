@@ -252,13 +252,16 @@ WEEKLY_RULES = [
 COVERAGE_RULES = [
     ("index_cons_fresh", "index_constituents", "date_floor",
      {"date_col": "trade_date", "days_back": 45}, "critical", 1,
-     "成分快照新鲜度：月度任务（每月15日 08:30），快照日期不得早于 45 天前（防连续漏跑）"),
+     "成分快照新鲜度：月度任务（每月15日 21:30），快照日期不得早于 45 天前（防连续漏跑）"),
     ("index_cons_rows", "index_constituents", "row_count_total",
      {"min_rows": 2600}, "critical", 1,
-     "成分股快照总行数下限（11 指数实测 2819；北证50 待 akshare 修复后补）"),
+     "成分股快照总行数下限（11 指数单份实测 2819；北证50 待 akshare 修复后补。"
+     "2026-09-19 起快照按日留档、总行数会随快照份数累积，故该下限只升不降）"),
     ("index_cons_uniq", "index_constituents", "unique_index",
-     {"cols": ["index_code", "stock_code"], "expect": "exists"}, "info", 1,
-     "幂等保障：uk_index_stock（指数 × 成分唯一）"),
+     {"cols": ["index_code", "stock_code", "trade_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_index_stock_date（指数 × 成分 × 快照日）。**2026-09-19 §7-⑧ 改造**："
+     "快照按日留档后，同一成分会在不同快照日重复出现，故唯一键必须含快照日；"
+     "原 uk_index_stock(index_code, stock_code) 会让每轮采集覆盖历史、永远无法回溯归因"),
     ("index_cons_stock_code", "index_constituents", "regex_count",
      {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1,
      "成分股代码格式校验"),
@@ -408,6 +411,116 @@ RECOVERED_RULES_B34 = [
      "幂等保障：uk_stock_date"),
 ]
 
+# ============================================================================
+# E. 市场风向蓝图 P2/P3 落地（2026-09-19）
+# 依据 docs/市场风向数据蓝图落地审计_2026-09-19.md §5。本批做两件事：
+#   (1) 补上 §7-⑤「美债断供 10 天零报警」的盲点 —— 新增 check_type `column_watermark`；
+#   (2) 为 6 张新采集表配完整规则（非空/新鲜度/取值域/唯一索引）。
+# 阈值全部按 2026-09-19 实际入库状态校准，确认「上线即 pass」。
+#
+# ⚠️ 为什么需要新检查器 column_watermark：既有 14 类检查器**结构上**看不见「有列无值」——
+#    null_rate_slice 只看最新切片（而空缺往往在最新日之前的一整段，空值率恒 0）；
+#    freshness_daily / date_floor 取的是 date_col 的 MAX，与 value_col 无关
+#    （「表在正常更新、某列已死」它们不可能发现）。美债断供 10 天就是这么漏掉的。
+# ============================================================================
+BLUEPRINT_RULES = [
+    # -- §7-⑤ 美债断供补盲点（本批最重要的一条：此前断供 10 天无任何规则覆盖） --
+    ("bond_us_notnull", "bond_profit_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "us_bond_10y", "max_gap_rows": 2}, "critical", 1,
+     "美债 10Y 列水位线：最后非空日之后堆积的行数不得超过 2。容忍 2 的理由——1 = 当日美债尚未发布"
+     "（美债在北京时间次日凌晨才出，每晚 19:15 拉取时当日必为 NULL，属固有滞后）；"
+     "2 = 再叠加一个美国假期（感恩节/圣诞）。实测 2026-09-07~09-18 连续 10 个交易日全 NULL 时"
+     "**没有任何规则报警**，纯靠人工复测才发现，本规则即为堵住该盲点"),
+
+    # -- P2 估值（index_valuation_daily，蓝图 B 的估值分母） --
+    ("valuation_fresh", "index_valuation_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 5, "grace_days": 3}, "warning", 1,
+     "指数估值新鲜度：乐咕/全A 为「月末 + 最新」序列，非月末日靠最新一个点覆盖，故容忍 5 日"
+     "（grace 3 日覆盖周末 + 假期）"),
+    ("valuation_rows", "index_valuation_daily", "row_count_total",
+     {"min_rows": 1000}, "warning", 1,
+     "估值总行数下限（中证官网 6 指数×20 日 + 乐咕 4 指数全史 ~900 + 全A ~260 ≈ 1,280；防误清空）"),
+    ("valuation_pe_range", "index_valuation_daily", "where_count",
+     {"where": "pe_ttm IS NOT NULL AND (pe_ttm <= 0 OR pe_ttm > 300)", "max_count": 0},
+     "warning", 1, "滚动市盈率取值域 (0, 300] —— 上限放到 300 是因全A 中位口径与科创50 会到三位数"),
+    ("valuation_anchor_notnull", "index_valuation_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "pe_ttm", "max_gap_rows": 5}, "warning", 1,
+     "估值腿水位线：滚动 PE 最后非空日之后不得堆积超过 5 行（三源任一更新即算，容忍假期与月末节奏）"),
+    ("valuation_uniq", "index_valuation_daily", "unique_index",
+     {"cols": ["index_code", "trade_date", "source"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_index_date_source（三源并存，故源必须进唯一键）"),
+
+    # -- 蓝图 A 拆借利率（interbank_rate_daily，「钱贵不贵」） --
+    ("interbank_fresh", "interbank_rate_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 5, "grace_days": 2}, "warning", 1,
+     "Shibor 新鲜度（Shibor 每工作日 11:00 发布；grace 覆盖周末与假期）"),
+    ("interbank_shibor_notnull", "interbank_rate_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "shibor_on", "max_gap_rows": 5}, "warning", 1,
+     "Shibor 隔夜水位线：防「LPR 顺延填充把日期撑起来、Shibor 腿其实已死」这种假活"),
+    ("interbank_lpr_range", "interbank_rate_daily", "where_count",
+     {"where": "lpr_1y IS NOT NULL AND (lpr_1y <= 0 OR lpr_1y > 10)", "max_count": 0},
+     "warning", 1, "LPR 1Y 取值域 (0, 10]%（同样是「顺延填充」的守护：不出现 0 或异常值）"),
+
+    # -- 蓝图 E 跨市场（overseas_index_daily） --
+    ("overseas_fresh", "overseas_index_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 5, "grace_days": 2}, "warning", 1,
+     "海外指数新鲜度（恒生与美股交易日历不同，取二者较新者，grace 覆盖各自假期）"),
+    ("overseas_rows_latest", "overseas_index_daily", "row_count_slice",
+     {"date_col": "trade_date", "min_rows": 3}, "warning", 1,
+     "最新日海外指数条数下限（共 4 个指数；港股与美股日历不同，同日通常 3~4 个）"),
+    ("overseas_close_range", "overseas_index_daily", "where_count",
+     {"where": "close IS NOT NULL AND close <= 0", "max_count": 0}, "warning", 1,
+     "收盘价必须为正"),
+    ("overseas_uniq", "overseas_index_daily", "unique_index",
+     {"cols": ["index_code", "trade_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_code_date"),
+
+    # -- 蓝图 E 汇率（currency_boc_daily） --
+    ("currency_fresh", "currency_boc_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 5, "grace_days": 2}, "warning", 1,
+     "外汇牌价新鲜度（中行牌价按工作日发布）"),
+    ("currency_usd_mid_range", "currency_boc_daily", "where_count",
+     {"where": "currency = 'USD' AND mid_price IS NOT NULL AND (mid_price < 5 OR mid_price > 10)",
+      "max_count": 0}, "warning", 1,
+     "美元中间价取值域 5~10 元 —— 同时是**单位守护**：源按「每 100 外币」报价（675.80），"
+     "采集器已 ÷100 归一为 6.7580；哪一轮忘了归一，这条立刻变红"),
+    ("currency_uniq", "currency_boc_daily", "unique_index",
+     {"cols": ["currency", "trade_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_currency_date"),
+
+    # -- 蓝图 E 新基金发行（fund_new_issue，发行冰点=反向底部信号） --
+    ("fund_new_issue_rows", "fund_new_issue", "row_count_total",
+     {"min_rows": 5000}, "warning", 1, "新基金发行总量下限（实测 6,848 只；防误清空）"),
+    ("fund_new_issue_floor", "fund_new_issue", "date_floor",
+     {"date_col": "establish_date", "days_back": 60}, "warning", 1,
+     "最近成立基金日期下限（发行节奏连续，60 天无新成立基金说明采集断档）"),
+    ("fund_new_issue_share_range", "fund_new_issue", "where_count",
+     {"where": "raise_share IS NOT NULL AND (raise_share < 0 OR raise_share > 5000)", "max_count": 0},
+     "warning", 1, "募集份额取值域（单位亿份，单只理论上限取 5000 的宽松值）"),
+
+    # -- 蓝图 D 股票回购（stock_repurchase，产业资本态度） --
+    ("repurchase_rows", "stock_repurchase", "row_count_total",
+     {"min_rows": 4000}, "warning", 1, "回购记录总量下限（实测 5,516 单；防误清空）"),
+    ("repurchase_fresh", "stock_repurchase", "date_floor",
+     {"date_col": "announce_date", "days_back": 60}, "warning", 1,
+     "回购公告新鲜度（回购公告日频，60 天无新公告说明采集断档）"),
+    ("repurchase_amount_order", "stock_repurchase", "where_count",
+     {"where": "plan_amount_low IS NOT NULL AND plan_amount_high IS NOT NULL "
+               "AND plan_amount_low > plan_amount_high", "max_count": 0}, "warning", 1,
+     "金额区间自洽：计划金额下限不得大于上限"),
+    ("repurchase_uniq", "stock_repurchase", "unique_index",
+     {"cols": ["stock_code", "start_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_code_start"),
+
+    # -- §7-② 两融口径：把复核结论钉死（原报告疑为「列名与值不符」，实测不成立） --
+    ("margin_cz_identity", "securities_margin", "where_count",
+     {"where": "rzrqyecz IS NOT NULL AND rzrqye IS NOT NULL AND rzye IS NOT NULL AND rqye IS NOT NULL "
+               "AND ABS(rzrqyecz - (rzye - rqye)) > 1", "max_count": 0}, "warning", 1,
+     "两融差值恒等式守护：rzrqyecz 必须 ≡ rzye − rqye。2026-09-19 全表 3,980 行复核差值恒为 0，"
+     "**确认列名与值一致、原「口径错配」疑虑不成立**（融券腿仅占 1% 量级，故该列信息量低）。"
+     "本规则把结论钉死：口径若日后漂移立刻变红"),
+]
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
     "frozen_dividend_rows",       # → dividend_fresh + dividend_rows
@@ -432,6 +545,7 @@ def main():
             + [(r, "daily") for r in FROZEN_RULES]        # 2026-09-13 历史表冻结监护
             + [(r, "daily") for r in RECOVERED_RULES]     # 2026-09-13 死表恢复（第 1 批）
             + [(r, "daily") for r in RECOVERED_RULES_B34]  # 2026-09-13 死表恢复（第 3/4 批）
+            + [(r, "daily") for r in BLUEPRINT_RULES]      # 2026-09-19 蓝图 P2/P3 落地（6 表 + 美债补盲点）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:

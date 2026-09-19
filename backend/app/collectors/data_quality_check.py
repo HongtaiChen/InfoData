@@ -29,6 +29,10 @@ dq_rules.params（JSON）契约，按 check_type 分：
   where_count       {where, max_count}                     全表任意条件行数上限（静态/档案表）
   regex_count       {col, pattern}                         全表列值格式校验（仅小表）
   unique_index      {cols: [..], expect}                   结构体检：是否存在自然键唯一索引
+  column_watermark  {date_col, value_col, max_gap_rows}     列水位线：value_col 最后非空日之后
+                                                            还有多少行（>max_gap_rows 判列已断供）。
+                                                            与 freshness_daily 互补——后者答「表还在更新吗」，
+                                                            本检查器答「这一列还在更新吗」（2026-09-19 立）
   gap_scan          {date_col, gap_days, high_days}        全史疑似缺口扫描（LAG 窗口）→ 写 dq_gap_detail
   source_handoff    {date_col, source_col, since, max_pct} 跨源衔接一致性（相邻行 data_source 变化处）
   per_key_coverage  {date_col, key_col, window_days, min_rows, min_listed_days,
@@ -52,7 +56,7 @@ logger = logging.getLogger(__name__)
 RUN_STEPS = [
     {"no": 1, "name": "读启用规则", "params": "dq_rules enabled=1（按 rule_group 分组过滤，按表排序）"},
     {"no": 2, "name": "规则预校验", "params": "表/列（含参照表）information_schema 白名单 + where 标识符白名单（防注入）"},
-    {"no": 3, "name": "执行检查器", "params": "14 类检查器（新鲜度/切片行数/空值率/违规数/全史缺口/跨源衔接/覆盖率/僵尸运行…）；单条失败记 error 不中断"},
+    {"no": 3, "name": "执行检查器", "params": "15 类检查器（新鲜度/切片行数/空值率/列水位线/违规数/全史缺口/跨源衔接/覆盖率/僵尸运行…）；单条失败记 error 不中断"},
     {"no": 4, "name": "写入结果", "params": "dq_report 每规则一行 + gap_scan 明细写 dq_gap_detail（供 L3 修复闭环）"},
     {"no": 5, "name": "轮次保留清理", "params": "删除 run_date 早于 30 天的 dq_report / dq_gap_detail 历史"},
 ]
@@ -136,7 +140,11 @@ class DataQualityCheckCollector:
                     return f"参照表列 {c} 不存在于 {ref_table}"
         w = p.get("where")
         if w:
-            bad = [t for t in _IDENT_RE.findall(w) if t not in cols and t.upper() not in _WHERE_FUNCS]
+            # ⚠️ 先剥掉单引号字符串字面量再做标识符白名单：字面量是**值**不是标识符，
+            # 而白名单要防的是「用未知标识符拼 SQL」。不剥离的话 `currency='USD'` 里的
+            # USD 会被当成列名而误报（2026-09-19 新增汇率单位守护规则时踩到）。
+            w_scan = re.sub(r"'[^']*'", "''", w)
+            bad = [t for t in _IDENT_RE.findall(w_scan) if t not in cols and t.upper() not in _WHERE_FUNCS]
             if bad:
                 return f"where 表达式含非白名单标识符: {bad[:3]}"
         for c in p.get("cols") or []:
@@ -368,6 +376,51 @@ class DataQualityCheckCollector:
             msg = f"不存在唯一索引 ({key})" if not found else f"存在唯一索引 ({key})"
         return {"status": status, "metric_value": key, "message": msg}
 
+    def _column_watermark(self, conn, rule: dict) -> dict:
+        """列水位线：某列「最后有值的那天」与「表最新那天」之间的空档行数。
+
+        为什么需要（2026-09-19 立，起因是一次真实事故）：`bond_profit_daily` 的美债 4 列
+        自 2026-09-07 起连续 10 个交易日全为 NULL，**断供 10 天没有任何规则报警**。
+        原因是既有检查器在结构上都看不见这种形态：
+          · `null_rate_slice` 只看「最新切片」，而本表的 NULL 分散在最新日之前的一整段
+            （最新日反而可能已有值）→ 空值率恒为 0；
+          · `freshness_daily` / `date_floor` 取的是 date_col 的 MAX，与 value_col 无关 →
+            「表在正常更新、某列已死」它们不可能发现；
+          · `row_count_*` / `where_count` 更不涉及列维度的时序。
+        这就是「有列无值」陷阱：列还在、表还在长，值却停在了某天。
+
+        本检查器专治这一类：先取 value_col 的**最后非空日**（水位线），再数表里还有多少行
+        排在水位线之后。稳态下该数应为 0~1 —— 1 是「当日源尚未发布」的合理滞后
+        （如美债在北京时间晚间确实还没出），> 1 就是真断供。`max_gap_rows` 用来切这两者。
+
+        与 freshness_daily 的分工：freshness_daily 答「这张表还在更新吗」，
+        本检查器答「这一列还在更新吗」。
+        """
+        p = rule.get("params") or {}
+        date_col = p.get("date_col", "trade_date")
+        value_col = p["value_col"]
+        max_gap = int(p.get("max_gap_rows", 1))
+        table = rule["table_name"]
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT MAX(CASE WHEN `{value_col}` IS NOT NULL THEN `{date_col}` END) AS wm, "
+                f"       MAX(`{date_col}`) AS latest, COUNT(*) AS total FROM `{table}`"
+            )
+            row = cur.fetchone()
+            if not row or row["total"] == 0:
+                return {"status": "fail", "metric_value": "-", "message": MSG_EMPTY}
+            wm, latest = row["wm"], row["latest"]
+            if wm is None:
+                return {"status": "fail", "metric_value": "0",
+                        "message": f"{value_col} 全表无任何非空值（共 {row['total']} 行）——有列无值"}
+            cur.execute(f"SELECT COUNT(*) AS n FROM `{table}` WHERE `{date_col}` > %s", (wm,))
+            n = cur.fetchone()["n"]
+        status = "pass" if n <= max_gap else "fail"
+        msg = (f"{value_col} 水位线 {str(wm)[:10]}，表最新 {str(latest)[:10]}；"
+               f"水位线之后仍有 {n} 行（应 ≤ {max_gap}）"
+               + ("" if n <= max_gap else "—— 该列疑似断供：表在更新但此列不再有新值"))
+        return {"status": status, "metric_value": str(n), "message": msg}
+
     # ---------- 全史窗口扫描类检查器（2026-09-10 新增，weekly 组） ----------
 
     def _gap_scan(self, conn, rule: dict) -> dict:
@@ -530,6 +583,7 @@ class DataQualityCheckCollector:
         "where_count": _where_count,
         "regex_count": _regex_count,
         "unique_index": _unique_index,
+        "column_watermark": _column_watermark,
         "gap_scan": _gap_scan,
         "source_handoff": _source_handoff,
         "per_key_coverage": _per_key_coverage,
