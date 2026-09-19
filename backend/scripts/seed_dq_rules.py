@@ -220,6 +220,19 @@ RULES = [
     ("task_stale_running", "task_runs", "stale_running",
      {"hours": 3}, "warning", 1,
      "僵尸 running 记录：任务记录停在 running 且已超 3 小时（重启中断的残留，会阻塞该任务后续触发）"),
+    # 2026-09-19 补：与 task_stale_running 互补的另一半 ——「跑完了，但跑了很久」。
+    # 原盘点报告称「单次 >3h 无任何告警覆盖」并不准确（stale_running 一直在 pass），
+    # 真实缺口是它只覆盖**未收尾**的 running，覆盖不到**已完成但超长**：
+    #   daily_recon_window     09-17 21:15 → 09-18 18:14  success 1259 分钟
+    #   financial_abstract_sync 09-16 06:52 → 09-16 18:43 success  711 分钟
+    # ⚠️ 判读：此类超长绝大多数是「机器待机冻结进程」所致（家用电脑合盖/睡眠），
+    # 跨度里绝大部分是冻结时长而非执行时长 → 本规则是**物理离线信号**，不是性能告警。
+    # ⚠️ 只数 status='success'：failed 记录里那批「9741 分钟」是运维脚本收尾跨度，非真实耗时。
+    ("task_long_finished", "task_runs", "long_finished_run",
+     {"minutes": 180, "lookback_days": 7}, "warning", 1,
+     "已完成但耗时超长（success 且 >180 分钟）：stale_running 只管「没跑完」，本规则管「跑完了但很久」。"
+     "⚠️ 此类超长多为机器待机冻结进程所致，是**物理离线的信号**，不是任务本身变慢——"
+     "请结合开机/睡眠时段判读，勿据此优化任务性能"),
 ]
 
 # weekly 组：全史窗口扫描类（每周一 21:30 独立任务，见文件头说明）

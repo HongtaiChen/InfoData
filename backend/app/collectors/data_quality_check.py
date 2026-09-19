@@ -39,6 +39,11 @@ dq_rules.params（JSON）契约，按 check_type 分：
                      ref_table, ref_key, ref_status_col, ref_status_val, ref_date_col,
                      exclude_prefixes}                     近端每票行数下限（在市老票）
   stale_running     {hours}                              僵尸 running 记录数（task_runs）
+  long_finished_run {minutes, lookback_days}             已完成但耗时超长的运行数（task_runs）。
+                                                         与 stale_running 互补：后者管「没跑完」，
+                                                         本检查器管「跑完了但很久」。
+                                                         ⚠️ 超长多因机器待机冻结进程，
+                                                         是物理离线信号，不是任务变慢
 """
 import logging
 import json
@@ -572,6 +577,60 @@ class DataQualityCheckCollector:
         msg = f"疑似僵尸 running {n} 条（running 且已启动 >{hours:g}h）"
         return {"status": status, "metric_value": str(n), "message": msg}
 
+    def _long_finished_run(self, conn, rule: dict) -> dict:
+        """「已完成」但耗时超长的运行（task_stale_running 覆盖不到的那半边）。
+
+        为什么需要（2026-09-19）：`stale_running` 只盯**未收尾**的 running，
+        覆盖不到「跑完了，但跑了很久」——而后者恰恰是本次盘点的真实缺口：
+        `daily_recon_window` 09-17 21:15→09-18 18:14 **success 1259 分钟**、
+        `financial_abstract_sync` 09-16 **success 711 分钟**。
+
+        ⚠️ 判读口径：**这类超长绝大多数不是「任务真的慢」，而是机器待机冻结进程的信号**
+        ——本机是家用电脑，夜间合盖/待机会把进程冻住，恢复后 finished_at 才落库，
+        于是 started_at→finished_at 的跨度里绝大部分是冻结时长，不是执行时长。
+        因此本规则 severity 取 warning，语义是「物理离线」告警，不是性能告警。
+
+        ⚠️ 只看 status='success'：盘点报告里 9741/6515/5121 分钟那批「超长」记录，
+        error_message 明写「进程重启中断，已由运维脚本标记为 failed」，
+        其时长 = started_at→收尾时刻的跨度，非真实执行时长，不能用来判「任务慢」。
+        """
+        p = rule.get("params") or {}
+        minutes = float(p.get("minutes", 180))
+        lookback_days = int(p.get("lookback_days", 7))
+        table = rule["table_name"]
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT COUNT(*) AS n, MAX(TIMESTAMPDIFF(MINUTE, started_at, finished_at)) AS mx "
+                f"FROM `{table}` "
+                "WHERE status='success' AND started_at IS NOT NULL AND finished_at IS NOT NULL "
+                "  AND started_at >= DATE_SUB(NOW(), INTERVAL %s DAY) "
+                "  AND TIMESTAMPDIFF(MINUTE, started_at, finished_at) > %s",
+                (lookback_days, minutes),
+            )
+            row = cur.fetchone()
+            n = row["n"] or 0
+            mx = row["mx"]
+        if n == 0:
+            return {"status": "pass", "metric_value": "0",
+                    "message": f"近 {lookback_days} 天无耗时 >{minutes:g} 分钟的已完成运行"}
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT task_name, TIMESTAMPDIFF(MINUTE, started_at, finished_at) AS mins "
+                f"FROM `{table}` "
+                "WHERE status='success' AND started_at IS NOT NULL AND finished_at IS NOT NULL "
+                "  AND started_at >= DATE_SUB(NOW(), INTERVAL %s DAY) "
+                "  AND TIMESTAMPDIFF(MINUTE, started_at, finished_at) > %s "
+                "ORDER BY mins DESC",
+                (lookback_days, minutes),
+            )
+            tops = cur.fetchall()
+        top = ", ".join(f"{r['task_name']} {r['mins']}min" for r in tops[:3])
+        status = "warning"
+        msg = (f"已完成但耗时 >{minutes:g} 分钟的运行 {n} 条（近 {lookback_days} 天，最长 {mx} 分钟；"
+               f"TOP: {top}）。⚠️ 此类超长多为「机器待机冻结进程」所致，"
+               f"是**物理离线的信号**，不是任务本身变慢——请结合开机/睡眠时段判读")
+        return {"status": status, "metric_value": str(n), "message": msg}
+
     CHECKERS = {
         "freshness_daily": _freshness_daily,
         "freshness_interval": _freshness_interval,
@@ -588,6 +647,7 @@ class DataQualityCheckCollector:
         "source_handoff": _source_handoff,
         "per_key_coverage": _per_key_coverage,
         "stale_running": _stale_running,
+        "long_finished_run": _long_finished_run,
     }
 
     # ---------- 主流程 ----------

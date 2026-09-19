@@ -234,7 +234,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 系统与配置表 ----
     ("table_meta", "系统",
      "手动维护;seed_table_meta",
-     "表级元数据：category/source_desc/flow_desc/writers/writer_cols；数据中心右侧「数据流」折叠卡与本表双向引用；当前本表登记 43 张表（库内共 44 张：29 业务 + 新增 6 + 系统/质量）。",
+     "表级元数据：category/source_desc/flow_desc/writers/writer_cols；数据中心右侧「数据流」折叠卡与本表双向引用；当前本表登记 44 张表（库内共 45 张：29 业务 + 新增 7 + 系统/质量；2026-09-19 补登漏网的 market_xcheck_daily）。",
      [], "元数据自身"),
     ("user_prefs", "系统",
      "手动维护;前端 SortPrefsModal",
@@ -286,6 +286,15 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "回答蓝图D「产业资本态度」。全量 upsert（uk_code_start(stock_code, start_date)，"
      "源会回溯修订进度，故必须覆盖写而非 INSERT IGNORE）；每自然日 20:35。",
      ["stock_repurchase_sync"], ""),
+    # 2026-09-19 补：7 张新表中唯一漏登 table_meta 的一张（数据中心看不到说明）
+    ("market_xcheck_daily", "质量",
+     "本地派生（market_style_daily + dc_index_market，无外部源）",
+     "市场风向「交叉印证」日频结果（250 行 / 2025-09-09~）：xcheck_sync 每日 22:30 写入，"
+     "把市场风向的多项判定两两交叉比对，产出 参与项数 items_n / 一致 agree_n / "
+     "**背离 diverge_n（核心产出）** / 中性 neutral_n（两维都在死区内）/ 缺数 nodata_n，"
+     "diverge_keys 列出具体背离项。⚠️ 必须**晚于 market_style_sync 与 index_market_sync** 跑，"
+     "否则读到的是半量风向数据。PRIMARY KEY(trade_date) 幂等 upsert。",
+     ["xcheck_sync"], ""),
 ]
 
 # 列级血缘：table_name -> { 任务名: {source, cols[], derived[], note?, col_notes{}} }

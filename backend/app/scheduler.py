@@ -8,6 +8,12 @@ InvestBuddy 定时调度器（APScheduler）
 - 配置修改（PUT /api/jobs/tasks/{name}）后调用 sync_from_db() 热生效
 - 立即执行（POST /api/jobs/tasks/{name}/trigger）走独立线程 + TaskRecorder 记录，
   带运行中保护：同任务已有 running 记录（2 小时内）则拒绝，避免并发双写
+
+🔒 双重防重（2026-09-19 修复）：
+  ① 进程内互斥锁 `_task_lock()` —— 见 `_execute()` 文档，解决链式线程 / 启动补跑线程 /
+     调度 worker **同进程并发**调用 `_execute` 时的「先查后跑」竞态（实测产出同秒重复行）；
+  ② DB 层 `_running_count()` —— 覆盖跨进程 / 重启残留的 running 记录。
+  两者互补，缺一不可。
 """
 import logging
 import threading
@@ -357,21 +363,56 @@ class SchedulerManager:
         finally:
             conn.close()
 
-    def _execute(self, task_name: str) -> dict:
-        """单次执行（含运行中保护），返回 {started, reason}"""
-        if self._running_count(task_name) > 0:
-            return {"started": False, "reason": "同任务运行中，已跳过本次触发"}
-        from .tasks.run import run_task  # noqa: PLC0415
+    def _task_lock(self, task_name: str) -> threading.Lock:
+        """取该任务的进程内互斥锁（惰性创建，进程生命周期内复用）"""
+        with self._lock_guard:
+            lk = self._locks.get(task_name)
+            if lk is None:
+                lk = threading.Lock()
+                self._locks[task_name] = lk
+            return lk
 
-        written = run_task(task_name)
-        # 链式触发：本任务成功后接力下游。上游失败或 blocked 会抛异常，
-        # 根本走不到这里 —— 这正是期望行为：数据没就绪就不接力。
-        downstream = CHAIN_NEXT.get(task_name)
-        if downstream:
-            threading.Thread(
-                target=self._run_chain, args=(task_name, list(downstream)), daemon=True
-            ).start()
-        return {"started": True, "records_written": written}
+    def _execute(self, task_name: str) -> dict:
+        """单次执行（含运行中保护 + 进程内互斥），返回 {started, reason}
+
+        🔒 为什么必须加进程内锁（2026-09-19 修复真实重复派发）：
+        `_running_count()` 是「先查后跑」（TOCTOU）——查的时候还没有 running 行，
+        真正 INSERT running 发生在 `run_task()` 内部的 `TaskRecorder.start()`，
+        这中间没有任何互斥。于是**同一进程内的多个触发源会同时通过检查**：
+          - 链式线程：`_run_chain` → `_execute(下游)`
+          - 启动补跑线程：`_run_catchup` → `_execute(todo[i])`
+          - APScheduler worker：`_run_scheduled` → `_execute`
+        实测证据（task_runs 里 started_at/finished_at **同秒**的重复行，全库共 4 组 5 行）：
+          09-19 07:36:45 catchup 串行补到 `market_style_sync` → 完成后起链式线程接力
+          `market_current_sync`；而 catchup 自己的 todo 队列下一步**也是**
+          `market_current_sync` → 两个调用者同时通过检查 → 双份执行（id 482/483）；
+          两份 `market_current_sync` 又各自接力 `data_quality_check`（2 线程）
+          ＋ catchup 队列里的 `data_quality_check` 自身（1）→ **三份并发**（id 484/485/486）。
+        锁按 task_name 取（非全局），所以不同任务仍可并行，不牺牲调度吞吐。
+        取锁用 blocking=False：已在跑就直接跳过本次触发（与 running 保护语义一致）。
+
+        注：本锁只覆盖**本进程内**的竞态；跨进程/重启残留仍由 `_running_count`
+        与 `task_stale_running` 规则兜底，故两者保留、不互相替代。
+        """
+        lock = self._task_lock(task_name)
+        if not lock.acquire(blocking=False):
+            return {"started": False, "reason": "同任务正在执行中（进程内互斥锁），已跳过本次触发"}
+        try:
+            if self._running_count(task_name) > 0:
+                return {"started": False, "reason": "同任务运行中，已跳过本次触发"}
+            from .tasks.run import run_task  # noqa: PLC0415
+
+            written = run_task(task_name)
+            # 链式触发：本任务成功后接力下游。上游失败或 blocked 会抛异常，
+            # 根本走不到这里 —— 这正是期望行为：数据没就绪就不接力。
+            downstream = CHAIN_NEXT.get(task_name)
+            if downstream:
+                threading.Thread(
+                    target=self._run_chain, args=(task_name, list(downstream)), daemon=True
+                ).start()
+            return {"started": True, "records_written": written}
+        finally:
+            lock.release()
 
     def _run_chain(self, upstream: str, downstream: list[str]):
         """上游成功后按依赖顺序接力下游（独立线程，不占用调度器 worker）
