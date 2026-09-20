@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Query
 
 from ..db import query_all
+from ..index_meta import DERIVED_INDEXES, NON_EQUITY_INDEXES
 
 router = APIRouter()
 
@@ -185,10 +186,15 @@ def index_detail(code: str = Query(..., description="指数代码")):
             "source": None,
         }
 
-    # 2) 成分股（join 行业）；000001 派生
-    derived_note = None
-    if code == "000001":
-        derived_note = "上证指数为全市场指数，成分股按「沪市全部上市股」实时派生（不落快照表）"
+    # 2) 成分股（join 行业）
+    # ① 全市场派生指数（000001）：不入快照表，按沪市全体上市股实时派生
+    # ② 其余指数必须取**最新快照日**的成分：快照表按日留档（uk_index_stock_date），
+    #    不过滤快照日的话历史快照会与新快照叠加、同一只股票被算两次
+    #    —— 改造前实测 000300 已有两天快照，接口会把 300 只返回成 600 行。
+    # ③ 债券等非股票指数：成分口径不适用，cons_note 给说明（而非笼统的「暂缺」）
+    derived_note = DERIVED_INDEXES.get(code)
+    cons_note = NON_EQUITY_INDEXES.get(code)
+    if code in DERIVED_INDEXES:
         cons = query_all(
             """
             SELECT stock_code, short_name AS stock_name, NULL AS weight,
@@ -199,19 +205,41 @@ def index_detail(code: str = Query(..., description="指数代码")):
             """
         )
     else:
+        # 先取最新快照日、再用常量比较 —— 不能图省事写成相关子查询
+        # `AND c.trade_date = (SELECT MAX(...) WHERE x.index_code = c.index_code)`：
+        # EXPLAIN 为 DEPENDENT SUBQUERY，5121 行逐行求值，实测 5.98s；
+        # 改成两步后同一份数据 0.04s（150×）。快照按日留档后这类写法极易踩坑。
+        snap_rows = query_all(
+            "SELECT MAX(trade_date) AS md FROM index_constituents WHERE index_code=%s",
+            [code],
+        )
+        snap = snap_rows[0]["md"] if snap_rows else None
         cons = query_all(
             """
             SELECT c.stock_code, c.stock_name, c.weight, c.trade_date, c.source,
                    s.industry
             FROM index_constituents c
             LEFT JOIN stock_info s ON s.stock_code = c.stock_code
-            WHERE c.index_code = %s
+            WHERE c.index_code = %s AND c.trade_date = %s
             ORDER BY c.weight DESC, c.stock_code
             """,
-            [code],
-        )
+            [code, snap],
+        ) if snap else []
 
     has_weight = any(r["weight"] is not None for r in cons)
+
+    # 2b) 行业覆盖度：成分在本地行业库（stock_info.industry）里的匹配率。
+    #     低于一半时「行业分布」不再有意义，硬算只会得到「其他 100%」的假饼图 ——
+    #     典型是北证50：成分是北交所标的，而 stock_info 的北交所记录 industry 全为空
+    #     （277/277），50 只成分里 36 只连主表都没有。假饼图比不展示更误导。
+    matched = sum(1 for r in cons if r["industry"])
+    ind_cover = round(100.0 * matched / len(cons), 1) if cons else 0.0
+    industry_note = None
+    if cons and ind_cover < 50:
+        industry_note = (
+            f"该指数 {len(cons)} 只成分中仅 {matched} 只在本地行业库中有分类"
+            f"（北交所标的的行业字段尚未采集），暂不展示行业分布"
+        )
 
     # 3) 行业分布聚合
     dist: dict[str, dict] = {}
@@ -234,10 +262,15 @@ def index_detail(code: str = Query(..., description="指数代码")):
     return {
         "profile": profile,
         "derived_note": derived_note,
+        # 口径不适用说明（债券指数等）：前端据此展示说明，而不是「行业数据暂缺」
+        "cons_note": cons_note,
         "constituents": {
             "total": len(cons),
             "has_weight": has_weight,
             "items": cons,
         },
         "industry_dist": industry_items,
+        # 行业覆盖度与不足时的说明（前端据此不画假饼图）
+        "industry_coverage": ind_cover,
+        "industry_note": industry_note,
     }

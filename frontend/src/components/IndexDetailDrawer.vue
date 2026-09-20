@@ -40,8 +40,13 @@ interface Detail {
     base_point: string | null
   }
   derived_note: string | null
+  /** 口径不适用说明（债券指数等）：非空时 UI 展示说明，而不是笼统的「暂缺」 */
+  cons_note: string | null
   constituents: { total: number; has_weight: boolean; items: ConRow[] }
   industry_dist: { industry: string; count: number; weight_pct: number }[]
+  /** 成分在本地行业库的匹配率（%）：过低时 industry_note 给说明，不画假饼图 */
+  industry_coverage: number
+  industry_note: string | null
 }
 
 const loading = ref(false)
@@ -147,7 +152,9 @@ const pieOption = computed(() => {
   }
 })
 
-const distColumns: DataTableColumns<{ industry: string; count: number; weight_pct: number }> = [
+// ⚠️ 必须是 computed：原实现是普通常量，在 setup 阶段求值一次 —— 那时 detail 还是 null，
+//    has_weight 恒为 undefined，列标题永远显示「只数占比」（含官方权重的指数也显示错）。
+const distColumns = computed<DataTableColumns<{ industry: string; count: number; weight_pct: number }>>(() => [
   { title: '行业', key: 'industry', ellipsis: { tooltip: true } },
   { title: '只数', key: 'count', width: 70, align: 'right' },
   {
@@ -158,7 +165,7 @@ const distColumns: DataTableColumns<{ industry: string; count: number; weight_pc
     render: (r) =>
       h('span', { style: { fontVariantNumeric: 'tabular-nums' } }, `${r.weight_pct.toFixed(2)}%`),
   },
-]
+])
 </script>
 
 <template>
@@ -190,38 +197,51 @@ const distColumns: DataTableColumns<{ industry: string; count: number; weight_pc
               </NTag>
             </div>
             <div v-if="detail.derived_note" class="derived">{{ detail.derived_note }}</div>
+            <!-- 口径不适用（非股票指数）：说清「为什么没有」，而不是让 UI 报「暂缺」
+                 —— 「暂缺」暗示我们采漏了，「口径不适用」是概念本身没有股票成分 -->
+            <div v-if="detail.cons_note" class="cons-note">{{ detail.cons_note }}</div>
           </div>
 
           <NTabs type="line" size="small" animated style="margin-top: 4px">
             <!-- 成分股 -->
             <NTabPane name="cons" :tab="`成分股 ${detail.constituents.total}`">
-              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px">
-                <NInput
-                  v-model:value="keyword"
-                  size="small"
-                  clearable
-                  placeholder="搜索代码 / 名称 / 行业"
-                  style="width: 240px"
-                />
-                <span style="font-size: 12px; color: #98a2b3">
-                  {{ filtered.length }} / {{ detail.constituents.total }} 只
-                </span>
+              <div v-if="!detail.constituents.total" style="padding: 30px">
+                <NEmpty :description="detail.cons_note ? '该指数无股票成分（口径不适用）' : '成分数据暂缺'" />
               </div>
-              <NDataTable
-                :columns="consColumns"
-                :data="filtered"
-                :bordered="false"
-                size="small"
-                :max-height="480"
-                :virtual-scroll="true"
-                :row-props="rowProps"
-              />
+              <template v-else>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px">
+                  <NInput
+                    v-model:value="keyword"
+                    size="small"
+                    clearable
+                    placeholder="搜索代码 / 名称 / 行业"
+                    style="width: 240px"
+                  />
+                  <span style="font-size: 12px; color: #98a2b3">
+                    {{ filtered.length }} / {{ detail.constituents.total }} 只
+                  </span>
+                </div>
+                <NDataTable
+                  :columns="consColumns"
+                  :data="filtered"
+                  :bordered="false"
+                  size="small"
+                  :max-height="480"
+                  :virtual-scroll="true"
+                  :row-props="rowProps"
+                />
+              </template>
             </NTabPane>
 
             <!-- 行业分布 -->
             <NTabPane name="ind" tab="行业分布">
-              <div v-if="!detail.industry_dist.length" style="padding: 30px">
-                <NEmpty description="行业数据暂缺" />
+              <!-- 行业库覆盖不足（如北证50：北交所标的的行业字段未采集）——
+                   此时 industry_dist 只剩「其他 100%」，画出来是假信息，改给说明 -->
+              <div v-if="detail.industry_note" class="cons-note" style="margin-top: 10px">
+                {{ detail.industry_note }}
+              </div>
+              <div v-else-if="!detail.industry_dist.length" style="padding: 30px">
+                <NEmpty :description="detail.cons_note ? '该指数无行业分布口径' : '行业数据暂缺'" />
               </div>
               <template v-else>
                 <VChart
@@ -258,6 +278,11 @@ const distColumns: DataTableColumns<{ industry: string; count: number; weight_pc
 .desc { font-size: 13px; line-height: 1.75; color: #344054; }
 .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .derived { margin-top: 8px; font-size: 12px; color: #b45309; }
+/* 口径不适用说明：中性信息色（非琥珀）—— 这不是异常，是口径本身不适用于该指数 */
+.cons-note {
+  margin-top: 8px; font-size: 12px; line-height: 1.6; color: #475467;
+  background: #f8fafc; border-left: 3px solid #8a919c; border-radius: 0 4px 4px 0; padding: 6px 10px;
+}
 .err { padding: 20px; text-align: center; color: #791f1f; font-size: 13px; }
 .equal-note { margin-top: 8px; font-size: 12px; color: #98a2b3; }
 </style>

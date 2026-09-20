@@ -3,16 +3,29 @@
 """
 InvestBuddy 指数成分股同步（index_constituents 表快照重建）
 
-数据源优先级：
-1. 中证系（000016/000300/000905/000852/000688/000698/931775）：
-   akshare index_stock_cons_csindex（成分名单）+ index_stock_cons_weight_csindex（权重，
-   失败不阻塞，权重置 NULL）
+数据源优先级（2026-09-20 按实测校准重排）：
+1. 中证系（14 个）：akshare index_stock_cons_csindex（成分名单）
+   + index_stock_cons_weight_csindex（权重，失败不阻塞，权重置 NULL）。
+   实测 csindex 覆盖 000/399/899/932 各码段 —— 含北交所 899050（故从 cni 迁入）。
 2. 深证系（399001/399006/399330/399673）：
    akshare index_detail_cni（当前版本该接口有 Excel 解析 bug，属预期性失败）
    → 失败自动降级 stock_info.index_members 反查（FIND_IN_SET 精确匹配逗号分隔名单，
    规避「深证100」误匹配「深证100R」的 LIKE 精度问题），权重为 NULL
-3. 北证50（899050）：仅走 index_detail_cni，失败则记 error（留待接口修复/直连国证）
+3. 国证系（980017 国证芯片）：仅走 index_detail_cni（实测返回 30 只 + 权重，
+   列名「样本代码/样本简称」正好匹配 _fetch_cni 的读取口径；csindex 不覆盖国证代码）
 4. 上证指数（000001）：全市场指数，不入成分表——详情接口按「沪市全部上市股」实时派生
+5. 中证转债（000832）：**债券指数，成分是可转换公司债券而非股票**，本表股票口径不适用，
+   永不入表 —— 详情接口 market.py 的 NON_EQUITY_INDEXES 登记口径说明，
+   前端据此展示「口径不适用」而不是笼统的「行业数据暂缺」
+
+⚠️ 维护约定（2026-09-20 补）—— 「写死的清单 vs 动态的行情表」已经漂移两次
+（上一次是 index_profile 释义 seed，本次是成分清单）：行情页指数由 dc_index_market
+采集决定，而本清单是写死的。**新增指数上市场页时必须同步三处**：
+  ① 本文件的 CSINDEX_CONS / CNINDEX_CONS / CNI_ONLY（成分来源，按 akshare 实测选源）
+  ② setup_index_tables.py 的 SEED（释义档案）
+  ③ 非股票指数（债券等）→ market.py 的 NON_EQUITY_INDEXES 登记口径说明
+核对差集：`SELECT DISTINCT index_code FROM dc_index_market` 与本清单比对
+（run() 末尾的巡检会把「档案里有、本快照日无成分」的指数记进 errors）。
 
 调度契约：
 - 指数每月定期调样，cron 建议月度（task_config: index_cons_sync '30 21 15 * *'）；
@@ -32,6 +45,7 @@ import pymysql
 import akshare as ak
 
 from ..db import get_db_config
+from ..index_meta import NON_EQUITY_INDEXES
 from ._common import with_steps
 
 logger = logging.getLogger(__name__)
@@ -59,14 +73,15 @@ def _call_with_timeout(fn, timeout_s: float):
     return box.get("r")
 
 RUN_STEPS = [
-    {"no": 1, "name": "构建同步清单", "params": "中证系 7 + 深证系 4 + 北证50（上证指数派生不入表）"},
+    {"no": 1, "name": "构建同步清单",
+     "params": "中证系 14 + 深证系 4 + 国证系 1（上证指数派生、中证转债债券口径 → 均不入表）"},
     {"no": 2, "name": "逐指数拉取成分", "params": "csindex 成分+权重 → cni 样本（列名 样本简称）→ index_members 精确反查"},
     {"no": 3, "name": "名称兜底回填", "params": "stock_name 为空时用 stock_info.short_name 补齐（防源列名变动）"},
     {"no": 4, "name": "按快照日留档重建", "params": "DELETE 本快照日旧行 → 批量 INSERT（uk_index_stock_date 幂等）；历史快照保留"},
     {"no": 5, "name": "结果巡检", "params": "逐指数行数汇总（按本次快照日过滤），失败项计入 errors"},
 ]
 
-# 中证系：成分 + 权重双接口
+# 中证系：成分 + 权重双接口（csindex 覆盖 000/399/899/932 码段，实测校准）
 CSINDEX_CONS = {
     "000016": "上证50",
     "000300": "沪深300",
@@ -75,6 +90,17 @@ CSINDEX_CONS = {
     "000688": "科创50",
     "000698": "科创100",
     "931775": "中证全指房地产指数",
+    # ---- 2026-09-20 补入：行情页指数扩容到 21 个后，以下 6 个从未进过本清单 ----
+    # （用户反馈「中证全指成分股与行业分布都是空的」）；实测 csindex 成分/权重双接口均可得
+    "000985": "中证全指",      # 5121 只（全市场参照指数）
+    "000922": "中证红利",      # 100 只
+    "932000": "中证2000",      # 2000 只
+    "399975": "证券公司",      # 49 只（中证全指证券公司）
+    "399986": "中证银行",      # 42 只
+    "399997": "中证白酒",      # 17 只
+    # 899050 原先只在 CNI_ONLY 里走 cni、长期 error（cni 对该码不可用）——
+    # 实测 csindex 支持北交所指数，迁到 csindex 即通（50 只）
+    "899050": "北证50",
 }
 # 深证系：cni 主源（当前版本有 bug）→ index_members 兜底
 CNINDEX_CONS = {
@@ -83,8 +109,11 @@ CNINDEX_CONS = {
     "399330": "深证100",
     "399673": "创业板50",
 }
-# 北证50：仅 cni（失败即 error，不兜底）
-CNI_ONLY = {"899050": "北证50"}
+# 国证系：仅 cni（csindex 不覆盖国证代码；980017 实测返回 30 只 + 权重）
+CNI_ONLY = {"980017": "国证芯片"}
+
+# 非股票指数（口径不适用，永不入表）与全市场派生指数清单见 app/index_meta.py ——
+# API 层与本文件共用同一份常量（避免「两处清单各写各的」再次漂移）。
 
 
 class IndexConsSyncCollector:
@@ -231,7 +260,7 @@ class IndexConsSyncCollector:
                         else:
                             rows = self._fallback_members(cur, code, name, snapshot)
                             source = "stock_info_members"
-                    else:  # 899050
+                    else:  # CNI_ONLY（国证系：csindex 不覆盖其代码段）
                         rows = self._fetch_cni(code, snapshot)
                         source = "cni"
 
@@ -290,6 +319,8 @@ class IndexConsSyncCollector:
                 for c, n, cnt in cur.fetchall():
                     if c == "000001":
                         continue  # 全市场指数，按沪市派生
+                    if c in NON_EQUITY_INDEXES:
+                        continue  # 债券等非股票指数「口径不适用」，不是采集缺陷（勿报假警）
                     if cnt == 0:
                         errors.append(f"{c} {n} 无成分快照（详情页将提示暂缺）")
             conn.commit()
