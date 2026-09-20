@@ -276,17 +276,22 @@ onMounted(() => {
           @click="pickIndex(it)"
         >
           <div class="idx-head">
-            <span class="idx-name" :title="it.index_name">{{ it.index_name }}</span>
-            <KpiHint
-              v-if="it.description"
-              :label="it.index_name"
-              :hint="it.description"
-              :footer="profileFooter(it)"
-            >
-              <template #trigger>
-                <span class="idx-q" aria-label="指数释义" @click.stop>ⓘ</span>
-              </template>
-            </KpiHint>
+            <!-- 名称与 ⓘ 必须同组相邻：两者若各自作为 .idx-head 的直接子项，
+                 space-between 会把 ⓘ 摊到「名称—代码」正中间，看起来离标题很远。
+                 分析栏目 .ao-card-name 也是「文字 + ⓘ」同组 inline-flex（gap 5px）。 -->
+            <span class="idx-title">
+              <span class="idx-name" :title="it.index_name">{{ it.index_name }}</span>
+              <KpiHint
+                v-if="it.description"
+                :label="it.index_name"
+                :hint="it.description"
+                :footer="profileFooter(it)"
+              >
+                <template #trigger>
+                  <span class="idx-q" aria-label="指数释义" @click.stop>ⓘ</span>
+                </template>
+              </KpiHint>
+            </span>
             <span class="idx-code">{{ it.index_code }}</span>
           </div>
           <div class="idx-close" :class="tint(it.change_pct)">
@@ -434,6 +439,15 @@ onMounted(() => {
   background: #e6f1fb;
   box-shadow: inset 0 0 0 1px var(--color-primary, #185fa5);
 }
+/* 标题组：「名称 + ⓘ」同组（参照分析栏目 .ao-card-name 的 inline-flex 结构）。
+   align-items:center 让 ⓘ 圆标垂直居中于名称文字盒，而非按基线悬挂；
+   min-width:0 允许组在窄卡里收缩，把省略号交给 .idx-name。 */
+.idx-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
 .idx-head {
   display: flex;
   align-items: baseline;
@@ -447,6 +461,7 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .idx-card.active .idx-name {
   color: var(--color-primary, #185fa5);
