@@ -288,7 +288,7 @@ onMounted(() => {
                 :footer="profileFooter(it)"
               >
                 <template #trigger>
-                  <span class="idx-q" aria-label="指数释义" @click.stop>ⓘ</span>
+                  <span class="idx-q" aria-label="指数释义" @click.stop>i</span>
                 </template>
               </KpiHint>
             </span>
