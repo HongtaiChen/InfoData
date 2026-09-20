@@ -243,6 +243,46 @@ RULES = [
      {"where": "list_status='上市' AND (stock_code LIKE '6%' OR stock_code LIKE '0%' OR stock_code LIKE '3%') AND company_name IS NULL",
       "max_count": 0}, "warning", 1,
      "档案覆盖：沪深在市 A 股均应已有巨潮公司档案（company_name 非空）"),
+    # ---------- 北交所口径守护（2026-09-20 立） ----------
+    # 起因：北交所 2025-10-09 全面切换 920 独立代码段，本库没跟上 ——
+    #   ① 277 条主表记录全是失效旧码 → 所有按 stock_code 的 JOIN（成分/行情/财务）北交所段全断；
+    #   ② 切换后新上市的 69 只从未入库；③ 行业字段整段为空（北证50 行业分布画不出来）。
+    # 三条规则把「这一次修好了」变成「不会再漂回去」。
+    ("stock_info_bj_code_920", "stock_info", "where_count",
+     {"where": "exchange='BJ' AND IFNULL(list_status,'')<>'退市' AND stock_code NOT LIKE '92%'",
+      "max_count": 0}, "critical", 1,
+     "北交所代码口径：**在市**标的必须已是 920 段（旧 43/83/87 段自 2025-10-09 起作废；"
+     "已退市标的保留原码，故显式排除，否则规则会常红掩盖真问题）"),
+    ("stock_info_bj_industry", "stock_info", "where_count",
+     {"where": "exchange='BJ' AND IFNULL(list_status,'')<>'退市' AND (industry IS NULL OR industry='')",
+      "max_count": 0}, "warning", 1,
+     "北交所行业覆盖：在市标的 industry 必须非空 —— 该列对北交所只有一个来源"
+     "（bj_stock_sync 从北交所官网名册取，巨潮不提供北交所档案），列空了必是该任务没跑成功。"
+     "下游直接消费方：指数详情抽屉的「行业分布」"),
+    ("stock_code_mapping_rows", "stock_code_mapping", "row_count_total",
+     {"min_rows": 242}, "critical", 1,
+     "代码对照台账行数下限 = 官方公告的存量切换只数 242（240 switched + 2 retired）；"
+     "低于此值说明映射逻辑退化（bj_stock_sync 内部有同款不变式巡检，此处是落库侧的独立复核）"),
+    ("stock_code_mapping_uniq", "stock_code_mapping", "unique_index",
+     {"cols": ["old_code"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_old_code（一旧码只对应一条新码）"),
+    ("stock_code_mapping_fields", "stock_code_mapping", "where_count",
+     {"where": "status NOT IN ('switched','retired') OR evidence IS NULL OR evidence=''",
+      "max_count": 0}, "warning", 1,
+     "台账完整性：status 取值合法 + evidence 必填（人工核证项若没写证据，这条映射就是猜测，"
+     "而它决定了主表代码会被改成什么）"),
+    # 2026-09-20 补：扩展表影子名册的旧码守护。
+    # 起因：stock_info_ex 的写方 stock_info_sync 取自东财 spot 名单，而**东财不含北交所**，
+    #   故该表北交所段永远不会被刷新 —— 主表 920 迁移后它整段留在旧码（实测 242 条，
+    #   其中 2 条还挂着人工「高股息」标记）。bj_stock_sync 现已按台账同步迁移。
+    # ⚠️ 该表**无 list_status 列**，主表那套「排除退市」用不了，只能用台账口径排除：
+    #   2 只退市标的（835305/839680）本就无 920 对应码，硬排除它们会变成常红假信号。
+    ("stock_info_ex_bj_code", "stock_info_ex", "where_count",
+     {"where": "exchange='BJ' AND stock_code NOT LIKE '92%' "
+               "AND stock_code NOT IN ('835305','839680')",
+      "max_count": 0}, "warning", 1,
+     "扩展表影子名册代码口径：北交所标的必须已是 920 段（排除台账 status='retired' 的无新码标的）；"
+     "残留说明 bj_stock_sync 的扩展表迁移没跑到"),
     # ---------- 调度/运维健康（2026-09-14 新增） ----------
     # 关注对象不是业务数据，而是「采集任务本身有没有被卡住」。
     # 起因：uvicorn 重启中断任务 → 留下永久 running 记录 → 调度器「同任务 2h running 保护」
@@ -314,8 +354,10 @@ COVERAGE_RULES = [
      "成分快照新鲜度：月度任务（每月15日 21:30），快照日期不得早于 45 天前（防连续漏跑）"),
     ("index_cons_rows", "index_constituents", "row_count_total",
      {"min_rows": 2600}, "critical", 1,
-     "成分股快照总行数下限（11 指数单份实测 2819；北证50 待 akshare 修复后补。"
-     "2026-09-19 起快照按日留档、总行数会随快照份数累积，故该下限只升不降）"),
+     "成分股快照总行数下限（2026-09-20 实测 19 指数单份 10,228 行、全表 15,866 行）。"
+     "2026-09-19 起快照按日留档、总行数会随快照份数累积，故该下限只升不降。"
+     "（原文「北证50 待 akshare 修复后补」已过期：2026-09-20 实测 csindex 支持北交所指数，"
+     "北证50 已走 csindex 正常采到 50 只）"),
     ("index_cons_uniq", "index_constituents", "unique_index",
      {"cols": ["index_code", "stock_code", "trade_date"], "expect": "exists"}, "info", 1,
      "幂等保障：uk_index_stock_date（指数 × 成分 × 快照日）。**2026-09-19 §7-⑧ 改造**："
@@ -331,14 +373,14 @@ COVERAGE_RULES = [
      {"where": "stock_name IS NULL OR stock_name = ''", "max_count": 0}, "warning", 1,
      "成分股名称覆盖（曾因国证列名读错致 750 行为空；采集器已加 stock_info 兜底回填）"),
     ("index_profile_rows", "index_profile", "row_count_total",
-     {"min_rows": 13}, "warning", 1,
-     "指数档案行数下限（13 只跟踪指数）"),
+     {"min_rows": 21}, "warning", 1,
+     "指数档案行数下限（21 只上市场页的指数；2026-09-19 由 13 扩至 21 后此处曾漏改）"),
     ("index_profile_uniq", "index_profile", "unique_index",
      {"cols": ["index_code"], "expect": "exists"}, "info", 1,
      "幂等保障：uk_index_code"),
     ("index_profile_desc", "index_profile", "where_count",
      {"where": "description IS NULL OR description = ''", "max_count": 0}, "info", 1,
-     "释义覆盖：13 只指数均应有简介"),
+     "释义覆盖：21 只指数均应有简介"),
     ("ai_concept_rows", "finance_concept_analysis", "row_count_total",
      {"min_rows": 600}, "warning", 1,
      "AI 概念分析结果行数下限（防误清空；实测 699）"),

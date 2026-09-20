@@ -28,6 +28,8 @@ from ..collectors.concept_sync import ConceptSyncCollector
 from ..collectors.fund_info_sync import FundInfoSyncCollector
 from ..collectors.index_market_sync import IndexMarketSyncCollector
 from ..collectors.index_cons_sync import IndexConsSyncCollector
+# 2026-09-20 北交所名册（920 代码切换迁移 + 行业补采 + 新旧代码对照台账）
+from ..collectors.bj_stock_sync import BjStockSyncCollector
 from ..collectors.bond_profit_sync import BondProfitSyncCollector
 from ..collectors.finance_calendar_sync import FinanceCalendarSyncCollector
 from ..collectors.data_quality_check import DataQualityCheckCollector
@@ -272,6 +274,21 @@ def run_index_cons_sync(params: dict) -> int:
     result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 指数成分 {result['error_count']} 项异常（其余正常）: {result['errors'][:5]}")
+    return result["records_written"]
+
+
+def run_bj_stock_sync(params: dict) -> int:
+    """北交所名册同步（stock_info 920 代码迁移 + 行业补采；台账写 stock_code_mapping）
+
+    排期落在 stock_info_sync 之后、stock_daily_incr 之前（19:06）——日线候选池取自
+    stock_info，名册不先修，北交所标的就永远进不了行情链。
+    errors 非空即抛（含台账行数不变式、行业空值、旧码残留三类硬校验），
+    避免「跑成功但口径仍脏」被静默放过。
+    """
+    collector = BjStockSyncCollector()
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        raise RuntimeError("; ".join(result["errors"][:5]))
     return result["records_written"]
 
 
@@ -771,6 +788,8 @@ TASKS = {
     "index_market_sync": run_index_market_sync,
     # 2026-09-12 指数成分股快照（月度调样刷新）
     "index_cons_sync": run_index_cons_sync,
+    # 2026-09-20 北交所名册（920 代码切换迁移 + 行业补采；必须早于 stock_daily_incr）
+    "bj_stock_sync": run_bj_stock_sync,
     "bond_profit_sync": run_bond_profit_sync,
     "finance_calendar_sync": run_finance_calendar_sync,
     # 2026-09-05 数据质量体检（读 dq_rules → 写 dq_report）

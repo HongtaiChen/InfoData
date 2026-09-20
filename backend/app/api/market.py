@@ -229,16 +229,20 @@ def index_detail(code: str = Query(..., description="指数代码")):
     has_weight = any(r["weight"] is not None for r in cons)
 
     # 2b) 行业覆盖度：成分在本地行业库（stock_info.industry）里的匹配率。
-    #     低于一半时「行业分布」不再有意义，硬算只会得到「其他 100%」的假饼图 ——
-    #     典型是北证50：成分是北交所标的，而 stock_info 的北交所记录 industry 全为空
-    #     （277/277），50 只成分里 36 只连主表都没有。假饼图比不展示更误导。
+    #     低于一半时「行业分布」不再有意义，硬算只会得到「其他 100%」的假饼图
+    #     —— 假饼图比不展示更误导。
+    #     历史成因：北交所 2025-10-09 切换 920 代码段后本库名册失同步且行业整段为空，
+    #     北证50 曾 36/50 只成分连主表都没有；该问题已于 2026-09-19 由 bj_stock_sync
+    #     采集器修复（名册 344 只 + 行业 100% 覆盖），此分支现为兜底保护而非日常路径。
+    #     仍保留的原因：新纳入指数的成分若采集排期未跑到，覆盖度会瞬时掉下来，
+    #     此时宁可给说明也不要画一张「其他 100%」的假图。
     matched = sum(1 for r in cons if r["industry"])
     ind_cover = round(100.0 * matched / len(cons), 1) if cons else 0.0
     industry_note = None
     if cons and ind_cover < 50:
         industry_note = (
-            f"该指数 {len(cons)} 只成分中仅 {matched} 只在本地行业库中有分类"
-            f"（北交所标的的行业字段尚未采集），暂不展示行业分布"
+            f"该指数 {len(cons)} 只成分中仅 {matched} 只在本地行业库中有分类，"
+            f"覆盖不足五成——画出来只会是「其他」主导的假饼图，故暂不展示行业分布"
         )
 
     # 3) 行业分布聚合

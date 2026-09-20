@@ -235,8 +235,9 @@ const distColumns = computed<DataTableColumns<{ industry: string; count: number;
 
             <!-- 行业分布 -->
             <NTabPane name="ind" tab="行业分布">
-              <!-- 行业库覆盖不足（如北证50：北交所标的的行业字段未采集）——
-                   此时 industry_dist 只剩「其他 100%」，画出来是假信息，改给说明 -->
+              <!-- 行业库覆盖不足（后端 industry_coverage < 50 时给 industry_note）——
+                   此时 industry_dist 只剩「其他 100%」，画出来是假信息，改给说明。
+                   典型触发场景：新纳入指数的成分采集排期未跑到，而非北交所（已于 2026-09-19 补齐） -->
               <div v-if="detail.industry_note" class="cons-note" style="margin-top: 10px">
                 {{ detail.industry_note }}
               </div>

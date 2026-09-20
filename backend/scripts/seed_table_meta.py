@@ -116,6 +116,18 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "指数档案（13 只跟踪指数）：名称/代码/简介，随 index_cons_sync 刷新；uk_index_code 幂等；"
      "供前端指数列表与释义展示。",
      ["index_cons_sync"], ""),
+    ("stock_code_mapping", "资料",
+     "北交所官网（经 akshare stock_info_bj_name_code）;北交所《新旧代码对照表》",
+     "证券代码变更对照台账（**北交所 920 代码切换**，2026-09-20 立）："
+     "北交所自 2025-10-09 起将全部 277 只股票统一为 920 段（旧 43/83/87 段为新三板遗留），"
+     "规则＝旧码前三位改 920、后三位不变，撞车时按上市时间递进第四位（837023→920123、831305→920405）。"
+     "bj_stock_sync 每日 19:06 重建：本地旧码按「简称归一」匹配北交所名册，"
+     "归一仍对不上的 6 条走人工核证（evidence 列随行落库），无法映射即认定已退市。"
+     "**行数不变式 = 242**（官方公告的存量切换只数：240 switched + 2 retired），"
+     "采集器巡检据此拦截映射退化。"
+     "⚠️ list_date 列是**北交所上市日期**（名册口径），与 stock_info.list_date"
+     "（推断口径：MIN(daily) + Baostock ipoDate）**不是同一套口径**，勿互相覆盖。",
+     ["bj_stock_sync"], "旧→新映射的唯一权威留档；迁移可逆（按 new_code 反查回滚）"),
     ("ths_concept_info", "概念",
      "同花顺",
      "概念板块清单：concept_market_sync 增量中发现新概念自动注册（309xxx）；与概念指数同轮（每工作日 20:00）。",
@@ -154,13 +166,26 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "基金基本信息：每月 1 日全量重建 ~27,800 行；<20,000 行护栏拒绝覆盖。",
      ["fund_info_sync"], ""),
     ("stock_info", "资料",
-     "东财全A名单;Baostock;巨潮资讯",
-     "证券主表+公司档案宽表（34 列）：东财周更名单（短名/exchange，list_date 本地 MIN 推断）；Baostock 周更上市/退市状态+退市日（ipoDate 仅补空）；巨潮日更档案 24 列（列级 UPDATE）。data_source=EM;BAOSTOCK;CNINFO。",
-     ["stock_info_sync", "stock_status_sync", "stock_company_sync"], "三源构成见列注释"),
+     "东财全A名单;Baostock;巨潮资讯;北交所官网",
+     "证券主表+公司档案宽表（34 列）：东财周更名单（短名/exchange，list_date 本地 MIN 推断）；"
+     "Baostock 周更上市/退市状态+退市日（ipoDate 仅补空）；巨潮日更档案 24 列（列级 UPDATE）。"
+     "data_source=EM;BAOSTOCK;CNINFO。"
+     "⚠️ **北交所（exchange='BJ'）走另一条链路（2026-09-20 立）**："
+     "巨潮不提供北交所档案、东财 spot 名单也不含北交所，"
+     "故 bj_stock_sync 专属维护 —— 北交所官网名册（344 只）提供简称与 "
+     "**证监会行业分类口径的 industry**（这是北交所行业字段的唯一来源，"
+     "以前 277 条全空导致北证50 行业分布画不出来）；"
+     "同时把 2025-10-09 代码切换（→920 段）后的旧码迁移到新码，"
+     "并补入切换后新上市的 69 只。"
+     "此外**只为北交所写 industry**：沪深标的的行业仍由巨潮档案提供。"
+     "数据源构成相应加 BSE（北交所官网）。",
+     ["stock_info_sync", "stock_status_sync", "stock_company_sync", "bj_stock_sync"],
+     "三源构成见列注释；北交所名册与行业由 bj_stock_sync 单独维护"),
     ("stock_info_ex", "资料",
-     "东财全A名单",
-     "股票信息扩展：随 stock_info 周更同步全市场名单；人工 is_gxlstock（高股息）标记保留。",
-     ["stock_info_sync"], ""),
+     "东财全A名单;北交所官网",
+     "股票信息扩展：随 stock_info 周更同步全市场名单；人工 is_gxlstock（高股息）标记保留。"
+     "北交所段代码由 bj_stock_sync 按对照台账同步迁移（东财 spot 不含北交所，本表该段不会被周更刷新）。",
+     ["stock_info_sync", "bj_stock_sync"], ""),
     ("finance_concept_analysis", "AI",
      "豆包方舟(ARK)",
      "AI 概念分析：分析投资日历事件→关联概念（评分 1-10）；无 ARK_API_KEY 时降级写占位结果；手动触发（当前 enabled=0）。",
@@ -409,6 +434,17 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                 "list_date": "本地推断口径 MIN(stock_market_daily.trade_date) 为主；Baostock ipoDate 仅补空",
             },
         },
+        "bj_stock_sync": {
+            "source": "北交所《新旧代码对照表》",
+            "cols": ["stock_code"],
+            "note": "北交所 920 代码切换：按 stock_code_mapping 台账把旧码 UPDATE 为新码，"
+                    "**只改代码**（is_gxlstock / list_date / data_source 均不动）；"
+                    "**不补录**名册新增标的一一该表以人工标注为主，批量灌机器行属口径取舍（待决策）",
+            "derived": [],
+            "col_notes": {
+                "stock_code": "北交所段现为 920 段；2 只退市标的（835305/839680）无新码，保持旧码",
+            },
+        },
     },
     "stock_market_daily": {
         "stock_daily_incr": {
@@ -507,6 +543,25 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
             "source": "中证指数官网",
             "cols": ["index_code", "index_name", "description", "base_date", "base_point", "source"],
             "note": "13 只跟踪指数的档案，随成分快照同轮刷新；uk_index_code 幂等",
+        },
+    },
+    "stock_code_mapping": {
+        "bj_stock_sync": {
+            "source": "北交所官网（akshare stock_info_bj_name_code）",
+            "cols": ["old_code", "new_code", "short_name", "list_date", "change_date",
+                     "status", "match_rule", "evidence", "source"],
+            "derived": ["new_code", "change_date", "status", "match_rule", "evidence"],
+            "note": "new_code 来自名册匹配；change_date 取切换生效日/摘牌日常量；"
+                    "match_rule 与 evidence 为映射依据留档（人工核证与退市项必填）",
+            "col_notes": {
+                "old_code": "变更前代码（北交所新三板时期 43/83/87 等段）；uk_old_code 唯一键",
+                "new_code": "920 段新码；**已退市标的为 NULL**（status='retired'）",
+                "list_date": "北交所上市日期（名册口径）——**≠ stock_info.list_date**",
+                "change_date": "switched 取切换生效日 2025-10-09；retired 取摘牌日",
+                "status": "switched=已切换 920 段 / retired=已退市无新码",
+                "match_rule": "简称归一 / 人工核证 / 官方通报",
+                "evidence": "映射证据，人工核证与退市项必填（否则本表就是猜测）",
+            },
         },
     },
     "bond_profit_daily": {
