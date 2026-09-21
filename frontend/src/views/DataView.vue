@@ -1701,7 +1701,7 @@ onMounted(async () => {
               <div>
                 <div style="font-size:11px;color:#888;margin-bottom:3px;">
                   A 随行源直采
-                  <span style="color:#c3c9d0;margin-left:4px;">命中源为整行来源，价格按 qfq 前复权</span>
+                  <span style="color:#c3c9d0;margin-left:4px;">命中源为整行来源，OHLC 为不复权实际成交价（复权口径由 adj_factor 派生）</span>
                 </div>
                 <div style="display:flex;flex-wrap:wrap;gap:3px;">
                   <span

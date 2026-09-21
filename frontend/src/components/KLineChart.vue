@@ -19,6 +19,10 @@ let chart: Chart | null = null
 
 const loadingMsg = ref('加载中...')
 const latest = ref<any>(null)
+// 最近一根的**真实涨跌幅**，来自接口 `change_pct`（按 hfq 派生、含除权调整，与行情表同口径）。
+// ⚠️ 不要用相邻两根 close 现算（2026-09-20 口径改造后修正）：主表已改存**不复权实际价**，
+// 除权日现算会把「除权跳空」当成跌幅，与同一组件十字光标的涨跌幅（用的是接口值）自相矛盾。
+let latestApiPct: number | null = null
 
 // 同花顺风格样式（白底 + 红涨绿跌 + 十字光标 OHLC 信息栏）
 function applyTonghuashunStyle(c: Chart) {
@@ -111,7 +115,10 @@ async function fetchBars(): Promise<KLineData[]> {
       is_index: props.isIndex ?? false,
     },
   })
-  return (resp.items || []).map((it: any) => {
+  const items = resp.items || []
+  const lastRaw = items[items.length - 1]
+  latestApiPct = lastRaw && lastRaw.change_pct != null ? Number(lastRaw.change_pct) : null
+  return items.map((it: any) => {
     const pct = it.change_pct != null ? Number(it.change_pct) : null
     return {
       timestamp: dayjs(it.trade_date).valueOf(),
@@ -134,9 +141,11 @@ function setLatest(list: KLineData[]) {
   latest.value = {
     trade_date: dayjs(last.timestamp).format('YYYY-MM-DD'),
     close: last.close,
-    changePct: list.length > 1
-      ? ((last.close - list[list.length - 2].close) / list[list.length - 2].close) * 100
-      : null,
+    changePct: latestApiPct != null
+      ? latestApiPct
+      : (list.length > 1
+        ? ((last.close - list[list.length - 2].close) / list[list.length - 2].close) * 100
+        : null),
   }
 }
 

@@ -88,15 +88,27 @@ def _industry_frame(d_old: str, d_cur: str) -> dict[str, list[float]]:
 
     ⚠️ 取数顺序即性能关键：`ORDER BY stock_code` 让优化器走索引顺序扫描（~8 秒），
     去掉 ORDER BY 会退化成 filesort + 随机回表（实测 20 秒）。见文件头坑 1。
+
+    **复权口径（2026-09-20）**：主表已改为存**不复权实际价 + adj_factor 列**，而本函数
+    算的是「20 日收益」＝跨日比值，直接用实际价会在**除权日出现假下跌**。故乘上后复权
+    因子 `close * adj_factor` —— 比值不变、除权处连续。
+    adj_factor 为空的行（该日源未返回）用同票另一日的因子兜底；两日都空则该票回退为
+    原值（其存量值本身即同一基准的旧前复权数，比值自洽）。
     """
     rows = query_all(
-        "SELECT stock_code, trade_date, close FROM stock_market_daily "
+        "SELECT stock_code, trade_date, close, adj_factor FROM stock_market_daily "
         "WHERE trade_date IN (%s, %s) AND close > 0 ORDER BY stock_code",
         [d_old, d_cur])
+    by_code: dict[str, dict[str, tuple[float, float | None]]] = {}
+    for r in rows:
+        by_code.setdefault(r["stock_code"], {})[str(r["trade_date"])] = (
+            float(r["close"]), float(r["adj_factor"]) if r["adj_factor"] is not None else None)
     cur_map: dict[str, float] = {}
     old_map: dict[str, float] = {}
-    for r in rows:
-        (cur_map if str(r["trade_date"]) == d_cur else old_map)[r["stock_code"]] = float(r["close"])
+    for code, byd in by_code.items():
+        fallback = next((f for _c, f in byd.values() if f is not None), 1.0)
+        for dt, (cl, af) in byd.items():
+            (cur_map if dt == d_cur else old_map)[code] = cl * (af if af is not None else fallback)
     if not cur_map:
         return {}
     return {c: (cv / old_map[c] - 1) * 100 for c, cv in cur_map.items()

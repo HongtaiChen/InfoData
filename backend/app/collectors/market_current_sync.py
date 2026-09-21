@@ -28,6 +28,16 @@ InvestBuddy 行情快照聚合采集器
   直连可拿到含 f9/f23/f20/f21 的完整快照、连续请求即被拒，跨 4 分钟重试全败），
   不适合作为稳定依赖。
 
+⚠️ 复权口径（2026-09-20 主表改存「不复权实际价 + adj_factor」后必读）
+  本文件里**只有 `ytd_change_pct` 一列是跨日比值**，故只有它需要乘因子（见下方 SQL 处的长注释）。
+  其余列的口径不受影响：
+  · `new / open / high / low / pre_close` = 当日实际价原值（快照语义，本就该是实际价）；
+  · `amplitude = (high-low)/pre_close` = **同日**比值，与复权基准无关；
+  · `change_pct / change_amount` 取自主表，而主表的 `change_pct` 本就按 hfq 算出、
+    含除权调整的真实收益，可直接用。
+  🔴 回归警告：`ytd_change_pct` 一旦回退成「实际价直除」，前端的「年初至今涨幅」**排行榜**
+  会系统性把高分红股排到榜尾（实测 10/10 只票低估 1.95~5.54pp）。
+
   故本轮**按「能否用本地数据精确派生」分两类处置，而不是一刀切删列**：
   ✅ 已补齐（本地精确派生，不依赖任何外部源，名单覆盖率实测 **100%**）——
      · `total_captital`  ← `stock_shares.total_shares`（总股本，单位：股）
@@ -110,6 +120,26 @@ class MarketCurrentSyncCollector:
 
                 # 2. 聚合最新交易日数据（无日期幂等：每次都重建，详见模块顶部调度契约）
                 year = datetime.now().year
+                # ⚠️ ytd_change_pct 必须**乘复权因子**（2026-09-20 口径改造后修正）
+                # ------------------------------------------------------------------
+                # 该列是「年初至今涨幅」，语义是**含分红再投的真实收益**。
+                # 改造前主表存的是同一基准的**前复权价**，故 `close_今 / close_年初 - 1`
+                # 本身就等于真实收益；改造后主表改存**不复权实际价**，这个比值会在
+                # 年内除权的票上**漏掉整段分红**，系统性低估收益。
+                #
+                # 实测（2026-09-20，10/10 只票全部低估，偏差 1.95~5.54pp，方向一致为少算）：
+                #   600036 招商银行  现算法 -4.16%  vs 正确 +1.03%   ← **符号反了**
+                #   601857 中国石油  现算法  4.87%  vs 正确 10.41%   ← 低估一倍以上
+                #   600900 长江电力  现算法  3.63%  vs 正确  7.46%
+                #   000001 平安银行  现算法  1.74%  vs 正确  5.09%
+                # 影响面不只是展示：`analysis/ytd.py` 的「年初至今涨幅」**排行榜**直接按此列
+                # 排序（前端 AnalysisView 的 YTD 涨幅/跌幅 TOP 页签），api/market 的
+                # `sort=ytd_change_pct` 也吃它 → **高分红股被系统性排到榜尾**。
+                #
+                # 正确式：`(今收×今因子) / (年初收×年初因子) - 1` —— 后复权比值，
+                # 因子在两次除权之间是常数，故除权日连续、历史永不变。
+                # 因子缺失（源未返回，多见于旧口径残留行）退化为 ×1，即回到「直除」，
+                # 与改造前对这些行的行为一致，不引入新的错误。
                 sql = """
                     SELECT d.stock_code,
                            IFNULL(i.short_name, d.stock_code) AS stock_name,
@@ -117,12 +147,15 @@ class MarketCurrentSyncCollector:
                            d.change_amount, d.change_pct, d.volume, d.amount,
                            d.turnover_ratio,
                            ROUND((d.high - d.low) / NULLIF(d.pre_close, 0) * 100, 2) AS amplitude,
-                           ROUND((d.close / y.close - 1) * 100, 2) AS ytd_change_pct,
+                           ROUND(
+                               (d.close * IFNULL(d.adj_factor, 1))
+                               / NULLIF(y.close * IFNULL(y.adj_factor, 1), 0) * 100 - 100
+                           , 2) AS ytd_change_pct,
                            sh.total_shares, sh.list_a_shares
                     FROM stock_market_daily d
                     LEFT JOIN stock_info i ON d.stock_code = i.stock_code
                     LEFT JOIN (
-                        SELECT m.stock_code, m.close
+                        SELECT m.stock_code, m.close, m.adj_factor
                         FROM stock_market_daily m
                         JOIN (
                             SELECT stock_code, MIN(trade_date) AS md

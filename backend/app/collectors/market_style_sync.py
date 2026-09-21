@@ -67,11 +67,20 @@
   EXPLAIN 确认优化器会走 `Using index for skip scan`，全索引覆盖免回表；缺索引只打警告。
   ⚠️ **2026-09-15 订正（实测）**：上面这句「全索引覆盖免回表」**与实测不符**。
   `_fetch_raw` 的 SELECT 含 `amount` / `turnover_ratio` 两列，而这两列都不在该索引里
-  → 优化器实际选的是 `idx_stock_date` 做索引扫描 + **回表**。之所以仍然快（118 万行 6.5s），
-  靠的不是「免回表」，而是 `ORDER BY stock_code, trade_date` 使回表**按聚集顺序进行**（顺序 IO）。
-  反面证据：按 `trade_date` 等值取同一列（5,119 行）要 **15 秒** —— 同样回表，但物理位置随机。
+  → 优化器实际走的是**索引扫描 + 回表**（当时它选的是 `idx_stock_date`）。之所以仍然快
+  （118 万行 6.5s），靠的不是「免回表」，而是 `ORDER BY stock_code, trade_date` 使回表
+  **按聚集顺序进行**（顺序 IO）。反面证据：按 `trade_date` 等值取同一列（5,119 行）要
+  **15 秒** —— 同样回表，但物理位置随机。
+  ⚠️ **2026-09-20 再订正**：`idx_stock_date` 已作为**冗余索引删除**（它与唯一索引
+  `uk_stock_code_trade_date` 的列与顺序完全相同，净回收 435 MB）。性能不受影响 ——
+  优化器改用列完全相同的 `uk_stock_code_trade_date`，访问路径不变。
   结论：**该表的取数必须按 stock_code 排序，且任何需要 scan 的列都应在采集时物化，
   绝不能在查询时按 trade_date 现取**（换手率物化即由此决定，见文件头「二·再补」）。
+- **复权口径（2026-09-20 改造）**：主表已改为存**不复权实际价 + adj_factor 列**。
+  本任务里的 MA20/MA60、60 日新高新低都是**跨日比值**指标，直接吃实际价会在除权日
+  出现假下跌 → 故 `_fetch_raw` 就地换算成**后复权价** `close * adj_factor`（比值不变、
+  除权处连续）。宽度列（涨跌家数 / 涨停跌停）用的是 `change_pct`，它本就按 hfq 算出
+  真实收益、含除权调整，不受影响；量能用 `amount`、换手率用 `turnover_ratio`，均不受影响。
 - **增量重算**：日常只重算「表内最新日 − 10 天」之后的目标区间（预热另取 200 天），
   旧行沿用表内既有宽度列，不重复扫全史。首次运行（表内无宽度数据）才分块回填全史。
 - 幂等：指数列每次全量重建（小表）；宽度列增量重算后与旧值合并，再随全表 DELETE + INSERT 落库
@@ -328,15 +337,29 @@ class MarketStyleSyncCollector:
         return max_d
 
     def _fetch_raw(self, conn, start: date, end: date) -> pd.DataFrame:
-        """抓个股日线（6 列：含 amount 供量能派生、turnover_ratio 供换手率结构）
+        """抓个股日线（含 amount 供量能派生、turnover_ratio 供换手率结构、adj_factor 供复权）
 
         ⚠️ 取数按 (stock_code, trade_date) 顺序 —— 这是**性能关键**，别改成按 trade_date 过滤：
         该表按 stock_code 聚集，按此顺序回表是顺序 IO（118 万行 6.5s）；
         反过来按 trade_date 取非索引列则是随机 IO（5 千行就要 15s，差 3 个数量级）。
+
+        **2026-09-20 口径改造（重要）**：主表已改为存**不复权实际价** + `adj_factor` 列。
+        MA/新高新低这类**跨日比值**指标不能直接用实际价 —— 除权日会出现假下跌
+        （前复权时代不会，因为前复权是整个序列乘同一个常数，比值被保留）。
+        故此处把 close 就地换算成**后复权价** `close * adj_factor`：比值不变、
+        除权日连续，且后复权因子历史永不变（不会像前复权那样随分红全史重算）。
+
+        adj_factor 为 NULL 的行 = 该日源未返回（重建只 UPSERT、不删库内独有行）。
+        处理方式：**同票内前向/后向填充因子**再乘。
+          · 因子在两次除权之间是常数，填充值即该日的真实因子；
+          · 少数「整只票因子全空」（如已摘牌、源无数据）的票，填充后退化为 ×1 ——
+            这些票的存量值本身就是同一基准的旧前复权数，比值自洽，行为与改造前一致。
+        填充而不留 NULL 是有意为之：留 NULL 会让 pandas 的 rolling 窗口
+        （整数窗口，min_periods=窗口长）连着 20/60 天算不出值，反而制造大面积空洞。
         """
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT stock_code, trade_date, close, change_pct, amount, turnover_ratio "
+                "SELECT stock_code, trade_date, close, adj_factor, change_pct, amount, turnover_ratio "
                 "FROM stock_market_daily "
                 "WHERE close IS NOT NULL AND trade_date BETWEEN %s AND %s "
                 "ORDER BY stock_code, trade_date",
@@ -346,11 +369,15 @@ class MarketStyleSyncCollector:
         if not rows:
             return pd.DataFrame(columns=["stock_code", "trade_date", "close", "change_pct",
                                          "amount", "turnover_ratio"])
-        df = pd.DataFrame(rows, columns=["stock_code", "trade_date", "close", "change_pct",
-                                         "amount", "turnover_ratio"])
-        for c in ("close", "change_pct", "amount", "turnover_ratio"):
+        df = pd.DataFrame(rows, columns=["stock_code", "trade_date", "close", "adj_factor",
+                                         "change_pct", "amount", "turnover_ratio"])
+        for c in ("close", "adj_factor", "change_pct", "amount", "turnover_ratio"):
             df[c] = pd.to_numeric(df[c], errors="coerce")
         df["stock_code"] = df["stock_code"].astype(str)
+        # 因子填充（同票内）→ 换算为后复权价；amount / turnover_ratio 不受影响
+        g = df.groupby("stock_code", sort=False)["adj_factor"]
+        df["adj_factor"] = g.ffill().bfill().fillna(1.0)
+        df["close"] = df["close"] * df["adj_factor"]
         return df
 
     @staticmethod
