@@ -48,9 +48,22 @@ CREATE TABLE IF NOT EXISTS table_meta (
 _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 健康自更新 12 张业务表 + dq_report ----
     ("stock_market_daily", "行情",
-     "东财;腾讯;新浪;Tushare",
-     "股票日线历史（1990-12-19~）。stock_daily_incr 按每只股票本地最新日起增量补齐（前复权），四级降级：东财→腾讯→新浪→Tushare；退市/停牌股失败不阻断全量；每工作日 19:00。",
-     ["stock_daily_incr"], ""),
+     "新浪;腾讯;东财;Tushare",
+     "股票日线历史（1990-12-19~）。**口径 = 不复权实际成交价 + 后复权因子列 adj_factor（2026-09-20 全库改造）**："
+     "实际价/后复权/前复权三种口径全部由公式派生、永不过期。stock_daily_incr 按每只股票本地最新日起增量补齐，"
+     "四级降级：新浪→腾讯→东财→Tushare（raw 与 hfq 必须同源）；退市/停牌股失败不阻断全量；每工作日 19:20。"
+     "存量 1,815 万行的一次性口径重写见 stock_daily_rebuild（带腾讯兜底，退市股亦覆盖）；"
+     "⚠️ 改造前本表存的是「按各自最后写入日做基准的前复权价」——基准因股而异且写入后不再更新，"
+     "实测指纹：末端价=实际价、历史被逐段压低（退市股 000005 1991 年被压低 8.39 倍）、早期出现负价。"
+     "**2026-09-20 全量重建收尾实测**：5,787 只 / 18,495,727 行，因子空 80,438 行（0.43%），"
+     "全部来自旧口径残留与退市股兜底（AKSHARE 73,768 + AUSAHRE 1,448 + AUSHARE 178 + TENCENT 5,044）；"
+     "「真·未重建」（因子空 >90%）仅 8 只 / 16,241 行 —— 新浪与腾讯均无数据的退市股与北交所老码"
+     "（五源探查确认无覆盖）。残留段处置 = **接受现状 + DQ 显式上账**（规则 legacy_scale_rows），"
+     "不删行、不伪造：这些日期已无任何可得源。",
+     ["stock_daily_incr"],
+     "勘误(2026-09-20)：① data_source 存在历史拼写错误 AUSAHRE(600018,1448行)/AUSHARE(920段,178行)，"
+     "未回改标签以免掩盖血缘、仅在 DQ 并集处理；② 689009 CDR 腾讯 volume 曾为真实股数×100(1432行)，"
+     "已 ÷100 并在 canon() 加第三单位假设；③ 新浪 1990~92 volume 混乱，已用腾讯覆盖 55 只/10,464 行。"),
     ("stock_market_current", "行情",
      "本地聚合（无外部源）",
      "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,121 行，"
@@ -200,9 +213,10 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "历史导入",
      "日K线**不复权原始价**（1,689 万行 / 5,779 只 / 1990-12-19~2025-09-19）："
      "2026-09-13 全表逐字段比对推翻「冗余副本」结论——公共键 1,689 万行中 85% 六字段不同，"
-     "实为复权口径差异（daily=前复权 qfq，有 58.7 万行负价退化区；ex=不复权原始价）；"
-     "另含 109 个 daily 缺失的键（深 B 200020/200429/200726、北交所 430556 老三板等）。"
-     "库内唯一原始价基准，可作为复权因子重建依据，**不可归档**，维持冻结监护。",
+     "当时差异源于复权口径（daily=前复权 qfq 且有 58.7 万行负价退化区；ex=不复权原始价）。"
+     "**2026-09-20 勘误**：daily 已完成口径改造、不再存前复权价，「口径差异」这一理由随之失效；"
+     "但 ex 仍有 109 个 daily 缺失的键（深 B 200020/200429/200726、北交所 430556 老三板等），"
+     "故维持冻结监护、不并入 daily（2026-09-20 复核结论：ex 表不动，只做冻结监护）。",
      [], "不复权原始价 · 不可归档"),
     ("stock_market_daily_bak_20250802", "行情",
      "备份",
@@ -448,15 +462,26 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
     },
     "stock_market_daily": {
         "stock_daily_incr": {
-            "source": "东财行情(四级降级)",
+            "source": "新浪;腾讯;东财;Tushare(四级降级)",
             "cols": ["stock_code", "trade_date", "open", "high", "low", "close", "pre_close",
-                     "change_amount", "change_pct", "volume", "amount", "turnover_ratio"],
-            "derived": ["pre_close", "change_amount", "change_pct"],
-            "note": "前复权；增量按本地最新日补齐，INSERT IGNORE 去重；昨收/涨跌额/涨跌幅源缺失时按清洗口径本地推算",
+                     "change_amount", "change_pct", "volume", "amount", "turnover_ratio",
+                     "adj_factor"],
+            "derived": ["pre_close", "change_amount", "change_pct", "adj_factor"],
+            "note": "**实际价（不复权）+ 后复权因子列**（2026-09-20 口径改造）。三种口径全部由公式派生且都不过期："
+                    "实际价=close；后复权价=close×adj_factor；前复权价=close×adj_factor÷latest(adj_factor)。"
+                    "增量为 INSERT IGNORE 去重、只补不改；volume 统一为「股」、turnover_ratio 统一为百分数 %。"
+                    "存量全量重写见 stock_daily_rebuild（一次性工具）",
             "col_notes": {
-                "pre_close": "昨收：源提供则直采；整列缺失时按日期升序用收盘价 shift(1) 推算（首行昨收为空）",
-                "change_amount": "涨跌额：源缺时以收盘-昨收推算 round 3",
-                "change_pct": "涨跌幅：源缺时以 (收盘-昨收)/昨收×100 推算 round 4",
+                "pre_close": "昨收：按 hfq 比值反推，即 close(t-1)×adj_factor(t-1)÷adj_factor(t)。"
+                             "**除权日它等于交易所公布的除权参考价**（不是上一日原始收盘价），"
+                             "故 (close-pre_close)/pre_close 恒等于含分红再投的真实收益率，与 change_pct 自洽",
+                "change_amount": "涨跌额 = close - pre_close（round 3）",
+                "change_pct": "涨跌幅：由 hfq 比值算真实收益再 ×100（round 4），除权日不会被记成假跌",
+                "adj_factor": "后复权累计因子 = hfq_close ÷ close（round 8）。基准取该票首个交易日，"
+                              "**历史值永不改变**（新增数据与分红都不会回改历史），这是选后复权因子而非前复权的原因。"
+                              "按「相对变化 >0.3%」阶梯化以吃掉源 2 位小数的舍入噪声；"
+                              "⚠️ 非新浪源命中时不写因子（置 NULL）以避免两个基准拼接成断阶 —— "
+                              "例外是退市股整只走腾讯重建时（单源全史重写，基准内部自洽，必须写因子）",
             },
         },
     },

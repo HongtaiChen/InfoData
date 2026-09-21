@@ -36,6 +36,8 @@ dq_rules.params（JSON）契约，按 check_type 分：
                                                             本检查器答「这一列还在更新吗」（2026-09-19 立）
   gap_scan          {date_col, gap_days, high_days}        全史疑似缺口扫描（LAG 窗口）→ 写 dq_gap_detail
   source_handoff    {date_col, source_col, since, max_pct} 跨源衔接一致性（相邻行 data_source 变化处）
+  factor_link       {date_col, max_pct}                    复权因子自洽：pre_close ≈
+                                                            LAG(close)×LAG(adj_factor)/adj_factor（全史）
   per_key_coverage  {date_col, key_col, window_days, min_rows, min_listed_days,
                      ref_table, ref_key, ref_status_col, ref_status_val, ref_date_col,
                      exclude_prefixes}                     近端每票行数下限（在市老票）
@@ -523,11 +525,17 @@ class DataQualityCheckCollector:
         return {"status": status, "metric_value": str(n), "message": msg}
 
     def _source_handoff(self, conn, rule: dict) -> dict:
-        """跨源衔接一致性：相邻两笔记录 data_source 不同时，pre_close 应≈上一笔 close
+        """跨源衔接一致性：相邻两笔记录 data_source 不同时，pre_close 应≈「上一笔 close × 因子比」
 
         实测（2026-09-10）：主表 AKSHARE(东财血缘) 与 TENCENT 增量在 2025-09 切换，
         部分票衔接处存在 0.02~0.12 的数值微差（复权基准/源算法差异），同源规则抓不到。
         只扫 since 之后（跨源切换只发生在新体系增量期）：1.3M 行回表扫描实测 ~41s。
+
+        **2026-09-20 口径改造后的等式**（必须改，否则除权日必然误报）：
+        主表已存**不复权实际价**，而 pre_close 是**按 hfq 反推出的除权调整后前收盘**：
+            pre_close(t) = close(t) / (1 + ret_t) = close(t-1) × f(t-1) / f(t)
+        其中 f = adj_factor。旧版直接比 `pre_close` 与 `LAG(close)`，在除权日会差一个
+        分红幅度而误报 —— 那是前复权时代的写法。
         """
         p = rule.get("params") or {}
         date_col = p.get("date_col", "trade_date")
@@ -537,18 +545,67 @@ class DataQualityCheckCollector:
         table = rule["table_name"]
         sql = (
             f"SELECT COUNT(*) AS n FROM ("
-            f"  SELECT pre_close, LAG(close) OVER w AS prev_close, "
+            f"  SELECT pre_close, "
+            f"         LAG(close) OVER w AS prev_close, "
+            f"         LAG(adj_factor) OVER w AS prev_f, adj_factor AS f, "
             f"         LAG(`{source_col}`) OVER w AS prev_src, `{source_col}` AS src "
-            f"  FROM `{table}` WHERE `{date_col}` >= %s "
+            f"  FROM `{table}` WHERE `{date_col}` >= %s AND adj_factor > 0 "
             f"  WINDOW w AS (PARTITION BY stock_code ORDER BY `{date_col}`)"
-            f") t WHERE pre_close IS NOT NULL AND prev_close > 0 AND prev_src <> src "
-            f"AND ABS(pre_close - prev_close) / prev_close * 100 > %s"
+            f") t WHERE pre_close IS NOT NULL AND prev_close > 0 "
+            f"  AND prev_f IS NOT NULL AND f IS NOT NULL AND prev_src <> src "
+            f"  AND ABS(pre_close - prev_close * prev_f / f) / (prev_close * prev_f / f) * 100 > %s"
         )
         with conn.cursor() as cur:
             cur.execute(sql, (since, max_pct))
             n = cur.fetchone()["n"]
         status = "pass" if n == 0 else "warning"
-        msg = f"{since} 起跨源衔接偏差 >{max_pct}% 共 {n} 行（相邻行 data_source 变化处）"
+        msg = (f"{since} 起跨源衔接偏差 >{max_pct}% 共 {n} 行"
+               f"（相邻行 data_source 变化处，比较前收盘与上一笔 close×因子比）")
+        return {"status": status, "metric_value": str(n), "message": msg}
+
+    def _factor_link(self, conn, rule: dict) -> dict:
+        """复权因子与昨收的**全史自洽**核验（2026-09-20 新增，守护「实际价 + 因子」口径）
+
+        等式（数学必然，见 daily_rebuild 文件头）：
+            pre_close(t) = close(t-1) × adj_factor(t-1) / adj_factor(t)
+
+        为什么这条值得占一个全史扫描：主表换成「实际价 + 因子列」后，**任何一种
+        因子写错**（阶梯切错段、跨源混写把两段基准拼在一起、漏写让倍率跳变）都会
+        在这条等式上留下 >0.5% 的偏差。它是整个复权体系的单一最强判据 ——
+        因子对了，前复权/后复权/收益率三个派生口径就都对。
+
+        ⚠️ 窗口必须在**未过滤**的全序列上算（2026-09-20 修正）
+        ------------------------------------------------------------------
+        旧实现把 `WHERE adj_factor IS NOT NULL` 写在内层、再对过滤结果做 LAG ——
+        这造出「跳跃相邻」：序列里被滤掉的行（典型是 920 段旧码前史 51,666 行
+        AKSHARE 数据，因子整段为空）不参与，于是「上一笔」被错认成更早的有因子行，
+        等式自然不成立 → 把「口径未知的空因子区」误报成「因子写错」。
+        正确做法：LAG 在全序列上取；若真正的上一交易日因子为空，则 prev_f 为空，
+        该行被自然排除，核验只发生在「因子连续的两行」之间。
+        """
+        p = rule.get("params") or {}
+        date_col = p.get("date_col", "trade_date")
+        max_pct = float(p.get("max_pct", 0.5))
+        table = rule["table_name"]
+        sql = (
+            f"SELECT COUNT(*) AS n FROM ("
+            f"  SELECT pre_close, close, adj_factor, "
+            f"         LAG(close) OVER w AS prev_close, "
+            f"         LAG(adj_factor) OVER w AS prev_f "
+            f"  FROM `{table}` "
+            f"  WINDOW w AS (PARTITION BY stock_code ORDER BY `{date_col}`)"
+            f") t WHERE adj_factor IS NOT NULL AND adj_factor > 0 "
+            f"  AND prev_f IS NOT NULL AND prev_f > 0 "
+            f"  AND pre_close IS NOT NULL AND prev_close > 0 "
+            f"  AND ABS(pre_close - prev_close * prev_f / adj_factor) "
+            f"      / (prev_close * prev_f / adj_factor) * 100 > %s"
+        )
+        with conn.cursor() as cur:
+            cur.execute(sql, (max_pct,))
+            n = cur.fetchone()["n"]
+        status = "pass" if n == 0 else "warning"
+        msg = (f"全史 pre_close 与 close(前一日)×因子比 偏差 >{max_pct}% 共 {n} 行"
+               f"（因子写错/阶梯切错的直接指纹）")
         return {"status": status, "metric_value": str(n), "message": msg}
 
     def _per_key_coverage(self, conn, rule: dict) -> dict:
@@ -684,6 +741,7 @@ class DataQualityCheckCollector:
         "column_watermark": _column_watermark,
         "gap_scan": _gap_scan,
         "source_handoff": _source_handoff,
+        "factor_link": _factor_link,
         "per_key_coverage": _per_key_coverage,
         "stale_running": _stale_running,
         "long_finished_run": _long_finished_run,

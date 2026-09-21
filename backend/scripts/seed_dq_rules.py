@@ -41,16 +41,32 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
 
 规则分组（dq_rules.rule_group）：
 - daily ：每日盘后 20:30 跑（最新切片类，秒级）
-- weekly：每周一 21:30 独立任务跑（全史窗口扫描类，实测合计 4~7 分钟）
+- weekly：每周一 21:30 独立任务跑（全史窗口扫描类）
 
-weekly 组设计说明（2026-09-10 实测结论）：
+weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷新）：
 - daily_gap_scan        全史疑似缺口（LAG 窗口，18M 行 ~196s）→ 明细入 dq_gap_detail
 - daily_ohlc_consistent 全史 OHLC 自洽（实测 0 违反，守护型）
-- daily_change_link     涨跌幅与前收衔接（实测 0 违反；pre_close 当前仅 6.6% 行有值，待回填后全覆盖）
+- daily_change_link     涨跌幅与前收衔接（恒等式，构造上必成立）。
+  ⚠️2026-09-20 **二次修订**：原判据用 **pp 口径 0.02pp** —— 它与价格量级无关，而低价股的
+  3 位小数舍入 ≈0.05/pre_close pp 会直接顶穿阈值 ⇒ 误报 72,614 行（99.97% 在 <3 元，
+  而全表 <3 元仅占 4.13%）。改为「元口径 + 存储精度上界」后实测 **0 行**。
+  adj_factor 过滤保留，但理由改写：**不是**旧口径行会失败，而是 AUSAHRE 段历史行的
+  pct 只存 2 位小数（22 行，由 legacy_scale_rows 上账）。
 - daily_coverage_recent 近 250 日每票行数下限（实测 0 异常）
-- daily_source_handoff  跨源衔接偏差（实测 2,532 行，AKSHARE→TENCENT 基准微差，真实问题）
-- 已废弃：daily_amount_cross（量额勾稽）—— 实测 47% 行违反，根因是 volume/amount 为真实值
-  而 OHLC 为前复权值，两者不同口径，勾稽数学退化。不可实现，故不写入规则。
+- daily_source_handoff  跨源衔接偏差（实测 0 行，改造后按「前收盘 vs 上一笔 close×因子比」比）
+- daily_factor_link     🆕2026-09-20：全史因子自洽，整个复权体系的**最强单一判据**。
+  ⚠️窗口必须在**未过滤**全序列上做 LAG —— 旧版把 WHERE adj_factor IS NOT NULL 写在内层
+  再 LAG 会造「跳跃相邻」，把「口径未知的空因子区」误报成「因子写错」（实测 1,000 行）。
+- legacy_scale_rows     🆕2026-09-20：旧口径残留**显式上账**（上限 90,000，实测 75,173）。
+  平时静止，一旦增长即说明又有数据悄悄落进旧口径。**是上账不是豁免**。
+- 已废弃：daily_amount_cross（量额勾稽）—— 2026-09-10 废弃理由是「volume/amount 为真实值
+  而 OHLC 为前复权值，两者不同口径，勾稽数学退化」。**2026-09-20 该理由随口径改造消失**
+  （OHLC 已同为真实成交价），其职责由 daily 组的 `daily_price_vwap`（VWAP ∈ [low,high]）
+  完整承接，故仍不单列规则，但「不可实现」的定性已作废。
+
+⚠️ 周组实测耗时（2026-09-20）：合计 **~39 分钟**（原注「4~7 分钟」已过期）。
+  成本几乎全在 daily_factor_link 的全史窗口函数（18.5M 行 LAG）。
+
 
 🗓️ 调度语义提醒（2026-09-14 事故）：task_config 的 cron 由 APScheduler
    `CronTrigger.from_crontab` 解析，**day_of_week 为 0=周一、6=周日**，
@@ -81,6 +97,19 @@ RULES = [
     ("daily_value_bounds", "stock_market_daily", "violation_count",
      {"date_col": "trade_date", "where": "close<=0 OR volume<0 OR ABS(change_pct)>31", "max_count": 0},
      "warning", 1, "脏值拦截：close≤0 / 量为负 / |涨跌幅|>31%（北交所 30cm 上限容差）"),
+    # 2026-09-20 随「实际价 + adj_factor」口径改造新增两条守护
+    ("daily_adj_factor_null", "stock_market_daily", "null_rate_slice",
+     {"date_col": "trade_date", "col": "adj_factor", "max_pct": 2.0}, "warning", 1,
+     "最新日 adj_factor 空值率 ≤2%（空=该日源未返回、口径未知；大面积空=重建/增量漏写因子，"
+     "会让前复权/后复权/收益率三个派生口径一并失真）"),
+    ("daily_price_vwap", "stock_market_daily", "violation_count",
+     {"date_col": "trade_date",
+      "where": "volume>500000 AND amount>0 AND close>0 "
+               "AND (amount/volume < low*0.85 OR amount/volume > high*1.15)",
+      "max_count": 0}, "critical", 1,
+     "**实际价判据**：当日 VWAP=amount/volume 必须落在 [low,high] 内（±15% 容差）。"
+     "复权价会与 amount/volume 脱钩（库内旧值曾出现茅台 2016 low=-35.78 这种减法前复权负价、"
+     "以及偏离实际价 5% 的 1602.65），故这条是「存的是不是真实成交价」的直接体检"),
     ("daily_natural_key", "stock_market_daily", "unique_index",
      {"cols": ["stock_code", "trade_date"], "expect": "exists"}, "warning", 1,
      "结构体检：缺 (stock_code,trade_date) 唯一索引，建议 DDL 补充保障幂等"),
@@ -315,12 +344,23 @@ WEEKLY_RULES = [
      {"where": "close>0 AND high>0 AND low>0 "
                "AND (high < LEAST(open,close) OR low > GREATEST(open,close) OR volume<0)",
       "max_count": 0}, "warning", 1,
-     "全史 OHLC 自洽：high≥max(o,c) 且 low≤min(o,c) 且 volume≥0（前置 >0 规避前复权负价区）"),
+     "全史 OHLC 自洽：high≥max(o,c) 且 low≤min(o,c) 且 volume≥0"
+     "（>0 前置条件保留为防御性写法；口径改造后主表已是实际价、不再有负价区）"),
     ("daily_change_link", "stock_market_daily", "where_count",
-     {"where": "pre_close>0 AND close>0 AND change_pct IS NOT NULL "
-               "AND ABS((close-pre_close)/pre_close*100 - change_pct) > 0.02",
+     {"where": "adj_factor IS NOT NULL AND pre_close>0 AND close>0 AND change_pct IS NOT NULL "
+               "AND ABS(close - pre_close*(1+change_pct/100)) "
+               "    > 0.001 + 0.0005*ABS(change_pct)/100 + pre_close*0.000001",
       "max_count": 0}, "warning", 1,
-     "涨跌幅与收盘/昨收推导值偏差 ≤0.02pp（当前仅覆盖有 pre_close 的行，回填后全覆盖）"),
+     "涨跌幅与「收盘/前收」恒等式：|close−pre×(1+pct/100)| ≤ 存储精度上界"
+     "（0.001+0.0005|pct|/100+pre×1e-6）。构造上恒成立（pre、pct 同源于 ret），非零只能是舍入。"
+     "⚠️原判据用 pp 口径 0.02pp（与价格量级无关）⇒ 低价股舍入顶穿，误报 72,614 行"
+     "（99.97% 在 <3 元）；改元口径后 0 行。adj_factor 过滤理由已改写：AUSAHRE 段 pct 只存 2 位小数。"
+     "详见本文件头"),
+    ("daily_factor_link", "stock_market_daily", "factor_link",
+     {"date_col": "trade_date", "max_pct": 0.5}, "warning", 1,
+     "全史因子自洽：pre_close(t) ≈ close(t-1)×adj_factor(t-1)/adj_factor(t)，偏差 >0.5% 的行数=0。"
+     "这是「实际价 + 后复权因子」体系的最强单一判据 —— 因子阶梯切错段、跨源混写把两段基准拼接、"
+     "漏写导致倍率跳变，都会在这条等式上留指纹（2026-09-20 新增）"),
     ("daily_coverage_recent", "stock_market_daily", "per_key_coverage",
      {"date_col": "trade_date", "key_col": "stock_code",
       "window_days": 250, "min_rows": 100, "min_listed_days": 365,
@@ -333,6 +373,12 @@ WEEKLY_RULES = [
      {"date_col": "trade_date", "source_col": "data_source",
       "since": "2025-09-01", "max_pct": 0.5}, "warning", 1,
      "跨源衔接一致性：相邻行 data_source 变化处 pre_close 与上一笔 close 偏差 >0.5%（复权基准微差）"),
+    ("legacy_scale_rows", "stock_market_daily", "where_count",
+     {"where": "data_source IN ('AKSHARE','AUSHARE','AUSAHRE') AND adj_factor IS NULL",
+      "max_count": 90000}, "warning", 1,
+     "【旧口径残留·显式上账】AKSHARE/AUSHARE/AUSAHRE 源且无 adj_factor 的行数上限，实测 75,173 行。"
+     "这些日期新浪/腾讯均不返回（五源探查无覆盖），无法重建 → 接受现状、保留原值。本条不是豁免而是"
+     "上账：数值平时静止，一旦增长即有新数据落入旧口径（2026-09-20 立）"),
 ]
 
 # ============================================================================
@@ -405,28 +451,28 @@ COVERAGE_RULES = [
 #   ex.close 为不复权原始价（同期 21~39 元）——**两表是复权口径差异，非冗余副本**，
 #   且 ex 另有 109 个 daily 缺失的键（B 股 200020/200429/200726、北交所 430556 等）。
 #   **不能归档**，维持冻结监护；它是库内唯一保留原始价的表，可作为后续复权因子重建的基准。
+# ⚠️⚠️ 2026-09-20 二次勘误（daily 口径改造后）：上述「复权口径差异」理由**已失效** ——
+#   daily 现已同为「不复权实际成交价」，两表在重叠键上理论应一致。故本表的定位从
+#   「唯一原始价基准」转为**跨源独立验证基准**：daily 现以新浪为基准源，ex 由 AKSHARE
+#   采集且止于 2025-09-19，血缘不同 → 逐日 close 比对是对「重建后存的确实是真实成交价」
+#   的独立外部证据（实测见 .workbuddy/tmp/out_xcheck.txt）。ex 仍有 109 个 daily 缺失的键，
+#   故**仍不可归档**，维持冻结监护。
 FROZEN_RULES = [
     ("frozen_daily_ex_rows", "stock_market_daily_ex", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
-     "冻结监护·除权日线：最新日切片行数下限（**不复权原始价**，与 daily 前复权口径不同、非冗余副本，2026-09-13 全表比对推翻冗余结论；库内唯一原始价基准，不可归档）"),
+     "冻结监护·除权日线：最新日切片行数下限（**不复权原始价**）。⚠️2026-09-20 勘误：原「与 daily 前复权口径不同」失效——daily 已同口径改造，本表价值转为跨源独立验证基准（AKSHARE vs 新浪），且仍有 109 个 daily 缺失键，仍不可归档"),
     ("frozen_capital_flow_rows", "stock_capital_flow", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 4000}, "warning", 1,
      "冻结监护·资金流向：最新日切片行数下限（停更于 2025-09，防误清空；东财域受限待复测）"),
-    ("frozen_fin_abstract_rows", "stock_financial_abstract_ths", "row_count_slice",
-     {"date_col": "report_date", "min_rows": 4000}, "warning", 1,
-     "冻结监护·财务关键指标：最新报告期切片行数下限（停更于 2025-09，防误清空）"),
-    ("frozen_shares_rows", "stock_shares", "row_count_total",
-     {"min_rows": 140000}, "warning", 1,
-     "冻结监护·股本事件表（稀疏，最新日仅数行→不适用切片）：总行数下限（防误清空）"),
+    # ⚠️ 2026-09-20 移除 4 条**死代码**：frozen_fin_abstract_rows / frozen_shares_rows /
+    # frozen_sw_industry_rows / frozen_futures_rows 曾同时出现在本列表与 RETIRED_RULES 里
+    # —— 每轮 seed 先 INSERT 再 DELETE，净效果虽等于「不存在」，但属「同文件自相矛盾」，
+    # 且每次运行都白写四行、并让 created_at 被反复重置；若脚本在两步之间中断，它们还会短暂留存。
+    # 实测其职责已被完整接管且在册：fin_abstract_*（3）/ shares_*（4）/ sw_*（3）/ futures_*（3）。
+    # 清理后本列表只剩 3 条**真·冻结**（采集器已下线、仅防误清空）。
     ("frozen_hold_by_fund_rows", "stock_hold_by_fund", "row_count_total",
      {"min_rows": 100000}, "warning", 1,
      "冻结监护·基金重仓：总行数下限（防误清空）"),
-    ("frozen_sw_industry_rows", "stock_industry_sw", "row_count_total",
-     {"min_rows": 6000}, "warning", 1,
-     "冻结监护·申万行业：总行数下限（防误清空）"),
-    ("frozen_futures_rows", "futures_spot_price", "row_count_total",
-     {"min_rows": 130000}, "warning", 1,
-     "冻结监护·期现价格：总行数下限（防误清空）"),
 ]
 
 # ---------- C. 死表恢复采集（2026-09-13 新增，3 张）----------
