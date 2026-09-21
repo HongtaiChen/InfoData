@@ -37,7 +37,12 @@ dq_rules.params（JSON）契约，按 check_type 分：
   gap_scan          {date_col, gap_days, high_days}        全史疑似缺口扫描（LAG 窗口）→ 写 dq_gap_detail
   source_handoff    {date_col, source_col, since, max_pct} 跨源衔接一致性（相邻行 data_source 变化处）
   factor_link       {date_col, max_pct}                    复权因子自洽：pre_close ≈
-                                                            LAG(close)×LAG(adj_factor)/adj_factor（全史）
+                                                           LAG(close)×LAG(adj_factor)/adj_factor（全史）
+  pct_limit         {date_col, since?, tol_pp?, limit_main?, limit_star?, limit_bj?}
+                                                           涨跌幅「板块上限」违规数：按代码段取
+                                                           主板±10/创业科创±20/北交所±30，超限即违规。
+                                                           与口径无关的物理约束，守护换源/价格写错/
+                                                           复权断阶三类故障（2026-09-21 立）
   per_key_coverage  {date_col, key_col, window_days, min_rows, min_listed_days,
                      ref_table, ref_key, ref_status_col, ref_status_val, ref_date_col,
                      exclude_prefixes}                     近端每票行数下限（在市老票）
@@ -608,6 +613,74 @@ class DataQualityCheckCollector:
                f"（因子写错/阶梯切错的直接指纹）")
         return {"status": status, "metric_value": str(n), "message": msg}
 
+    def _pct_limit(self, conn, rule: dict) -> dict:
+        """涨跌幅「板块上限」违规：按股票所属板块取真实涨跌停上限，超限即违规
+
+        2026-09-21 新增。为什么需要它（决策项 ⑧ 核查时发现的真缺口）
+        ------------------------------------------------------------------
+        原先用 `ABS(change_pct) > 11` 当「物理不可能」判据，隐含**错误前提**
+        「全市场涨跌停均为 10%」。A 股实际分板块：主板 ±10%、创业板/科创板 ±20%、
+        北交所 ±30%。实测该前提把 **73,285 行合法涨停**判成异常，其中 77% 是
+        创业板 ±20% 被误杀（样本 300691 = +19.99%、301520 = +14.29%，均为合法板）。
+        按板块重判后降到 **16,491 行**。
+
+        这条判据的价值在于**与复权口径无关** —— 它是纯物理约束，不依赖
+        adj_factor / pre_close 的推导，故能同时守护三类故障：
+          ① 换源后价格单位对不上（如「元」被当「分」）；
+          ② close 被写错（截断、错位）；
+          ③ 复权断阶（因子跳变会把 change_pct 放大成天文数字）。
+        与 factor_link 互补：后者查「因子之间自洽」，本检查器查「结果物理合理」。
+
+        params:
+          date_col      默认 trade_date
+          since         可选，只查该日期之后（留空 = 全史）
+          tol_pp        容差（百分点），默认 1.0，给一字板/退市整理/新股首日留余量
+          limit_main    主板上限，默认 10
+          limit_star    创业板+科创板上限，默认 20
+          limit_bj      北交所上限，默认 30
+          max_count     允许的行数上限，默认 0。实测真超限 16,491 行且成因是
+                        「早期数据质量 + 低价股舍入退化」（非因子写错）→ 与
+                        legacy_scale_rows 同策略改为**上账**：设固定上限，
+                        平时静止、一旦增长即说明有新故障落入。
+        """
+        p = rule.get("params") or {}
+        date_col = p.get("date_col", "trade_date")
+        tol = float(p.get("tol_pp", 1.0))
+        max_count = int(p.get("max_count", 0))
+        lim_main = float(p.get("limit_main", 10))
+        lim_star = float(p.get("limit_star", 20))
+        lim_bj = float(p.get("limit_bj", 30))
+        table = rule["table_name"]
+
+        # 板块上限表达式（代码段口径与 code_to_symbol / 代码前缀约定保持一致）
+        lim_expr = (
+            "CASE "
+            "WHEN stock_code LIKE '300%%' OR stock_code LIKE '301%%' OR stock_code LIKE '302%%' "
+            "  OR stock_code LIKE '688%%' OR stock_code LIKE '689%%' THEN %s "
+            "WHEN stock_code LIKE '92%%' OR stock_code LIKE '4%%' OR stock_code LIKE '8%%' THEN %s "
+            "ELSE %s END"
+        )
+        args: list = [lim_star, lim_bj, lim_main]
+        since_sql = ""
+        if p.get("since"):
+            since_sql = f" AND `{date_col}` >= %s"
+            args.append(p["since"])
+        args.append(tol)
+        sql = (
+            f"SELECT COUNT(*) AS n FROM ("
+            f"  SELECT change_pct, ({lim_expr}) AS lim FROM `{table}` "
+            f"  WHERE change_pct IS NOT NULL{since_sql}"
+            f") t WHERE ABS(change_pct) > lim + %s"
+        )
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(args))
+            n = cur.fetchone()["n"]
+        status = "pass" if n <= max_count else "warning"
+        scope = f"{p['since']} 起" if p.get("since") else "全史"
+        msg = (f"{scope}涨跌幅超「板块上限+{tol:g}pp」共 {n} 行（应 ≤ {max_count}）"
+               f"（主板±{lim_main:g}/创业科创±{lim_star:g}/北交所±{lim_bj:g}）")
+        return {"status": status, "metric_value": str(n), "message": msg}
+
     def _per_key_coverage(self, conn, rule: dict) -> dict:
         """近端每票覆盖率：窗口期内每只（在市且上市满 N 天的）股票行数下限
 
@@ -742,6 +815,7 @@ class DataQualityCheckCollector:
         "gap_scan": _gap_scan,
         "source_handoff": _source_handoff,
         "factor_link": _factor_link,
+        "pct_limit": _pct_limit,
         "per_key_coverage": _per_key_coverage,
         "stale_running": _stale_running,
         "long_finished_run": _long_finished_run,
