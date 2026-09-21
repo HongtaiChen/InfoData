@@ -4,15 +4,15 @@
 InvestBuddy 日线外部对账（L2）
 
 两个模式（2026-09-10 与用户确认「本期做」）：
-- window：最近 N 个交易日 × 在市 A 股，与**腾讯**源逐票比对价格（独立血缘）
-- sample：固定种子抽 N 票，与**东财**源比对全史摘要（count / 首末日期，SUM 仅参考）
+- window：最近 N 个交易日 × 在市 A 股，与外部源逐票比对价格（独立血缘）
+- sample：固定种子抽 N 票，与外部源比对全史摘要（count / 首末日期，SUM 仅参考）
 
-设计要点（基于 2026-09-10 实库实测结论）：
+设计要点（基于 2026-09-10 实库实测结论，2026-09-20 随口径改造修订）：
 1. 对账源必须独立于本地采集链血缘：本地全史 93.4% 为 AKSHARE（东财接口），
-   故 window 模式用腾讯（真正独立的免费源）；sample 用东财仅用于查「入库丢行/截断」
-   （同源正好对口该类问题，但不能发现源本身的错）。
-2. 复权口径：本地为前复权。双方均以 adjust=qfq 拉取，且 window 模式限定"最近 5 个交易日"
-   ——该窗口内若发生除权，前复权基准会整体重算导致假差异，故对差异票标注除权豁免提示。
+   故 window 模式优先用非东财源做独立比对；sample 用于查「入库丢行/截断」。
+2. **复权口径（2026-09-20 改）**：本地主表已改为**不复权实际价 + adj_factor 列**，
+   故对账两端都按 `adjust=''` 拉取实际价逐值比对。**不再有「前复权基准漂移」假差异**
+   —— 那是旧口径（存过期前复权价）时代的豁免理由，实际价永不随时间改变。
 3. 停牌语义：无停牌表，远端"本地有/远端无"的行记为 missing_remote 但语义为"疑似"，
    不直接判失败（由人工或后续 Tushare suspend_d 兜底）。
 4. 结果落库：汇总写 dq_report（check_type='recon'，前端「数据质量」栏目可见）；
@@ -22,6 +22,12 @@ InvestBuddy 日线外部对账（L2）
    50/50 全部 range_diff，实为对账跑在日线采集（19:00）之前，本地自然还没有当日数据。
    故引入 `lag_days`（默认 5 自然日）：远端尾部比本地多出 ≤N 天 → 记 `latest_lag`
    （采集时延，不计入差异、不改变 status），只有超出该窗口的差异才算真实问题。
+7. **⚠️ 2026-09-20 修掉一个「静默空转」缺陷**：远端 DataFrame 经旧 `normalize_df`
+   归一后列名是中文（收盘/开盘…），而比对时按英文列名取值（`row.get("close")`）
+   → 恒为 None → `continue` → **逐值比对从未真正执行过**。实库佐证：dq_recon_detail
+   历史 30 天里只有 50 条 range_diff（来自 09-11 的旧跑），value_diff / missing_*
+   全为 0，而窗口模式每天比 5,125 只 × 5 日却"零差异"，统计上不可能。
+   现在两端统一用 stock_daily_core 的规范英文列（date/open/high/low/close），比对真正生效。
 """
 import logging
 import random
@@ -38,13 +44,15 @@ logger = logging.getLogger(__name__)
 # 明细与报告保留窗口（天），与 dq_report 对齐
 REPORT_KEEP_DAYS = 30
 # 比对的价格字段（volume/amount 因源单位口径差异大，首版不参与判定）
+# 列名用 stock_daily_core 的**规范英文列**——远端 DataFrame 由 core.canon() 归一，
+# 本地 SQL 也直接取这些英文列名，两端同源方能真正比上（旧版中文名/英文名混用即空转根因）。
 PRICE_COLS = ["open", "high", "low", "close"]
 # 尾部容忍窗口：远端比本地多出的最近 N 个自然日视为"采集时延"，不计入差异
 DEFAULT_LAG_DAYS = 5
 
 RUN_STEPS = [
     {"no": 1, "name": "确定对账范围", "params": "window: 最近 N 交易日×在市 A 股；sample: 固定种子抽 N 票"},
-    {"no": 2, "name": "拉取外部源", "params": "window→腾讯（独立血缘）；sample→东财（查入库丢行）；adjust=qfq、25s 超时、随机延时"},
+    {"no": 2, "name": "拉取外部源", "params": "adjust=''（实际价，与主表新口径一致）；25s 超时、随机延时"},
     {"no": 3, "name": "逐票比对", "params": f"按 trade_date 对齐；价格容差 0.5%；"
                                             f"远端尾部多出 ≤{DEFAULT_LAG_DAYS} 自然日记 latest_lag（采集时延，不计差异）"},
     {"no": 4, "name": "写明细与汇总", "params": "dq_recon_detail 差异明细 + dq_report 汇总（check_type=recon）"},
@@ -70,13 +78,15 @@ class DailyReconCollector:
 
     def __init__(self, mode: str = "window", days: int = 5, sample_size: int = 50,
                  seed: int = 42, max_stocks: int = 0, tolerance_pct: float = 0.5,
-                 adjust: str = "qfq", lag_days: int = DEFAULT_LAG_DAYS):
+                 adjust: str = "", lag_days: int = DEFAULT_LAG_DAYS):
         self.mode = mode if mode in ("window", "sample") else "window"
         self.days = days
         self.sample_size = sample_size
         self.seed = seed
         self.max_stocks = max_stocks  # 0 = 不限（调试可设小值）
         self.tolerance_pct = tolerance_pct
+        # 2026-09-20 随主表口径改造：本地已存**实际价**，故对账也取实际价（adjust=''）。
+        # 参数保留以便需要时切回复权口径对照，但默认必须与实际价一致。
         self.adjust = adjust
         self.lag_days = lag_days
         self.run_at = datetime.now()
@@ -86,6 +96,7 @@ class DailyReconCollector:
         self._errors: list[str] = []
         self._compared = 0
         self._written = 0
+        self._src_stats: dict = {}
 
     # ---------- 工具 ----------
 
@@ -142,14 +153,23 @@ class DailyReconCollector:
             return {"status": "error", "diff_count": 0, "compared": 0, "message": "在市股票名单为空"}
 
         fetcher = self._fetcher()
+        # ⚠️ 必须预热：fetcher 的源阶梯以新浪为首，而新浪接口内部用 py_mini_racer(V8)，
+        # V8 禁止同进程并发初始化 —— 不预热就开 4 线程会让整个任务进程硬崩溃。
+        # 详见 stock_daily_core.warmup_js_engine。
+        from .stock_daily_core import js_engine_ready, warmup_js_engine
+
+        warm_msg = warmup_js_engine()
+        pool_size = 4 if js_engine_ready() else 1
+        logger.info("%s；对账并发 %s 线程", warm_msg, pool_size)
         start_s, end_s = start_d.strftime("%Y%m%d"), end_d.strftime("%Y%m%d")
-        logger.info(f"🔍 窗口对账：{start_d}~{end_d}（{len(dates)} 个交易日）× {len(stocks)} 只，源=腾讯")
+        logger.info(f"🔍 窗口对账：{start_d}~{end_d}（{len(dates)} 个交易日）× {len(stocks)} 只")
 
         diffs: list[tuple] = []
         lags: list[tuple] = []
         errors: list[str] = []
         compared = 0
-        with ThreadPoolExecutor(max_workers=4) as ex:
+        src_stats: dict = {}
+        with ThreadPoolExecutor(max_workers=pool_size) as ex:
             futures = {
                 ex.submit(self._compare_window_one, fetcher, code, name, start_d, end_d): code
                 for code, name in stocks
@@ -159,7 +179,7 @@ class DailyReconCollector:
                 code = futures[fut]
                 done += 1
                 try:
-                    code, rows, lags_one, err = fut.result()
+                    code, rows, lags_one, err, src = fut.result()
                 except Exception as e:  # noqa: BLE001
                     errors.append(f"{code}: {e}")
                     continue
@@ -169,6 +189,7 @@ class DailyReconCollector:
                     compared += 1
                     diffs.extend(rows)
                     lags.extend(lags_one)
+                    src_stats[src] = src_stats.get(src, 0) + 1
                 if done % 500 == 0:
                     logger.info(f"进度 {done}/{len(stocks)}，差异 {len(diffs)} 行（时延 {len(lags)}）")
 
@@ -176,26 +197,28 @@ class DailyReconCollector:
         self._lags = lags
         self._errors = errors
         self._compared = compared
+        self._src_stats = src_stats
         n_diff_codes = len({d[0] for d in diffs})
         # 仅"真实差异"影响判定；latest_lag 属采集时延，不计入
         status = "pass" if not diffs else "warning"
         msg = (
             f"窗口 {start_d}~{end_d}：比对 {compared}/{len(stocks)} 只（失败 {len(errors)}），"
-            f"差异 {len(diffs)} 行 / {n_diff_codes} 只，源=腾讯，容差 {self.tolerance_pct}%"
+            f"差异 {len(diffs)} 行 / {n_diff_codes} 只，源 {src_stats or '未知'}，容差 {self.tolerance_pct}%"
         )
         if lags:
             msg += f"；另有采集时延 {len({l[0] for l in lags})} 只 / {len(lags)} 行（≤{self.lag_days} 天，不计差异）"
         return {"status": status, "diff_count": len(diffs), "compared": compared, "message": msg}
 
     def _compare_window_one(self, fetcher, code: str, name: str, start_d, end_d) -> tuple:
-        """单票窗口比对：远端（腾讯）vs 本地"""
-        df, src = fetcher.fetch_with_retry(code, start_d.strftime("%Y%m%d"), end_d.strftime("%Y%m%d"))
-        if df is None or df.empty:
-            return (code, [], [], f"{code} {name}: 远端返回空")
+        """单票窗口比对：远端 vs 本地（两端均为实际价）"""
+        raw, _hfq, src = fetcher.fetch_with_retry(code, start_d.strftime("%Y%m%d"), end_d.strftime("%Y%m%d"))
+        if raw is None or raw.empty:
+            return (code, [], [], f"{code} {name}: 远端返回空", None)
+        # 远端列为 stock_daily_core 规范列（date/open/high/low/close），与 PRICE_COLS 同源
         remote = {}
-        for _, row in df.iterrows():
-            d = row.get("日期")
-            if d is None:
+        for _, row in raw.iterrows():
+            d = row.get("date")
+            if d is None or (isinstance(d, float) and d != d):
                 continue
             remote[str(d)[:10]] = row
         conn = self._connect()
@@ -244,7 +267,7 @@ class DailyReconCollector:
                         continue
                     if abs(lvf - rvf) / abs(rvf) * 100 > self.tolerance_pct:
                         rows.append((code, d, "value_diff", col, str(lvf), str(rvf), src, None))
-        return (code, rows, lags, None)
+        return (code, rows, lags, None, src)
 
     # ---------- sample 模式 ----------
 
@@ -261,25 +284,27 @@ class DailyReconCollector:
         rnd = random.Random(self.seed)
         picked = rnd.sample(stocks, min(self.sample_size, len(stocks)))
         fetcher = self._fetcher()
-        logger.info(f"🔍 全史抽样对账：{len(picked)} 只（种子 {self.seed}），源=东财")
+        logger.info(f"🔍 全史抽样对账：{len(picked)} 只（种子 {self.seed}）")
 
         diffs: list[tuple] = []
         lags: list[tuple] = []
         errors: list[str] = []
         compared = 0
+        src_stats: dict = {}
         for code, name in picked:
             try:
-                df, src = fetcher.fetch_with_retry(code, "19900101", datetime.now().strftime("%Y%m%d"))
+                raw, _hfq, src = fetcher.fetch_with_retry(code, "19900101", datetime.now().strftime("%Y%m%d"))
             except Exception as e:  # noqa: BLE001
                 errors.append(f"{code} {name}: {e}")
                 continue
-            if df is None or df.empty:
+            if raw is None or raw.empty:
                 errors.append(f"{code} {name}: 远端返回空")
                 continue
             compared += 1
-            rcount = len(df)
-            rmin = str(df["日期"].min())[:10]
-            rmax = str(df["日期"].max())[:10]
+            src_stats[src] = src_stats.get(src, 0) + 1
+            rcount = len(raw)
+            rmin = str(raw["date"].min())[:10]
+            rmax = str(raw["date"].max())[:10]
             conn = self._connect()
             try:
                 with conn.cursor() as cur:
@@ -318,10 +343,11 @@ class DailyReconCollector:
         self._lags = lags
         self._errors = errors
         self._compared = compared
+        self._src_stats = src_stats
         status = "pass" if not diffs else "warning"
         msg = (
             f"全史抽样 {compared}/{len(picked)} 只（种子 {self.seed}），差异 {len(diffs)} 条"
-            f"（count/首末日期；SUM 不判定——前复权基准漂移会致假差异），源=东财"
+            f"（count/首末日期），源 {src_stats or '未知'}"
         )
         if lags:
             msg += f"；另有采集时延 {len(lags)} 只（≤{self.lag_days} 天，不计差异）"
@@ -392,7 +418,7 @@ class DailyReconCollector:
             RUN_STEPS,
             {
                 1: f"mode={self.mode} · 比对 {self._compared} 只",
-                2: "腾讯" if self.mode == "window" else "东财",
+                2: f"源 {getattr(self, '_src_stats', {}) or '未知'} · adjust='{self.adjust}'（实际价）",
                 3: f"差异 {summary['diff_count']} 条 · 采集时延 {len(self._lags)} 条",
                 4: f"明细 {self._written} 行 + 汇总 1 条",
                 5: f"清理 ≤{REPORT_KEEP_DAYS} 天前历史",

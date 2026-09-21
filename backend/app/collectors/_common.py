@@ -15,13 +15,43 @@ call_with_timeout：给 akshare 等「裸 requests 调用」加超时兜底。
   故所有采集器的外部网络调用统一经本函数包裹：超时即抛 CollectorTimeout，
   由调用方按「跳过该日 / 记 error / 下轮自动补」的容错策略处理，绝不无限等待。
 """
+import json
 import threading
 import time
 from datetime import date, datetime, timedelta
 
-__all__ = ["with_steps", "CollectorTimeout", "call_with_timeout",
+__all__ = ["with_steps", "CollectorTimeout", "call_with_timeout", "is_source_missing",
            "is_a_share", "latest_expected_report_period",
            "load_universe", "load_refresh_targets"]
+
+# 「源里根本没有这只票」的消息指纹（2026-09-20 实测立）
+#
+# akshare 的 `stock_zh_a_daily` 对退市 / 已作废代码返回空响应，抛出的异常**不是**
+# stdlib 的 `json.JSONDecodeError`，而是 akshare 自带 demjson 实现里的同名类：
+#
+#     akshare.utils.demjson.JSONDecodeError
+#     MRO: JSONDecodeError → JSONError → JSONException → Exception → BaseException
+#
+# 它**不继承** stdlib `json.JSONDecodeError`（实测 isinstance() 为 False），
+# 所以 `except json.JSONDecodeError` 是**永不命中的死代码** —— 曾经据此写下的
+# 「源无此票 → 跳过」分支从未生效，退市股全被误判为「失败」并白跑重试轮。
+# 实测证据：含退市股的 300 只批次里 63 只报 JSONDecodeError，却因哨兵未命中
+# 而计入 failed、`source_missing` 恒为 0（见 .workbuddy/tmp/diag_delisted_exc.py）。
+#
+# 结论：判定只能靠「类名 + 消息」，不能靠类型层级。
+_NO_DATA_MSG = "No value to decode"
+
+
+def is_source_missing(exc: BaseException) -> bool:
+    """是否为「源里根本没有这只标的」的**确定性**失败（重试必然同样失败）。
+
+    命中两类：stdlib json.JSONDecodeError（其他源/其他调用路径可能抛），
+    以及任何名字叫 JSONDecodeError 且消息含 `No value to decode` 的异常
+    （akshare demjson 的实现）。后者靠名字判定，故不会漏掉第三方同名类。
+    """
+    if isinstance(exc, json.JSONDecodeError):
+        return True
+    return type(exc).__name__ == "JSONDecodeError" and _NO_DATA_MSG in str(exc)
 
 # 排序哨兵：让「从未采集过」（NULL）的股票排在最前
 _MIN_TS = datetime(1900, 1, 1)
@@ -78,7 +108,7 @@ def call_with_timeout(fn, timeout: float, *args, **kwargs):
 
 
 def call_with_retry(fn, timeout: float, attempts: int = 3, base_delay: float = 1.5,
-                    *args, **kwargs):
+                    *args, no_retry_exc: tuple = (), **kwargs):
     """`call_with_timeout` + 指数退避重试（瞬态网络故障的通用兜底）。
 
     背景（2026-09-14 复盘）：`concept_market_sync` 的主入口
@@ -90,13 +120,30 @@ def call_with_retry(fn, timeout: float, attempts: int = 3, base_delay: float = 1
 
     attempts 为总尝试次数（含首次）；全部失败时抛出最后一次的异常，
     由调用方按「记 error / 下轮自动补」处理。delay 序列 base_delay × 2^i（1.5s→3s→6s）。
+
+    no_retry_exc（keyword-only，2026-09-20 新增）：**确定性失败**的异常类型元组，
+    命中即立刻抛出、不消耗重试次数。动机是逐股型采集器的实测发现——
+    新浪 `stock_zh_a_daily` 对退市 / 已作废代码返回空响应，akshare 抛
+    `JSONDecodeError('No value to decode')`：这是「源里根本没有这只票」的
+    确定性结论，重试必然同样失败。实测在含退市股的样本里这类票占 30%，
+    按默认 3 次重试 + 退避会给全量重建凭空增加数小时无谓等待。
+    默认空元组 = 不做排除，行为与新增该参数前完全一致。
+
+    ⚠️ 该元组**不足以**覆盖上述场景（2026-09-20 二次实测勘误）：真正的异常类
+    是 `akshare.utils.demjson.JSONDecodeError`，不是 stdlib 的同名类，传
+    `(json.JSONDecodeError,)` 进来永远匹配不上。故本函数**额外**无条件调用
+    `is_source_missing(e)` 按「类名 + 消息」判定，参数保留只为兼容既有调用方。
     """
     last: Exception | None = None
     n = max(1, int(attempts))
     for i in range(n):
         try:
             return call_with_timeout(fn, timeout, *args, **kwargs)
+        except no_retry_exc:
+            raise                                   # 确定性失败，重试无意义
         except Exception as e:  # noqa: BLE001 - 重试后仍失败则原样抛出
+            if is_source_missing(e):
+                raise                               # 源无此标的，同样不必重试
             last = e
             if i < n - 1:
                 time.sleep(base_delay * (2 ** i))

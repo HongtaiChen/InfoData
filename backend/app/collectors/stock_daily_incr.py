@@ -1,11 +1,48 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-InvestBuddy 股票日线增量采集器
-从存量最新交易日开始，增量补齐股票日 K 线到最新交易日。
-- 数据源四级降级：东财 stock_zh_a_hist → 腾讯 stock_zh_a_hist_tx → 新浪 stock_zh_a_daily → Tushare
-- 去重：INSERT IGNORE + 唯一键 (stock_code, trade_date)
-- 记录：task_runs 作业记录 + 失败重试
+InvestBuddy 股票日线增量采集器（实际价 + 后复权因子口径）
+
+口径（2026-09-20 与全库重建 stock_daily_rebuild 对齐，两者共用 stock_daily_core）
+================================================================================
+- open/high/low/close = **不复权实际成交价**（新浪 adjust=''）
+- adj_factor          = 后复权累计因子 = hfq_close / close（历史永不变）
+      实际价   = close
+      后复权价 = close * adj_factor
+      前复权价 = close * adj_factor / latest(adj_factor)     ← 永不失效
+      收益率   = (c2*f2)/(c1*f1) - 1
+- volume              = 股（单位自适应判定，见 core.canon）
+- turnover_ratio      = 百分数 %（单位自适应判定）
+
+**为什么增量必须一起改**：本表此前就是「重建/增量两套口径」写歪的 —— volume
+（股 vs 手）与 turnover（百分数 vs 小数）两列都出现过同一列混存两种量纲。
+所以增量与重建现在共用 `stock_daily_core` 的同一份转换逻辑，不再各写各的。
+
+数据源阶梯（2026-09-20 重排）
+================================================================================
+    新浪 → 腾讯 → 东财 → Tushare
+**raw 与 hfq 必须来自同一个源**。
+
+为什么把新浪从第 3 提到第 1：
+1. **实测可用性**：本机东财 push2 全线 `RemoteDisconnected`；腾讯 `stock_zh_a_hist_tx`
+   可用但 volume 单位**按股票而变**（sh600519 是股、sz000001 是手，实测），
+   换手率也时而缺失；只有新浪 raw/hfq/turnover/volume 四项齐全且口径一致。
+2. **因子口径基准**：各源 hfq 的基准不同 —— 实测 2026-09-18 的 600519，
+   新浪 hfq/raw = 8.8826 而腾讯 = 7.0625。全库重建用新浪，增量若换源会把
+   adj_factor 写成两段互不衔接的阶梯。故 `FACTOR_SOURCE = "sina"` 作为
+   因子口径基准源，命中其他源时**不写因子**（置 NULL + 计入 factor_missing）。
+
+⚠️ V8 预热（必须）
+================================================================================
+新浪接口内部用 py_mini_racer(V8) 解 JS，V8 的 PartitionAlloc 禁止同进程并发初始化，
+未预热直接开线程池会让**整个进程硬崩溃**（FATAL, 非异常）。故 run() 在建线程池前
+先在主线程预热一次；预热失败则退回单线程。详见 stock_daily_core.warmup_js_engine。
+
+去重
+================================================================================
+写库用 INSERT IGNORE + 唯一键 (stock_code, trade_date)。
+**刻意不用 UPSERT**：增量窗口的第一行是「上一交易日」（用于给后续行提供前收盘基准），
+它的 pre_close/涨跌幅按定义为空，UPSERT 会把库内已有的正确值冲成 NULL。
 """
 import logging
 import os
@@ -15,9 +52,18 @@ import time
 from datetime import datetime, timedelta
 
 import pymysql
-import pandas as pd
 
 from ..db import get_db_config
+from ._common import with_steps
+from .stock_daily_core import (
+    INSERT_ALL_COLS,
+    canon,
+    code_to_symbol as _core_code_to_symbol,
+    derive_rows,
+    js_engine_ready,
+    warmup_js_engine,
+    with_update_time,
+)
 
 # 国内数据源不走代理（本机若配置了 HTTP 代理，访问东财等国内站点会 ProxyError）
 os.environ["NO_PROXY"] = "*"
@@ -38,104 +84,68 @@ REQUEST_DELAY_MAX = 1.2
 RETRY_TIMES = 2
 # 疑似退市/长期停牌判定：最后数据日期距今超过该天数则默认跳过
 STALE_DAYS = 730  # 2 年
+# 因子口径基准源：命中其他源时不写 adj_factor（各源 hfq 基准不同，混写会断阶）
+FACTOR_SOURCE = "sina"
+
+# 写库列序与 stock_daily_core.INSERT_COLS 100% 同源（重建/增量共用一份列定义）。
+# ⚠️ update_time 用 %s 占位而非 SQL 的 NOW()：pymysql 仅在「VALUES 全为占位符」时才把
+# 多行合并成一条 INSERT，夹了 NOW() 会静默退化成逐行往返（2026-09-20 实测，吞吐差一个数量级）。
+_INSERT_SQL = f"""
+    INSERT IGNORE INTO stock_market_daily
+        ({", ".join(INSERT_ALL_COLS)})
+    VALUES ({", ".join(["%s"] * len(INSERT_ALL_COLS))})
+"""
 
 # 运行步骤链模板（供前端「数据流·整链拓扑」展示运行逻辑）。
 # 约定：每步 {no, name, params(可选说明/关键参数)}；
 # run() 结束时把模板 + 当轮实录合并为 run_detail 写入 task_runs.run_detail，
 # 代码变更后下一轮运行即携带最新模板，无需人工维护元数据。
 RUN_STEPS = [
-    {"no": 1, "name": "读候选名单", "params": "stock_info 在市 A 股，可含北交所"},
+    {"no": 1, "name": "读候选名单", "params": "stock_info 在市 A 股，含北交所（920 段）"},
     {"no": 2, "name": "定位增量窗口", "params": f"回看 {DEFAULT_DAYS_BACK} 交易日（覆盖停牌/长假缺口）"},
     {"no": 3, "name": "逐只增量判定", "params": f"最后日期 ≥ 判定线即跳过；STALE_DAYS={STALE_DAYS} 疑似退市软跳过"},
-    {"no": 4, "name": "并发抓取 × 四级降级", "params": "4 线程；东财→腾讯→新浪→Tushare，每源重试 2 次"},
-    {"no": 5, "name": "清洗归一 + 推算缺失字段", "params": "源列名归一化；昨收缺失→收盘 shift(1)，涨跌额/涨跌幅缺失→收盘-昨收推算"},
-    {"no": 6, "name": "INSERT IGNORE 去重写库", "params": "唯一键 (stock_code, trade_date)，重复自动忽略"},
+    {"no": 4, "name": "并发抓取 × 源阶梯", "params": "4 线程（建池前先预热 V8）；新浪→腾讯→东财→Tushare，raw/hfq 成对同源"},
+    {"no": 5, "name": "归一 + 派生", "params": "实际价 + 后复权因子；volume 自适应归股、换手率自适应归 %；涨跌幅按 hfq 计真实收益"},
+    {"no": 6, "name": "INSERT IGNORE 写库", "params": "唯一键 (stock_code, trade_date)；刻意非 UPSERT（保护窗口首行已有前收盘）"},
 ]
 
 
 def code_to_symbol(code: str) -> str:
-    """6位代码 -> 带交易所前缀（sh600519 / sz000001 / bj830799）"""
-    code = code.strip()
-    if code.startswith(("600", "601", "603", "605", "688", "689")):
-        return "sh" + code
-    if code.startswith(("000", "001", "002", "003", "300", "301")):
-        return "sz" + code
-    if code.startswith(("4", "8", "920")):
-        return "bj" + code
-    return code
+    """6位代码 -> 带交易所前缀（sh600519 / sz000001 / bj920599）
 
-
-def normalize_df(df: pd.DataFrame, source: str) -> pd.DataFrame:
-    """将不同数据源的列名归一化为统一中文列名，并补充昨收/涨跌幅"""
-    if df is None or df.empty:
-        return pd.DataFrame(columns=["日期", "开盘", "最高", "最低", "收盘", "昨收", "涨跌额", "涨跌幅", "成交量", "成交额", "换手率"])
-    d = df.copy()
-    if source == "eastmoney":
-        # 东财: 日期/开盘/收盘/最高/最低/成交量/成交额/振幅/涨跌幅/涨跌额/换手率
-        d = d.rename(columns={
-            "日期": "日期", "开盘": "开盘", "收盘": "收盘", "最高": "最高", "最低": "最低",
-            "成交量": "成交量", "成交额": "成交额", "涨跌幅": "涨跌幅", "涨跌额": "涨跌额",
-            "换手率": "换手率",
-        })
-    elif source == "tencent":
-        # 腾讯: date/open/close/high/low/volume/turnover/amount
-        d = d.rename(columns={
-            "date": "日期", "open": "开盘", "close": "收盘", "high": "最高", "low": "最低",
-            "volume": "成交量", "amount": "成交额", "turnover": "换手率",
-        })
-    elif source == "sina":
-        # 新浪: date/open/high/low/close/volume/amount/outstanding_share/turnover
-        d = d.rename(columns={
-            "date": "日期", "open": "开盘", "high": "最高", "low": "最低", "close": "收盘",
-            "volume": "成交量", "amount": "成交额", "turnover": "换手率",
-        })
-    elif source == "tushare":
-        # Tushare: trade_date/open/high/low/close/pre_close/change/pct_chg/vol/amount
-        d = d.rename(columns={
-            "trade_date": "日期", "open": "开盘", "high": "最高", "low": "最低", "close": "收盘",
-            "pre_close": "昨收", "change": "涨跌额", "pct_chg": "涨跌幅",
-            "vol": "成交量", "amount": "成交额",
-        })
-    # 统一列集合，缺失列补 NaN
-    cols = ["日期", "开盘", "最高", "最低", "收盘", "昨收", "涨跌额", "涨跌幅", "成交量", "成交额", "换手率"]
-    for c in cols:
-        if c not in d.columns:
-            d[c] = None
-    d = d[cols]
-    # 按日期升序，推算缺失的昨收/涨跌幅/涨跌额
-    d = d.sort_values("日期").reset_index(drop=True)
-    closes = d["收盘"].astype(float)
-    if "昨收" in d and d["昨收"].isna().all():
-        d["昨收"] = closes.shift(1)  # 首行昨收为 NaN
-    for i in range(len(d)):
-        close, pre = d.at[i, "收盘"], d.at[i, "昨收"]
-        if close is None or pd.isna(close) or pre is None or pd.isna(pre):
-            continue
-        close, pre = float(close), float(pre)
-        if (d.at[i, "涨跌幅"] is None or pd.isna(d.at[i, "涨跌幅"])) and pre:
-            d.at[i, "涨跌幅"] = round((close - pre) / pre * 100, 4)
-        if (d.at[i, "涨跌额"] is None or pd.isna(d.at[i, "涨跌额"])):
-            d.at[i, "涨跌额"] = round(close - pre, 3)
-    return d
+    实现已收敛到 `stock_daily_core.code_to_symbol`（重建与增量共用一份）。
+    该实现覆盖 302 段（深交所新创业板段，库内实测已有 302132）、92 段（北交所
+    2025-10-09 切换后的新码段）与 B 股段 —— 缺任一个都会退化成裸码、取数必然失败。
+    """
+    return _core_code_to_symbol(code)
 
 
 class StockDailyIncrementalCollector:
-    """股票日线增量采集器"""
+    """股票日线增量采集器（实际价 + 后复权因子）"""
 
-    def __init__(self, days_back: int = DEFAULT_DAYS_BACK, adjust: str = "qfq", max_stocks: int = 0,
-                 include_stale: bool = False, include_bj: bool = False,
+    def __init__(self, days_back: int = DEFAULT_DAYS_BACK, adjust: str = "",
+                 max_stocks: int = 0, include_stale: bool = False, include_bj: bool = True,
                  backfill_ranges: list | None = None):
         self.days_back = days_back
+        # adjust 参数**已废弃**：口径固定为「实际价 + 后复权因子列」，不再按调用方切换
+        # 复权。保留参数仅为兼容既有调用方（daily_recon / tasks.run）不破坏签名。
         self.adjust = adjust
         self.max_stocks = max_stocks  # 0 = 不限（全量）
         self.include_stale = include_stale  # True = 也采集疑似退市/长期停牌股
-        self.include_bj = include_bj  # True = 也采集北交所（当前数据源不支持，默认跳过）
+        # True = 也采集北交所。2026-09-20 由 False 改为 True —— 原先跳过的理由是
+        # 「四级源均不支持北交所」，实测该结论**已不成立**：新浪 stock_zh_a_daily
+        # 对 bj920xxx 完全可用（20/20，含全史），且全库重建已把北交所历史补齐。
+        # 若继续跳过，北交所行情会从重建日起再次停更。
+        self.include_bj = include_bj
         # 定向回补（L3 修复闭环）：[(code, start_yyyymmdd, end_yyyymmdd), ...]
         # 提供时只按显式区间回补，绕过增量定位、500 天截断与陈旧软跳过
         self.backfill_ranges = backfill_ranges or []
         self.db = get_db_config().to_dict()
         self._written = 0
         self._errors: list[str] = []
+        self._factor_missing: list[str] = []
+        self._degraded: list[str] = []
+        self._effective_workers = 4
 
     # ---------- 数据库工具 ----------
     def _connect(self):
@@ -172,14 +182,13 @@ class StockDailyIncrementalCollector:
         back = {0: 3, 6: 2}.get(d.weekday(), 1)  # 周一回看 3 天(上周五)；周日回看 2 天(周五)
         return (d - timedelta(days=back)).strftime("%Y%m%d")
 
-    def get_stock_list(self, conn, include_bj: bool = False) -> tuple[list[tuple], int]:
+    def get_stock_list(self, conn, include_bj: bool = True) -> tuple[list[tuple], int]:
         """获取股票代码列表，返回 (列表, 北交所数量)。
 
         过滤规则：
         - 排除 B 股（200%/900% 前缀）——数据源不支持
         - 排除名称含"退"或以"PT"开头的已退市股——数据源已无数据，逐个重试耗时巨大
-        - 默认排除北交所（4/8/92 开头）：当前四级源（东财被风控、腾讯/新浪不支持北交所、
-          Tushare 未配置）均无法采集，硬拉纯浪费时间；留待专用北交所任务。
+        - include_bj=True（默认）时包含北交所 4/8/92 段；False 则剔除并返回只数
         排序规则：疑似退市（无数据或最后数据极旧）排最后，先处理活跃缺口股。
         """
         with conn.cursor() as cur:
@@ -206,42 +215,47 @@ class StockDailyIncrementalCollector:
             return rows, len(bj)
         return rows, 0
 
-    # ---------- 数据源（四级降级） ----------
-    def _fetch_eastmoney(self, code: str, start: str, end: str) -> pd.DataFrame:
-        import akshare as ak
-        return normalize_df(
-            ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start, end_date=end, adjust=self.adjust),
-            "eastmoney",
-        )
-
-    def _fetch_tencent(self, code: str, start: str, end: str) -> pd.DataFrame:
+    # ---------- 数据源（成对降级：raw 与 hfq 必须同源） ----------
+    # 为什么成对：各源 hfq 的基准不同（实测 600519 于 2026-09-18：
+    # 新浪 hfq/raw = 8.8826、腾讯 = 7.0625）。raw 与 hfq 若跨源配对，
+    # 反推出的因子就是两个基准的混合体，会污染 adj_factor 序列。
+    def _fetch_pair_sina(self, code: str, start: str, end: str) -> tuple:
         import akshare as ak
         symbol = code_to_symbol(code)
-        return normalize_df(
-            ak.stock_zh_a_hist_tx(symbol=symbol, start_date=start, end_date=end, adjust=self.adjust),
-            "tencent",
+        return (
+            ak.stock_zh_a_daily(symbol=symbol, start_date=start, end_date=end, adjust=""),
+            ak.stock_zh_a_daily(symbol=symbol, start_date=start, end_date=end, adjust="hfq"),
         )
 
-    def _fetch_sina(self, code: str, start: str, end: str) -> pd.DataFrame:
+    def _fetch_pair_tencent(self, code: str, start: str, end: str) -> tuple:
         import akshare as ak
         symbol = code_to_symbol(code)
-        return normalize_df(
-            ak.stock_zh_a_daily(symbol=symbol, start_date=start, end_date=end, adjust=self.adjust),
-            "sina",
+        return (
+            ak.stock_zh_a_hist_tx(symbol=symbol, start_date=start, end_date=end, adjust=""),
+            ak.stock_zh_a_hist_tx(symbol=symbol, start_date=start, end_date=end, adjust="hfq"),
         )
 
-    def _fetch_tushare(self, code: str, start: str, end: str) -> pd.DataFrame:
+    def _fetch_pair_eastmoney(self, code: str, start: str, end: str) -> tuple:
+        import akshare as ak
+        return (
+            ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start, end_date=end, adjust=""),
+            ak.stock_zh_a_hist(symbol=code, period="daily", start_date=start, end_date=end, adjust="hfq"),
+        )
+
+    def _fetch_pair_tushare(self, code: str, start: str, end: str) -> tuple:
         token = os.getenv("TUSHARE_TOKEN", "")
         if not token:
             raise RuntimeError("Tushare 备源未配置（缺少环境变量 TUSHARE_TOKEN），跳过")
         import tushare as ts
         ts.set_token(token)
         symbol = code + (".SH" if code.startswith("6") else ".SZ" if code.startswith(("0", "3")) else ".BJ")
-        df = ts.pro_api().daily(ts_code=symbol, start_date=start, end_date=end)
-        return normalize_df(df, "tushare")
+        return (
+            ts.pro_bar(ts_code=symbol, start_date=start, end_date=end, adj=None),
+            ts.pro_bar(ts_code=symbol, start_date=start, end_date=end, adj="hfq"),
+        )
 
     @staticmethod
-    def _fetch_with_timeout(fetcher, code: str, start: str, end: str, timeout: int = 25) -> pd.DataFrame:
+    def _fetch_with_timeout(fetcher, code: str, start: str, end: str, timeout: int = 25) -> tuple:
         """给单个数据源请求加硬超时。
 
         akshare 部分接口（如腾讯源分页循环）不受 socket.setdefaulttimeout 约束，
@@ -259,66 +273,61 @@ class StockDailyIncrementalCollector:
         finally:
             ex.shutdown(wait=False)  # 不等挂死的线程，让其泄漏
 
-    def fetch_with_retry(self, code: str, start: str, end: str) -> tuple[pd.DataFrame, str]:
-        """四级数据源降级：东财→腾讯→新浪→Tushare，返回 (数据, 实际使用的数据源)。
+    def fetch_with_retry(self, code: str, start: str, end: str) -> tuple:
+        """源阶梯：新浪→腾讯→东财→Tushare，每源返回 (raw_df, hfq_df)。
 
-        东财被风控时（如返回 HTTP 000）快速降级：首源只重试 1 次，其余源保持 RETRY_TIMES 次。
+        返回 (raw_df, hfq_df, source_name)。东财近年频繁被风控（返回 HTTP 000 /
+        RemoteDisconnected），故被风控时快速降级：东财只重试 1 次，其余源 RETRY_TIMES 次。
         每源带 25s 硬超时，杜绝单只股票挂死拖垮整个任务。
         """
         sources = [
-            ("eastmoney", self._fetch_eastmoney),
-            ("tencent", self._fetch_tencent),
-            ("sina", self._fetch_sina),
-            ("tushare", self._fetch_tushare),
+            ("sina", self._fetch_pair_sina),
+            ("tencent", self._fetch_pair_tencent),
+            ("eastmoney", self._fetch_pair_eastmoney),
+            ("tushare", self._fetch_pair_tushare),
         ]
         errors = []
-        for i, (name, fetcher) in enumerate(sources):
-            # 首个源（东财）只试 1 次，被风控/失败即快速降级，避免全量采集时大量时间空耗
-            times = 1 if i == 0 else RETRY_TIMES
-            for attempt in range(times):
+        for name, fetcher in sources:
+            times = 1 if name in ("eastmoney", "sina") else RETRY_TIMES
+            for _attempt in range(times):
                 try:
-                    df = self._fetch_with_timeout(fetcher, code, start, end)
-                    if df is not None and not df.empty:
-                        if name != "eastmoney":
-                            logger.info(f"↩️ {code} 使用 {name} 源成功")
-                        return df, name
+                    raw, hfq = self._fetch_with_timeout(fetcher, code, start, end)
+                    if raw is not None and not raw.empty:
+                        if name != sources[0][0]:
+                            logger.info(f"↩️ {code} 降级使用 {name} 源")
+                        return raw, hfq, name
                     raise RuntimeError(f"{name} 返回空数据")
-                except Exception as e:
+                except Exception as e:                     # noqa: BLE001
                     errors.append(f"{name}:{e}")
                     time.sleep(0.8)
         raise RuntimeError("全部数据源失败: " + "; ".join(errors[-6:]))
 
     # ---------- 写库 ----------
-    def insert_rows(self, conn, code: str, df: pd.DataFrame, source: str) -> int:
-        """批量插入（INSERT IGNORE 去重），返回实际写入行数"""
-        if df is None or df.empty:
-            return 0
-        insert_sql = """
-            INSERT IGNORE INTO stock_market_daily
-            (stock_code, trade_date, open, high, low, close, pre_close,
-             change_amount, change_pct, volume, amount, turnover_ratio, update_time, data_source)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    def to_rows(self, code: str, raw, hfq, source: str) -> tuple:
+        """源 DataFrame → (入库元组列表, 因子跳变次数, 因子是否缺失)
+
+        因子口径守卫：命中非 FACTOR_SOURCE（新浪）时把 adj_factor 置 NULL 并回报 ——
+        各源 hfq 基准不同，硬写会把因子序列写成两段互不衔接的阶梯，
+        比留空更糟（留空可由 DQ 规则与修复脚本显式发现）。
         """
-        rows = []
-        for _, row in df.iterrows():
-            trade_date = row.get("日期")
-            if trade_date is None or pd.isna(trade_date):
-                continue
-            rows.append((
-                code,
-                str(trade_date),
-                _f(row.get("开盘")), _f(row.get("最高")),
-                _f(row.get("最低")), _f(row.get("收盘")),
-                _f(row.get("昨收")),
-                _f(row.get("涨跌额")), _f(row.get("涨跌幅")),
-                _i(row.get("成交量")), _f(row.get("成交额")),
-                _f(row.get("换手率")),
-                datetime.now(), source.upper(),
-            ))
+        rows, n_cut, degraded = derive_rows(
+            code,
+            canon(raw, source),
+            canon(hfq, source) if hfq is not None and not hfq.empty else None,
+            source.upper(),
+        )
+        factor_missing = False
+        if rows and source != FACTOR_SOURCE:
+            rows = [r[:12] + (None,) + r[13:] for r in rows]
+            factor_missing = True
+        return rows, n_cut, (degraded or factor_missing)
+
+    def insert_rows(self, conn, rows: list[tuple]) -> int:
+        """批量写入（INSERT IGNORE 去重），返回尝试写入行数"""
         if not rows:
             return 0
         with conn.cursor() as cur:
-            cur.executemany(insert_sql, rows)
+            cur.executemany(_INSERT_SQL, with_update_time(rows))
         conn.commit()
         return len(rows)
 
@@ -336,11 +345,16 @@ class StockDailyIncrementalCollector:
             if gap_days > 500:
                 start_date = (datetime.strptime(end_date, "%Y%m%d") - timedelta(days=500)).strftime("%Y%m%d")
                 logger.warning(f"⚠️ {code} {name} 缺口 {gap_days} 天，限制拉取最近 500 天")
-            df, src = self.fetch_with_retry(code, start_date, end_date)
-            n = self.insert_rows(conn, code, df, src)
+            raw, hfq, src = self.fetch_with_retry(code, start_date, end_date)
+            rows, _n_cut, degraded = self.to_rows(code, raw, hfq, src)
+            n = self.insert_rows(conn, rows)
+            if degraded:
+                self._degraded.append(code)
+            if src != FACTOR_SOURCE:
+                self._factor_missing.append(code)
             time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
             return (code, name, n, src, None)
-        except Exception as e:
+        except Exception as e:                              # noqa: BLE001
             return (code, name, 0, None, f"{code} {name}: {e}")
         finally:
             conn.close()
@@ -349,11 +363,16 @@ class StockDailyIncrementalCollector:
         """显式区间回补（L3 修复闭环）：不做增量定位、不做 500 天截断、不做陈旧跳过"""
         conn = self._connect()
         try:
-            df, src = self.fetch_with_retry(code, start, end)
-            n = self.insert_rows(conn, code, df, src)
+            raw, hfq, src = self.fetch_with_retry(code, start, end)
+            rows, _n_cut, degraded = self.to_rows(code, raw, hfq, src)
+            n = self.insert_rows(conn, rows)
+            if degraded:
+                self._degraded.append(code)
+            if src != FACTOR_SOURCE:
+                self._factor_missing.append(code)
             time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
             return (code, name, n, src, None)
-        except Exception as e:
+        except Exception as e:                              # noqa: BLE001
             return (code, name, 0, None, f"{code} {name}: {e}")
         finally:
             conn.close()
@@ -361,9 +380,7 @@ class StockDailyIncrementalCollector:
     def _run_backfill(self) -> dict:
         """按 backfill_ranges 定向回补（L3）：缺口清单 → 单票区间拉取 → INSERT IGNORE 补行
 
-        口径提示：回补沿用 self.adjust（默认 qfq）与主表一致；但「当前时点前复权」
-        与历史回灌时点基准可能存在微差，回补后应由 weekly 的 source_handoff 等规则复检，
-        必要时对该票做全史重灌。
+        口径：与主表一致（实际价 + 后复权因子），因为走的是同一套 to_rows()。
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -388,13 +405,19 @@ class StockDailyIncrementalCollector:
             todo = todo[: self.max_stocks]
         logger.info(f"🔧 定向回补 {len(todo)} 个区间（涉及 {len({t[0] for t in todo})} 只股票）")
 
+        warm_msg = warmup_js_engine()
+        workers = 4 if js_engine_ready() else 1
+        logger.info("%s；回补并发 %s 线程", warm_msg, workers)
+
         source_stats: dict = {}
         ok_codes: list[str] = []
         ok_ranges: list[tuple] = []  # 成功补到数据的区间（供 L3 精确标记 fixed）
         self._written = 0
         self._errors = []
+        self._factor_missing = []
+        self._degraded = []
         done = 0
-        with ThreadPoolExecutor(max_workers=4) as ex:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
             futures = {
                 ex.submit(self._process_one_explicit, code, name, s, e): (code, s, e)
                 for code, name, s, e in todo
@@ -429,6 +452,8 @@ class StockDailyIncrementalCollector:
             "ok_ranges": ok_ranges,
             "errors": self._errors[:10],
             "error_count": len(self._errors),
+            "factor_missing": sorted(set(self._factor_missing)),
+            "degraded": sorted(set(self._degraded)),
         }
         logger.info(
             f"✅ 定向回补完成：{len(todo)} 区间，写入 {self._written} 行，失败 {len(self._errors)}，耗时 {duration}"
@@ -467,7 +492,10 @@ class StockDailyIncrementalCollector:
 
             stocks, bj_count = self.get_stock_list(conn, include_bj=self.include_bj)
             if bj_count:
-                logger.info(f"跳过北交所 {bj_count} 只（数据源暂不支持，待专用任务采集）")
+                logger.info(f"跳过北交所 {bj_count} 只（include_bj=False）")
+            else:
+                bj_in = len([s for s in stocks if s[0].startswith(("4", "8", "920"))])
+                logger.info(f"北交所已纳入候选 {bj_in} 只")
             # 软跳过：最后数据日期距今超过 STALE_DAYS（2 年）的，视为疑似退市/长期停牌，
             # 默认不采集（数据源基本已不支持，逐个重试成本极高），可用 include_stale=True 放开。
             if not self.include_stale:
@@ -498,11 +526,17 @@ class StockDailyIncrementalCollector:
                 todo.append((code, name, stock_last))
             logger.info(f"实际待采集 {len(todo)} 只（已推进到 {target_day} 跳过 {skipped} 只）")
 
+            # ⚠️ 建线程池前必须先在主线程预热 V8（否则新浪接口并发调用会让进程硬崩溃）
+            warm_msg = warmup_js_engine()
+            workers = 4 if js_engine_ready() else 1
+            logger.info("%s；实际并发 %s 线程", warm_msg, workers)
+
             source_stats = {}
             self._written = 0
             self._errors = []
+            self._factor_missing = []
+            self._degraded = []
             done = 0
-            workers = 4
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 futures = {
                     ex.submit(self._process_one, code, name, stock_last, cutoff, end_date): (code, name)
@@ -523,6 +557,11 @@ class StockDailyIncrementalCollector:
                         logger.info(f"进度 {done}/{len(todo)}，已写 {self._written} 行")
 
             duration = datetime.now() - start_ts
+            missing = sorted(set(self._factor_missing))
+            degraded = sorted(set(self._degraded))
+            if missing:
+                logger.warning(f"⚠️ {len(missing)} 只的 adj_factor 未写入（源非新浪，因子基准不同，"
+                               f"留空待修复）如 {missing[:5]}")
             result = {
                 "task_name": "stock_daily_incr",
                 "status": "success" if not self._errors else "partial",
@@ -534,6 +573,8 @@ class StockDailyIncrementalCollector:
                 "source_stats": source_stats,
                 "errors": self._errors[:10],
                 "error_count": len(self._errors),
+                "factor_missing": missing,
+                "degraded": degraded,
                 # 运行步骤链：模板 + 当轮实录（供前端整链拓扑/运行逻辑展示）
                 "run_steps": [
                     {
@@ -541,11 +582,11 @@ class StockDailyIncrementalCollector:
                         "name": s["name"],
                         "params": s.get("params"),
                         "value": {
-                            1: f"候选 {len(stocks)} 只",
-                            2: f"判定线 {cutoff}",
-                            3: f"已最新跳过 {skipped} · 疑似退市跳过 {skipped_stale} · 北交所 {bj_count}",
-                            4: f"命中 {source_stats or '无（本轮全部失败）'}",
-                            5: f"写前清洗（列归一 + 缺失推算）",
+                            1: f"候选 {len(stocks)} 只（含北交所）",
+                            2: f"判定线 {target_day}（回看窗口起 {cutoff}）",
+                            3: f"已最新跳过 {skipped} · 疑似退市跳过 {skipped_stale} · 北交所跳过 {bj_count}",
+                            4: f"命中 {source_stats or '无（本轮全部失败）'} · 并发 {workers}",
+                            5: f"因子缺失 {len(missing)} 只 · 涨跌幅降级 {len(degraded)} 只",
                             6: f"写入 {self._written} 行",
                         }.get(s["no"]),
                     }
@@ -556,7 +597,8 @@ class StockDailyIncrementalCollector:
             }
             logger.info(
                 f"✅ 完成: 写入 {self._written} 行, 跳过 {skipped} 只, 疑似退市跳过 {skipped_stale} 只, "
-                f"源分布 {source_stats}, 失败 {len(self._errors)} 只, 耗时 {duration}"
+                f"源分布 {source_stats}, 失败 {len(self._errors)} 只, 因子缺失 {len(missing)} 只, "
+                f"耗时 {duration}"
             )
             return result
         finally:
@@ -565,6 +607,7 @@ class StockDailyIncrementalCollector:
 
 def _f(v) -> float | None:
     """安全转 float"""
+    import pandas as pd
     if v is None or pd.isna(v):
         return None
     try:
@@ -575,6 +618,7 @@ def _f(v) -> float | None:
 
 def _i(v) -> int | None:
     """安全转 int"""
+    import pandas as pd
     if v is None or pd.isna(v):
         return None
     try:

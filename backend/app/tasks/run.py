@@ -129,10 +129,13 @@ def _setup_logging():
 def run_stock_daily_incr(params: dict) -> int:
     collector = StockDailyIncrementalCollector(
         days_back=int(params.get("days_back", 15)),
-        adjust=params.get("adjust", "qfq"),
+        # adjust 已废弃（口径固定为实际价 + 后复权因子列），仅保留传参兼容
+        adjust=params.get("adjust", ""),
         max_stocks=int(params.get("max_stocks", 0)),
         include_stale=bool(params.get("include_stale", False)),
-        include_bj=bool(params.get("include_bj", False)),
+        # 2026-09-20 由 False 改为 True：实测新浪对 bj920xxx 完全可用，
+        # 原先「四级源均不支持北交所」的结论已不成立；继续跳过会让北交所行情再次停更。
+        include_bj=bool(params.get("include_bj", True)),
     )
     result = _collector_run(collector)
     if result["error_count"] > 0 and result["records_written"] == 0:
@@ -401,7 +404,7 @@ def run_daily_backfill(params: dict) -> int:
         return 0
 
     collector = StockDailyIncrementalCollector(
-        adjust=p.get("adjust", "qfq"),
+        adjust=p.get("adjust", ""),
         max_stocks=int(p.get("max_codes", 0)),
         backfill_ranges=ranges,
     )
@@ -457,9 +460,9 @@ def run_daily_recon_window(params: dict) -> int:
 def run_daily_recon_sample(params: dict) -> int:
     """L2 外部对账 · 全史抽样（东财源，查入库丢行/截断）
 
-    params: sample_size(50) / seed(42) / adjust(qfq)
+    params: sample_size(50) / seed(42) / adjust(""=实际价，同主表新口径)
     """
-    p = _task_params(params, {"sample_size": 50, "seed": 42, "adjust": "qfq"})
+    p = _task_params(params, {"sample_size": 50, "seed": 42, "adjust": ""})
     collector = DailyReconCollector(
         mode="sample",
         sample_size=int(p.get("sample_size", 50)),
