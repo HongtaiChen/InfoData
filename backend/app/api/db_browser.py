@@ -6,6 +6,23 @@
 - 表名 / 列名必须来自 information_schema 白名单（进程内 60s 缓存），拼 SQL 时用反引号包裹
 - 过滤值一律参数化绑定；contains 时转义 LIKE 通配符
 - 行查询强制 LIMIT 上限，不做 COUNT 大表扫描
+
+🔴 语句级超时熔断（2026-09-21 立，事故驱动）
+  起因：数据中心打开 stock_market_daily 永久转圈。根因是该表缺 update_time 排序索引，
+  ORDER BY update_time 在 1,717 万行上全表扫 + filesort 实测 50~158 秒 ——
+  而前端 axios timeout=30s，超时后**请求被客户端丢弃，服务端查询仍在全表扫**，
+  白烧 I/O 且拖慢同库其它任务。索引已补（见 scripts/seed_indexes.py 的 idx_update_time 等），
+  但「补索引」只修好这一张表；本段是**结构性防线**，保证任何未来的慢查询都有兜底：
+  MySQL 8 的 MAX_EXECUTION_TIME 让服务端主动中断超过 _ROWS_TIMEOUT_MS 的 SELECT，
+  返回 3024 (ER_QUERY_TIMEOUT) 而不是无限期占着连接和磁盘带宽。
+
+  范式来源：同项目 app/api/sql_explorer.py 已用同一手法（SET SESSION MAX_EXECUTION_TIME），
+  此处与之保持一致，避免两套超时口径。
+
+  为什么用「独立连接」而不是 app.db.query_all（长连接复用）：
+  MAX_EXECUTION_TIME 是**会话级**变量，且长连接是按线程复用的——若在长连接上设置，
+  会把这个超时泄漏给同线程上后续的其它查询（含采集器写入路径），属于隐蔽的副作用。
+  故行查询走 pymysql.connect() 独立会话，用完即关。与 db.py 顶部注释的边界约定一致。
 """
 import json
 import threading
@@ -23,6 +40,11 @@ _SCHEMA = get_db_config().database
 _EXACT_COUNT_THRESHOLD = 300_000  # 估算行数低于此阈值才执行精确 COUNT（保证秒级）
 _ROW_LIMIT_MAX = 200
 _CACHE_TTL = 60.0
+
+# 行查询语句级超时（毫秒）。取值理由：
+#   索引齐备时正常首屏 <10ms；即便翻到 5,000,000 行深分页实测约 13s，
+#   故 20s 给出充裕余量的同时，能把「无索引全表扫」这类 50s+ 异常挡在超时上。
+_ROWS_TIMEOUT_MS = 20_000
 
 _cache_lock = threading.Lock()
 _cache = {"tables": None, "ts": 0.0, "cols": {}}
@@ -113,6 +135,49 @@ def _col_map(table: str, force: bool = False) -> dict[str, dict]:
 def _require_table(table: str) -> None:
     if table not in {t["name"] for t in _table_rows()}:
         raise HTTPException(404, f"表 {table} 不存在")
+
+
+def _query_rows_timed(sql: str, params: list, timeout_ms: int = _ROWS_TIMEOUT_MS) -> list[dict]:
+    """带语句级超时的行查询（独立会话，见模块 docstring 的超时熔断说明）。
+
+    超时（MySQL 3024）转 504 并给出可行动提示——把「无限期卡住」变成「明确失败」，
+    前端可据此提示用户换列排序或加过滤条件，而不是无休止转圈。
+    """
+    import pymysql
+
+    conn = pymysql.connect(**get_db_config().to_dict())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET SESSION MAX_EXECUTION_TIME = %s", (timeout_ms,))
+            try:
+                cur.execute(sql, params)
+                cols = [d[0] for d in cur.description]
+                return [dict(zip(cols, row)) for row in cur.fetchall()]
+            except pymysql.err.OperationalError as e:
+                code = e.args[0] if e.args else None
+                msg = str(e.args[1] if len(e.args) > 1 else e)
+                # 3024 = ER_QUERY_TIMEOUT（MAX_EXECUTION_TIME 触发）
+                if code == 3024 or "MAX_EXECUTION_TIME" in msg.upper() or "QUERY EXECUTION WAS INTERRUPTED" in msg.upper():
+                    raise HTTPException(
+                        504,
+                        f"查询超过 {timeout_ms / 1000:.0f} 秒被中断（{table_hint(sql)}）。"
+                        f"该排序/过滤列可能缺少索引，建议：换一列排序、缩小时间范围或加过滤条件。",
+                    )
+                raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def table_hint(sql: str) -> str:
+    """从 SQL 里抠出表名，仅用于错误文案"""
+    try:
+        seg = sql.split("FROM `", 1)[1]
+        return f"表 {seg.split('`', 1)[0]}"
+    except Exception:
+        return "该表"
 
 
 # ---------- 表清单 ----------
@@ -230,7 +295,7 @@ def table_rows(
         f"SELECT * FROM `{table}`{where_sql}{order_by} "
         f"LIMIT {limit + 1} OFFSET {offset}"
     )
-    rows = query_all(sql, params)
+    rows = _query_rows_timed(sql, params)
     has_more = len(rows) > limit
     return {
         "table": table,
