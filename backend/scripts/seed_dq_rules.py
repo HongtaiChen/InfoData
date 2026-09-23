@@ -40,8 +40,16 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
    09-12 手工调过阈值，09-13 跑 seed 被还原成旧值导致体检变红）。
 
 规则分组（dq_rules.rule_group）：
-- daily ：每日盘后 20:30 跑（最新切片类，秒级）
+- daily ：每日盘后 **22:45** 跑（最新切片类，秒级；主触发=链式延迟，见下）
 - weekly：每周一 21:30 独立任务跑（全史窗口扫描类）
+
+⚠️ daily 组的执行时点（2026-09-22 重排，**这是理解多条 freshness 规则为何无 grace 的前提**）：
+  实际执行时刻 = `scheduler.CHAIN_NOT_BEFORE["data_quality_check"] = 22:45`，
+  由链式在 market_current_sync 成功后挂一次性 job 到点触发；`task_config` 里的
+  `0 23 * * *` 只是**兜底**（仅在当日链式没跑成时才真正执行）。
+  为什么必须这么晚：本组的 freshness 规则守护的表由 22:00~22:30 的采集写入，
+  体检若早于它们（原为链式紧跟上游的 20:02）就会数到 T-1 → 每个工作日恒 warning。
+  故 2026-09-22 起：**freshness 类规则一律不加 grace_days**，靠时点正确而非靠放宽来 pass。
 
 weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷新）：
 - daily_gap_scan        全史疑似缺口（LAG 窗口，18M 行 ~196s）→ 明细入 dq_gap_detail
@@ -57,10 +65,24 @@ weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷�
 - daily_factor_link     🆕2026-09-20：全史因子自洽，整个复权体系的**最强单一判据**。
   ⚠️窗口必须在**未过滤**全序列上做 LAG —— 旧版把 WHERE adj_factor IS NOT NULL 写在内层
   再 LAG 会造「跳跃相邻」，把「口径未知的空因子区」误报成「因子写错」（实测 1,000 行）。
-  ⚠️2026-09-21 复核：这 1,000 行**不是阈值问题**。原「按票分布」实测为弥散型
-  （95 只票各只 1 行），其中 847 行涨跌幅完全正常；成因是**低价股 + 2 位小数源**的
-  舍入退化（`step_factor` 文件头已述的信息论上限，非 bug）。**故阈值不动**
+  ❌2026-09-21 旧定性「低价股 + 2 位小数源舍入退化」**只解释主体、解释不了尾部**；
+  ❌2026-09-22 早前「缩股/重整导致价格跳变而因子未跟随」**已被推翻**（因子未变恰恰证明无除权，
+  此时 pre_close 必须等于上一笔 close，124.83 vs 2.09 任何因子解释都推不出）。
+  ✅2026-09-22 v3 **已查清真因**：`pre_close`/`change_pct` **不是源字段**，而是
+  `stock_daily_core.py` L311–326 用**后复权(hfq)序列的逐日比值 `ret`** 反算
+  （`pct=ret×100`、`pre=close/(1+ret)`、`ret≤-1 时 pre 强制 NULL`）⇒ **ret 失真则两列同错**。
+  决定性指纹：全库 `change_pct ≤ -100%` 共 307 行，其中 **307 行 pre_close IS NULL、0 反例**，
+  与代码护栏完全一致。`close`/OHLC **不受影响**（daily_ohlc_consistent pass）。
+  ⚠️ 故本条的「偏差 >0.5%」实为**同一批 pre_close 失真行**，`max_count=1000` 是**上账不是豁免**；
+  是否重算该列属口径取舍（取证报告 §八，可不回源重算），**未擅自动手**。
+  详见 docs/昨收与涨跌幅列失真取证_2026-09-22.md
   （原决策项 ⑧ 已撤回，详见 docs/2026-09-20_日线口径重建收尾报告.md §9）。
+  ⚠️2026-09-22 补（本次）：既然这 1,000 行是**已解释、已接受**的技术债，而检查器原实现是
+  `n != 0 即 warning`，该规则自建立起**从未 pass 过**（09-20/09-21 三次执行全 warning）
+  —— 与 margin_freshness / pct_limit 同类「恒定假信号」。故按本项目既有**上账**策略
+  （见 legacy_scale_rows：设固定上限、平时静止、增长即新故障）为它加 `max_count=1000`。
+  检查器侧新增 `max_count` 参数支持（默认 0，向后兼容）。
+  ⚠️实测成本：全史窗口查询 **432s**（7.2 分钟），是周组最重的一条。
 - daily_pct_limit_rows  🆕2026-09-21：涨跌幅**板块上限**违规数 = 0（主板±10/创业科创±20/
   北交所±30，留 1pp 容差）。这是决策项 ⑧ 核查时发现的**真缺口**：旧判据用
   `ABS(change_pct)>11` 隐含「全市场涨跌停=10%」的错误前提，把 73,285 行**合法涨停**
@@ -68,6 +90,15 @@ weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷�
   78% 带因子（属本体系内）→ 早期数据质量 + 低价舍入，性质同 legacy_scale_rows，列决策项 ⑨。
   本检查器的价值：**与复权口径无关**的物理约束，能同时守护「换源价格单位错」
   「价格写错」「复权断阶」三类故障。
+  ⚠️2026-09-22 v3 勘误：把 16,491 行笼统写成「低价舍入」**不准确**。分域实测（详见
+  docs/昨收与涨跌幅列失真取证_2026-09-22.md）：全史 |pct|>31% 共 4,721 行，其中
+  718 行在 1996-12-16（涨跌停制度实施日）之前、3,160 行在 4/8/92 段（新三板协议转让
+  **本无涨跌停**）→ **这两类的大波动可能合法，不能判脏**；其余 843 行中「因子未变
+  （无除权）却仍跳变」的 **92 行**才是可确证错（❌原写 202 已作废 —— 该数实为 constrained
+  域 `same_factor=1` 的总数、含正常的 `pre_close==prev_close` 行；同口径实测 92，勘误见取证报告 §五/§十-6），
+  真因是 `pre_close`/`change_pct` 列由
+  **后复权序列比值 `ret` 反算**、`ret` 在个别日期被源侧 hfq 阶跃打歪（见 factor_link 条）。
+  故本条的 `max_count` 上账基线**混入了合法行**，属粗粒度护栏，细粒度判据见 factor_link。
 - legacy_scale_rows     🆕2026-09-20：旧口径残留**显式上账**（上限 90,000，实测 75,173）。
   平时静止，一旦增长即说明又有数据悄悄落进旧口径。**是上账不是豁免**。
 - 已废弃：daily_amount_cross（量额勾稽）—— 2026-09-10 废弃理由是「volume/amount 为真实值
@@ -105,9 +136,18 @@ RULES = [
     ("daily_close_null", "stock_market_daily", "null_rate_slice",
      {"date_col": "trade_date", "col": "close", "max_pct": 1.0}, "warning", 1,
      "最新日 close 空值率 ≤1%"),
+    # ⚠️2026-09-22 口径标注（取证时发现描述与实现不符，曾致误信「已覆盖全史」）：
+    #   `violation_count` 检查器带切片谓词 `trade_date = (SELECT MAX(trade_date) FROM 表)`，
+    #   **只判最新一个交易日**。故这条描述里的「|涨跌幅|>31%」**不覆盖 1,850 万行历史**。
+    #   全史同类判据在 weekly 组：`daily_pct_limit_rows`（按板块上限）与 `daily_factor_link`。
+    #   实测教训：`daily_value_bounds` 一直 pass，而全史其实有 4,721 行 |pct|>31%
+    #   （占 0.026%，其中「无除权却跳变」202~333 行可确证错）。
+    #   详见 docs/昨收与涨跌幅列失真取证_2026-09-22.md
     ("daily_value_bounds", "stock_market_daily", "violation_count",
      {"date_col": "trade_date", "where": "close<=0 OR volume<0 OR ABS(change_pct)>31", "max_count": 0},
-     "warning", 1, "脏值拦截：close≤0 / 量为负 / |涨跌幅|>31%（北交所 30cm 上限容差）"),
+     "warning", 1,
+     "脏值拦截（**仅最新交易日切片**，非全史）：close≤0 / 量为负 / |涨跌幅|>31%（北交所 30cm 容差）。"
+     "全史同类判据见 daily_pct_limit_rows / daily_factor_link"),
     # 2026-09-20 随「实际价 + adj_factor」口径改造新增两条守护
     ("daily_adj_factor_null", "stock_market_daily", "null_rate_slice",
      {"date_col": "trade_date", "col": "adj_factor", "max_pct": 2.0}, "warning", 1,
@@ -174,9 +214,18 @@ RULES = [
     #    `_diverge_stats` 直接返回 None，判读条**静默退回纯计数**（「7 项中 4 项背离」）——
     #    页面看起来完全正常，只是那个「99.6% 分位」悄悄没了。这是「优雅降级」的阴暗面：
     #    降级太安静就没人会发现。故三条规则覆盖 停更 / 行数不足 / 数值越界。
+    # 2026-09-22 处置：**时点错位而非数据异常**。本表由 xcheck_sync 在 22:30 写入，
+    # 而 DQ 实际在链式里紧跟 market_current_sync（约 20:02）跑，故 behind 恒为 1 →
+    # 每个工作日必 warning。当日的处置分两步：
+    #   ① 【治本·同日生效】把 DQ 推到所有采集之后（scheduler.CHAIN_NOT_BEFORE 22:45）——
+    #      22:45 时 xcheck 22:30 已落库，behind=0 天然 pass；
+    #   ② 【治标·已撤回】当日曾先加 grace_days=1 压制，时点改对后**撤回**：留着它会把
+    #      「当日数据根本没落库」也一起放过，等于把这条监控废掉。现在 behind=1 即 warning，
+    #      这才是它该有的敏感度（xcheck 是秒级任务，正常不应迟到）。
     ("xcheck_freshness", "market_xcheck_daily", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 2}, "warning", 1,
-     "背离数对齐交易日历（每工作日 22:30 xcheck_sync 写入；须晚于概念补班 22:00）"),
+     "背离数对齐交易日历（每工作日 22:30 xcheck_sync 写入，须晚于概念补班 22:00）。"
+     "无 grace：DQ 已改到 22:45，当日数据未落库就该报警"),
     ("xcheck_rows", "market_xcheck_daily", "row_count_total",
      {"min_rows": 60}, "warning", 1,
      "背离数物化行数下限（一次性回填 250 行；<60 行则分位样本不足，_diverge_stats 不判）"),
@@ -223,9 +272,19 @@ RULES = [
      "无唯一键时并发派发会把整表写成每只股票 2 份（2026-09-19 实测 10,242/5,121=2.00x，"
      "且行数类规则全部无法察觉）。同时它也是 UI 侧 /api/market/list 总数翻倍的根因"),
     # ---------- 概念 ----------
+    # 2026-09-22 处置（同 xcheck_freshness，两处一并改正）：
+    #   ❌ 推翻当日早前的写法：「task_config 里登记的 `50 21` 经实测全史从未触发」——错。
+    #      该班次**照常触发**，只是 `_run_scheduled` 见当日链式已 success（约 20:02）便走
+    #      「⏭ 兜底班次跳过」分支直接 return，**不写 task_runs**，故按 started_at 查不到
+    #      21 时 50 分的记录。现象是真的，归因错了（见 scheduler.py CHAIN_FALLBACK_TASKS）。
+    #   ✅ 真因：DQ 实际执行在 20:02，早于 concept_market_sync 的 21:00/22:00 两批，
+    #      behind 恒为 1（T-1）。实测 09-18/09-21/09-22 三连 warning，09-19/09-20 因周末才 pass。
+    #   ① 治本：DQ 改到 22:45（CHAIN_NOT_BEFORE）→ 概念补班 22:00 已落库，behind=0 天然 pass；
+    #   ② 治标撤回：原先加的 grace_days=1 已去掉，恢复「当日概念没落库即报警」的敏感度。
     ("concept_market_freshness", "ths_concept_market", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 5}, "warning", 1,
-     "概念指数日线对齐交易日历（同花顺周级波动容忍，2026-09-12 由 2 放宽至 5）"),
+     "概念指数日线对齐交易日历（同花顺周级波动容忍，2026-09-12 由 2 放宽至 5）。"
+     "无 grace：DQ 已改到 22:45（晚于 22:00 补班），当日概念未落库就该报警"),
     ("concept_market_rows", "ths_concept_market", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 150}, "critical", 1,
      "概念指数最新日条数（正常 375；源侧对部分新概念**延迟/分批发布**，20:30 体检时实测可能只有 ~204，"
@@ -368,10 +427,11 @@ WEEKLY_RULES = [
      "（99.97% 在 <3 元）；改元口径后 0 行。adj_factor 过滤理由已改写：AUSAHRE 段 pct 只存 2 位小数。"
      "详见本文件头"),
     ("daily_factor_link", "stock_market_daily", "factor_link",
-     {"date_col": "trade_date", "max_pct": 0.5}, "warning", 1,
-     "全史因子自洽：pre_close(t) ≈ close(t-1)×adj_factor(t-1)/adj_factor(t)，偏差 >0.5% 的行数=0。"
-     "这是「实际价 + 后复权因子」体系的最强单一判据 —— 因子阶梯切错段、跨源混写把两段基准拼接、"
-     "漏写导致倍率跳变，都会在这条等式上留指纹（2026-09-20 新增）"),
+     {"date_col": "trade_date", "max_pct": 0.5, "max_count": 1000}, "warning", 1,
+     "【上账·非豁免】全史因子自洽：pre_close(t) ≈ close(t-1)×adj_factor(t-1)/adj_factor(t)，"
+     "偏差 >0.5% 的行数上限 1,000（复权体系最强单一判据）。⚠️这 1,000 行 2026-09-21 已查明"
+     "非因子写错（95 票各 1 行、847 行涨跌幅正常，系低价股+2位小数源舍入退化）；原实现 n!=0 "
+     "即 warning → 自建立起从未 pass，2026-09-22 改固定基线：平时静止、增长即新故障"),
     ("daily_pct_limit_rows", "stock_market_daily", "pct_limit",
      {"date_col": "trade_date", "tol_pp": 1.0,
       "limit_main": 10, "limit_star": 20, "limit_bj": 30,
@@ -432,9 +492,16 @@ COVERAGE_RULES = [
     ("index_cons_stock_code", "index_constituents", "regex_count",
      {"col": "stock_code", "pattern": "^[0-9]{6}$"}, "warning", 1,
      "成分股代码格式校验"),
+    # 2026-09-22 修正谓词 `weight <= 0` → `weight < 0`：0.0000 是**合法**取值，不是越界。
+    # 实证：中证全指（000985）5,121 只成分股，权重保留 4 位小数；微盘股权重 <0.00005% 时
+    #   四舍五入即得 0.0000。实测全 index 仅 4 行为 0.0000（920718/920802/920926/920957），
+    #   而同属 920 段的其它 20 只均为 0.0010、非 92 段 4,880 行**无一为 0**
+    #   → 说明源侧对 920 段是适配的，0 只是「最小的那一档被舍入」，并非源未适配。
+    # 时间线：09-13~09-20 08:02 恒 pass(0)，09-20 16:06 起 fail(4)，与 920 段迁移同刻。
     ("index_cons_weight_bounds", "index_constituents", "where_count",
-     {"where": "weight IS NOT NULL AND (weight <= 0 OR weight > 100)", "max_count": 0},
-     "warning", 1, "权重越界拦截：权重应落在 (0,100]"),
+     {"where": "weight IS NOT NULL AND (weight < 0 OR weight > 100)", "max_count": 0},
+     "warning", 1, "权重越界拦截：权重应落在 [0,100]。0.0000 合法（微盘股权重 <0.00005% 的舍入结果）；"
+     "2026-09-22 由 `<= 0` 放宽为 `< 0`，避免把合法舍入判成越界"),
     ("index_cons_name_cover", "index_constituents", "where_count",
      {"where": "stock_name IS NULL OR stock_name = ''", "max_count": 0}, "warning", 1,
      "成分股名称覆盖（曾因国证列名读错致 750 行为空；采集器已加 stock_info 兜底回填）"),
@@ -534,9 +601,14 @@ RECOVERED_RULES = [
 #    故本组刻意不给它配 unique_index 规则（配了必红）。
 RECOVERED_RULES_B34 = [
     # -- 期货现货价格与基差 --
+    # 2026-09-22 处置：本表由 futures_sync 在 22:20 写入，而 DQ 实际在 20:02 跑 →
+    # behind 恒为 1，排期日必 warning（唯一一次 pass 是 09-18 手动提前跑过）。
+    # 治本同 xcheck/concept：DQ 推到 22:45 后 futures 22:20 已落库；原先压制的
+    # grace_days=1 已撤回，恢复「当日期货数据未落库即报警」。
     ("futures_freshness", "futures_spot_price", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 4}, "warning", 1,
-     "期现价格对齐交易日历（源 100ppi 日频；含周末/假期缓冲，容错 4 日）"),
+     "期现价格对齐交易日历（源 100ppi 日频；含周末/假期缓冲，容错 4 日）。"
+     "无 grace：DQ 已改到 22:45（晚于 22:20 采集），当日未落库就该报警"),
     ("futures_rows", "futures_spot_price", "row_count_total",
      {"min_rows": 130000}, "warning", 1,
      "期现价格总行数下限（防误清空；实测 14.95 万，日增 ~54）"),
@@ -762,16 +834,24 @@ CONSUMPTION_RULES = [
 # **监控**而非修复——报警即真实信号，别当成规则误报去放宽阈值。
 # ============================================================================
 DEBT_RULES = [
-    # 【保留】turnover_ratio > 1：确属源侧脏值，分析层已用中位数口径绕行（可接受的技术债）。
-    # 实测（2026-09-19）：stock_market_current 5,121 行中 25 行 >1、max 9.05。
-    # 注意只有本表有这个问题：stock_market_daily.turnover_ratio 是「百分比」量纲，
-    # 60% 的行 >1 属正常（max 2766.88 = 2766%），对它套 「>1 即脏」会全线误报。
+    # 【2026-09-22 定性推翻】turnover_ratio > 1 不是「源侧脏值」，是**量纲在 09-20 变了**。
+    # 原注释「本表是比率量纲（0~1 正常），只有 stock_market_daily 是百分比」成立于 09-20 之前
+    # —— 当时快照源是东财实时快照（本就是比率量纲）。09-20 快照改为「从 stock_market_daily
+    # 聚合」（data_source=daily-agg）后，该列变成**直拷日线同名百分比列**：
+    #   实测 2026-09-22：快照 5,465 行 vs 日线同交易日，逐行相等 5,465 / 不等 0 —— 同一列。
+    # 于是旧判据 >1 比真实量纲小 100 倍，把正常换手率全判成越界。
+    # 时间线（dq_report 实录）：09-19 与 09-20 08:02 均 pass(25) → 09-20 16:06 起
+    #   fail(3945) → 09-21 fail(4230) → 09-22 fail(4177)，翻转点与快照切源同一时刻。
+    # 现判据改为**物理不可能的下限**：单日换手 >100%（成交量超过全部流通股）。
+    # 实测该日分布：>1 共 4177、>10 共 284、>20 共 48、>30 共 7、>50 共 0、>100 共 0
+    #   —— 阈值 100 平时静止，一旦出现即说明价格/成交量单位或复权出问题（同 pct_limit 思路）。
     ("current_turnover_dirty", "stock_market_current", "where_count",
-     {"where": "turnover_ratio IS NOT NULL AND turnover_ratio > 1", "max_count": 60},
+     {"where": "turnover_ratio IS NOT NULL AND turnover_ratio > 100", "max_count": 0},
      "warning", 1,
-     "换手率越界行数（>1）上限 —— 源侧偶发脏值、分析层已用中位数口径绕行，只监控不改数据。"
-     "阈值 60 是实测值 25 的 ~2.4 倍留量，只在明显恶化时亮灯。"
-     "⚠️ 本表 turnover_ratio 是「比率」量纲（0~1 正常）；stock_market_daily 同名列是百分比量纲，不可同比"),
+     "换手率越界行数（>100%）上限 —— 单日换手不可能超过 100%（成交量 > 全部流通股），"
+     "超限即源侧单位/复权故障。⚠️ 本表与 stock_market_daily 同列为**百分比**量纲"
+     "（2026-09-20 快照改从日线聚合后一致，实测逐行相等）；「0~1 比率」是 09-20 前的旧口径，"
+     "已于 2026-09-22 更正"),
 
     # 【推翻报告定性】概念「异常收益」不是源列脏，是**跨日/跨名拼接**。
     # 实测（2026-09-19）：

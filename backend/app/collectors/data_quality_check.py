@@ -36,8 +36,9 @@ dq_rules.params（JSON）契约，按 check_type 分：
                                                             本检查器答「这一列还在更新吗」（2026-09-19 立）
   gap_scan          {date_col, gap_days, high_days}        全史疑似缺口扫描（LAG 窗口）→ 写 dq_gap_detail
   source_handoff    {date_col, source_col, since, max_pct} 跨源衔接一致性（相邻行 data_source 变化处）
-  factor_link       {date_col, max_pct}                    复权因子自洽：pre_close ≈
-                                                           LAG(close)×LAG(adj_factor)/adj_factor（全史）
+  factor_link       {date_col, max_pct, max_count}           复权因子自洽：pre_close ≈
+                                                           LAG(close)×LAG(adj_factor)/adj_factor（全史）；
+                                                           max_count 为「上账」基线（默认 0）
   pct_limit         {date_col, since?, tol_pp?, limit_main?, limit_star?, limit_bj?}
                                                            涨跌幅「板块上限」违规数：按代码段取
                                                            主板±10/创业科创±20/北交所±30，超限即违规。
@@ -605,12 +606,18 @@ class DataQualityCheckCollector:
             f"  AND ABS(pre_close - prev_close * prev_f / adj_factor) "
             f"      / (prev_close * prev_f / adj_factor) * 100 > %s"
         )
+        max_count = int(p.get("max_count", 0))
         with conn.cursor() as cur:
             cur.execute(sql, (max_pct,))
             n = cur.fetchone()["n"]
-        status = "pass" if n == 0 else "warning"
+        # 基线「上账」（2026-09-22 新增，与 pct_limit / legacy_scale_rows 同策略）：
+        # 该等式对**因子连续且相邻真为上一交易日**的行恒成立，但全史里总有一批
+        # 「旧口径残留 / 源侧 pre_close 与因子不同步」的历史行无法归零 —— 实测恒为 1000 行，
+        # 而规则原实现是 n!=0 即 warning → 自 09-20 建立以来**从未 pass 过**，等于恒定假信号。
+        # 改为固定基线后：平时静止，**一旦增长即说明有新故障落入**（这才是它该抓的东西）。
+        status = "pass" if n <= max_count else "warning"
         msg = (f"全史 pre_close 与 close(前一日)×因子比 偏差 >{max_pct}% 共 {n} 行"
-               f"（因子写错/阶梯切错的直接指纹）")
+               f"（基线 ≤{max_count}；因子写错/阶梯切错的直接指纹）")
         return {"status": status, "metric_value": str(n), "message": msg}
 
     def _pct_limit(self, conn, rule: dict) -> dict:

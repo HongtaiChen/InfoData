@@ -205,7 +205,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["ai_concept_analysis"], "当前为占位降级态"),
     ("dq_report", "质量",
      "自产(data_quality_check)",
-     "数据质量体检结果快照：每日 21:50（主触发=链式）读 dq_rules（104 条规则）逐条执行写入；"
+     "数据质量体检结果快照：每日 22:45（主触发=链式延迟；兜底 23:00）读 dq_rules 逐条执行写入；"
      "大表限定最新时间切片秒级完成；同轮运行中保护。",
      ["data_quality_check"], ""),
     # ---- 无采集任务（历史导入/静态/系统） ----
@@ -290,7 +290,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 系统表 ----
     ("task_config", "系统",
      "手动维护;作业监控前端",
-     "采集任务配置（35 任务：enabled/cron/params，列名就是 `cron`）；作业监控栏目可热改，调度器实时同步。⚠️ cron 的 day_of_week 为 APScheduler 语义（0=周一、6=周日，与 Unix crontab 相反），界面与调度日志会同时显示 cron_human 中文语义。⚠️ 主触发=链式：19:20 日线 success 后自动接力 market_style → market_current → data_quality_check，表内时刻（21:30/21:40/21:50）仅兜底。",
+     "采集任务配置（35 任务：enabled/cron/params，列名就是 `cron`）；作业监控栏目可热改，调度器实时同步。⚠️ cron 的 day_of_week 为 APScheduler 语义（0=周一、6=周日，与 Unix crontab 相反），界面与调度日志会同时显示 cron_human 中文语义。⚠️ 主触发=链式：19:20 日线 success 后自动接力 market_style → market_current → data_quality_check（后者受 CHAIN_NOT_BEFORE 约束，延迟到 22:45 执行）。⚠️ 链式跑成后，表内登记的兜底时刻**会照常触发但被跳过**（不写 task_runs），故「表内时刻查不到运行记录」不等于班次没触发。",
      [], ""),
     ("task_runs", "系统",
      "自产(TaskRecorder)",

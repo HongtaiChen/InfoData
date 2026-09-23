@@ -70,7 +70,45 @@ CHAIN_NEXT: dict[str, list[str]] = {
 
 # 兜底班次清单：这些任务的固定时刻只在「当日链式未跑成」时才真正执行。
 # 判定看当日是否已有 success —— blocked（数据未就绪）不算跑成，故仍允许兜底再试一次。
+#
+# ⚠️ 连锁反应（2026-09-22 查明，勿再误判为「班次从未触发」）：
+# 由于链式在 20:02 就把 data_quality_check 跑成，其 21:50 兜底班次**会照常触发**，
+# 但 `_run_scheduled` 里 `_succeeded_today` 判定为真 → 打印「⏭ 兜底班次跳过」后
+# **直接 return，不写 task_runs**。所以「task_runs 里 MINUTE=50 有 0 次」并不等于
+# 班次没触发，只能说明它每次都走了跳过分支。判「任务跑没跑」要看 task_runs；
+# 判「班次有没有触发」必须看日志或 next_run_time，两者不可混为一谈。
 CHAIN_FALLBACK_TASKS: set[str] = {"market_style_sync", "market_current_sync", "data_quality_check"}
+
+# ============================================================================
+# 链式接力的「最早执行时刻」下限（2026-09-22 新增）
+#
+# 动机：链式保证的是「上游成功即接力」，**不保证所有数据都已就绪**。
+# `data_quality_check` 被 market_current_sync（约 20:02）直接接力，而它守护的若干
+# 表要到 22:00 之后才写入（实测常态完成时刻）：
+#     concept_market_sync 22:00 补班 → 22:01   （当日概念主体 358~375 行，21:00 那批只 2~17 行）
+#     jgdy_sync 22:00   financial_abstract_sync 22:15   futures_sync 22:20   xcheck_sync 22:30
+# 于是产生两类**结构性误判**（都不是数据缺陷，是体检时点错位）：
+#   ① `concept_market_rows`（critical，要求「最新交易日 ≥150 行」）落在 21:00~22:00
+#      窗口时，数到的是 21:00 残批 —— 实测 2026-09-22 21:45 手工跑得 n=2 而假失败；
+#   ② 三条 freshness 规则（concept/futures/xcheck）在 20:02 必然 behind=1 →
+#      **每个工作日恒 warning**（原先靠逐条加 grace_days=1 压制，属治标）。
+#
+# 把 DQ 整体推到所有数据任务之后，两个问题同时从根上消失，且 grace_days 可以撤回，
+# 让 freshness 重新具备「当日数据没落库就报警」的真实敏感度（见 seed_dq_rules.py）。
+#
+# 实现方式是**保链 + 延迟**，而不是解链 + 改 cron：解链会丢掉「上游失败就不体检」
+# 这个最有价值的保证（数据没就绪时体检出的结论没有意义）。故链条照旧，只是到点前
+# 不执行——挂一个 APScheduler 一次性 job，到点由调度器触发，不占用线程空等。
+#
+# 时刻选择依据：最晚的常规数据任务是 xcheck_sync 22:30（实测 22:30:01 完成，秒级），
+# 22:45 = 其后 15 分钟余量，且晚于 concept 补班 44 分钟。
+CHAIN_NOT_BEFORE: dict[str, str] = {
+    "data_quality_check": "22:45",
+}
+
+# 链式延迟接力 job 的 id 前缀。这类 job 由链式动态挂载、非 task_config 管理，
+# `sync_from_db` 重建调度时必须跳过它们，否则每次同步都会被误删。
+DEFER_JOB_PREFIX = "defer__"
 
 
 def parse_cron(cron: str):
@@ -293,7 +331,11 @@ class SchedulerManager:
             want[name] = {"cron": cron, "params": r["params"]}
 
         # 移除已不需要的任务
+        # ⚠️ `defer__*`（链式延迟接力）是链式动态挂载的一次性 job，不在 task_config
+        # 里，故不能按「不在 want 即删除」处理，否则每次同步都会把它误删（见 CHAIN_NOT_BEFORE）。
         for job_id in [j.id for j in self._scheduler.get_jobs()]:
+            if job_id.startswith(DEFER_JOB_PREFIX):
+                continue
             if job_id not in want:
                 self._scheduler.remove_job(job_id)
 
@@ -424,14 +466,64 @@ class SchedulerManager:
         finally:
             lock.release()
 
+    def _chain_floor(self, task_name: str, now: datetime | None = None) -> datetime | None:
+        """返回该链式下游的「最早执行时刻」；未配置下限、或已过点则返回 None
+
+        `now` 仅用于测试注入（避免为测这个方法去改系统时钟）；默认取上海当前时间。
+        """
+        hhmm = CHAIN_NOT_BEFORE.get(task_name)
+        if not hhmm:
+            return None
+        now_local = (now or datetime.now(TZ)).replace(tzinfo=None)
+        hh, mm = (int(x) for x in hhmm.split(":"))
+        target = now_local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        return target if now_local < target else None
+
+    def _defer_chain_task(self, task_name: str, run_date: datetime) -> bool:
+        """把链式接力任务改挂到 run_date 的一次性 job（不阻塞当前线程）"""
+        sched = self._scheduler
+        if sched is None or not sched.running:
+            return False
+        try:
+            sched.add_job(
+                self._run_scheduled,
+                trigger="date",
+                run_date=run_date,
+                args=[task_name],
+                id=f"{DEFER_JOB_PREFIX}{task_name}",
+                name=f"链式延迟接力 {task_name}",
+                coalesce=True,
+                max_instances=1,
+                misfire_grace_time=MISFIRE_GRACE_SECONDS,
+                replace_existing=True,   # 同日被接力多次只保留最后一个时点
+            )
+            return True
+        except Exception:
+            logger.exception(f"🔗 链式延迟接力 {task_name} 挂载失败")
+            return False
+
     def _run_chain(self, upstream: str, downstream: list[str]):
         """上游成功后按依赖顺序接力下游（独立线程，不占用调度器 worker）
 
         每级都经 _execute 调用，成功后自动继续接力下一级（自然递归）。
         任一级失败 / blocked 即中止整条链，等兜底班次或下次开机补偿再试。
+        配了 CHAIN_NOT_BEFORE 下限的任务若尚未到点，则挂到调度器上到点再触发；
+        此时**不算完成**，故不再继续往下接力（见该方法处说明）。
         """
         logger.info(f"🔗 链式触发：{upstream} 已完成 → 接力 {downstream}")
         for name in downstream:
+            floor = self._chain_floor(name)
+            if floor is not None:
+                if self._defer_chain_task(name, floor):
+                    logger.info(
+                        f"🔗 链式接力 {name} 已推迟到 {floor:%H:%M}（早于下限 "
+                        f"{CHAIN_NOT_BEFORE[name]}，避免在采集未完成时体检）"
+                    )
+                else:
+                    logger.warning(
+                        f"🔗 链式接力 {name} 推迟失败（调度器未运行），改由兜底班次接管"
+                    )
+                break
             try:
                 res = self._execute(name)
                 if not res.get("started"):
