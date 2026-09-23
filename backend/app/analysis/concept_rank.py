@@ -85,7 +85,10 @@ def _period_rank(period: int, date: str | None, limit: int) -> list[dict]:
                cur.trade_date AS end_date, cur.close AS end_close,
                prev.close AS start_close,
                ROUND((cur.close / NULLIF(prev.close, 0) - 1) * 100, 4) AS period_change_pct,
-               cur.change_pct AS day_change_pct, cur.amount
+               -- day_change_pct 同样兜底：库内该列可能为 NULL（源间歇性不返回）
+               COALESCE(cur.change_pct,
+                        ROUND((cur.close / NULLIF(prev.close, 0) - 1) * 100, 4)) AS day_change_pct,
+               cur.amount
         FROM ths_concept_market cur
         JOIN ths_concept_market prev
           ON prev.index_code = cur.index_code AND prev.trade_date = %s

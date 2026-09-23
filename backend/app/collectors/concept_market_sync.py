@@ -91,6 +91,41 @@ class ConceptMarketSyncCollector:
             symbol=name, start_date=start, end_date=end,
         )
 
+    # ---------- 昨收兜底 ----------
+
+    def _last_close_before(self, conn, index_code, before) -> float | None:
+        """取库内该概念在 before（**不含**）之前、最后一个非空 close —— 首行昨收的兜底来源。
+
+        为什么必须有它（2026-09-22 修复）：
+          增量窗口是「库内最大交易日 + 1 → 今天」（见 run 第 3 步），源每天只回**一行**。
+          旧实现按概念 `prev_close = None` 重置、只从「本次返回的前一行」推昨收，
+          于是首行恒 None → change_amount/change_pct 恒 NULL。实测劣化：
+            09-02 前 0% → 09-03 起 97.9% → 09-14 起 ≈100%（09-21 达 360/360）。
+          改为查库后，单日返回也能算出正确的日涨跌。
+        """
+        if before is None:
+            return None
+        try:
+            d = before.strftime("%Y-%m-%d")
+        except AttributeError:
+            d = str(before)[:10]
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT close FROM ths_concept_market "
+                "WHERE index_code = %s AND trade_date < %s AND close IS NOT NULL "
+                "ORDER BY trade_date DESC LIMIT 1",
+                (index_code, d),
+            )
+            row = cur.fetchone()
+        if not row:
+            return None
+        v = row["close"] if isinstance(row, dict) else row[0]
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if f > 0 else None
+
     # ---------- 主流程 ----------
 
     def run(self) -> dict:
@@ -200,7 +235,13 @@ class ConceptMarketSyncCollector:
                 # 日期统一为 YYYY-MM-DD 字符串并过滤非法行
                 df["date"] = pd.to_datetime(df["date"], errors="coerce")
                 df = df[df["date"].notna()]
-                prev_close = None
+                if df.empty:
+                    continue
+                # 显式按日期升序，让「批内昨收连算」不依赖源的返回顺序
+                df = df.sort_values("date")
+                # 🔴 昨收取自**库内上一交易日**，而不是依赖本次返回的前一行
+                #    （增量窗口使源每日只回一行，旧写法必然算出 NULL —— 见 _last_close_before）
+                prev_close = self._last_close_before(conn, index_code, df["date"].min())
                 for _, x in df.iterrows():
                     close = _to_num(x.get("close"))
                     if close is None:

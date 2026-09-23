@@ -78,20 +78,33 @@ def concept_kline(
     limit: int = Query(250, ge=10, le=2000),
 ):
     """概念指数K线"""
+    # ⚠️ change_pct / change_amount 在库内可能是 NULL（源间歇性不返回，见采集器
+    #    _last_close_before 的说明）。此处用**上一交易日 close** 兜底，避免前端 K 线
+    #    的「涨跌幅/涨跌额」出现空值。LAG 必须在本概念**全序列**上算（故过滤放外层），
+    #    否则窗口区间的首行拿不到前收、兜底失效。
     params: list = [code]
-    where = "WHERE index_code = %s"
+    outer_where = ""
     if start:
-        where += " AND trade_date >= %s"
+        outer_where += " AND t.trade_date >= %s"
         params.append(start)
     if end:
-        where += " AND trade_date <= %s"
+        outer_where += " AND t.trade_date <= %s"
         params.append(end)
     rows = query_all(
         f"""
-        SELECT trade_date, open, close, high, low, volume, amount, change_pct, change_amount
-        FROM ths_concept_market
-        {where}
-        ORDER BY trade_date DESC LIMIT %s
+        SELECT t.trade_date, t.open, t.close, t.high, t.low, t.volume, t.amount,
+               COALESCE(t.change_pct,
+                        ROUND((t.close / NULLIF(t.prev_close, 0) - 1) * 100, 4)) AS change_pct,
+               COALESCE(t.change_amount, ROUND(t.close - t.prev_close, 4)) AS change_amount
+        FROM (
+            SELECT trade_date, open, close, high, low, volume, amount,
+                   change_pct, change_amount,
+                   LAG(close) OVER (PARTITION BY index_code ORDER BY trade_date) AS prev_close
+            FROM ths_concept_market
+            WHERE index_code = %s
+        ) t
+        WHERE 1 = 1{outer_where}
+        ORDER BY t.trade_date DESC LIMIT %s
         """,
         params + [limit],
     )
