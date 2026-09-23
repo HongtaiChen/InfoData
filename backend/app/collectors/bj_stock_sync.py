@@ -385,18 +385,25 @@ class BjStockSyncCollector:
                     else:
                         errors.append(f"{old} 扩展表迁移影响行数 {cur.rowcount}（期望 1）")
 
-                # 4) 名册 UPSERT（简称 / 交易所 / 行业；list_date 刻意不写，见文件头口径约定）
+                # 4) 名册 UPSERT（简称 / 交易所 / 行业 / **在市状态**；list_date 刻意不写，见文件头口径约定）
+                #    🔴 2026-09-22 补 list_status='上市'：名册 = 当前在市的北交所标的，故在市状态一律落 '上市'。
+                #    此前只写简称/交易所/行业，导致 920 段 344 只在市标的的 list_status **恒为 NULL**，
+                #    而下游凡「按 list_status='上市' 建候选池」的采集器（如 stock_shares_sync 经
+                #    load_refresh_targets、index_cons_sync、ths_dividend_sync）**永远收不到 920 段**
+                #    → 北交所的股本缺失 → stock_market_current.total_captital 313 行为 NULL（实测）。
+                #    退市标的由紧随其后的第 5 步覆盖为 '退市'，两步不冲突（第 5 步在后）。
                 for r in roster:
                     if r["stock_code"] in all_codes:
                         cur.execute(
                             "UPDATE stock_info SET short_name=%s, exchange='BJ', "
-                            "industry=%s, update_time=NOW() WHERE stock_code=%s",
+                            "industry=%s, list_status='上市', update_time=NOW() WHERE stock_code=%s",
                             (r["short_name"], r["industry"], r["stock_code"]),
                         )
                     else:
                         cur.execute(
                             "INSERT INTO stock_info (stock_code, short_name, exchange, "
-                            "industry, update_time) VALUES (%s, %s, 'BJ', %s, NOW())",
+                            "industry, list_status, update_time) "
+                            "VALUES (%s, %s, 'BJ', %s, '上市', NOW())",
                             (r["stock_code"], r["short_name"], r["industry"]),
                         )
                         all_codes.add(r["stock_code"])

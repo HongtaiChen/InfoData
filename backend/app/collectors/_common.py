@@ -249,7 +249,8 @@ def load_refresh_targets(conn, table: str, *, data_col: str | None = None,
                          name_col: str | None = None,
                          include_bse: bool = True, today=None,
                          max_stocks: int = 0,
-                         skip_delisted: bool = False) -> tuple[list[tuple[str, str | None]], int]:
+                         skip_delisted: bool = False,
+                         exclude_switched_old: bool = False) -> tuple[list[tuple[str, str | None]], int]:
     """逐股型采集器的「待刷新名单」：候选池 = 本地已有股票 ∪ 在册 A 股，按最久未刷新排序。
 
     入选规则（满足任一即可；两者都不传则全选）：
@@ -312,6 +313,21 @@ def load_refresh_targets(conn, table: str, *, data_col: str | None = None,
     eligible = [c for c in local_codes
                 if is_a_share(c, include_bse)
                 and not (skip_delisted and status.get(c) == "退市")]
+
+    # exclude_switched_old（2026-09-22 新增）：剔除「北交所 920 代码段切换」前的旧码。
+    # 必要性：旧码（43/83/87 段）的历史行仍留在逐股型表里（如 stock_shares 2,240 code 中的 240 个），
+    # 于是它们既是候选池成员、又因 change_date/update_time 最陈旧而**长期占据 max_stocks 榜首**；
+    # 而源侧（巨潮）切换后**只认 920 新码**，对旧码一律返回无记录 → 整轮名额被废码吃光、
+    # upsert 恒为 0。实测 2026-09-22：stock_shares_sync 每轮选 246 只，其中 245 只是旧码，
+    # 246/246 全部「无可用事件」，连续 ≥10 轮零产出却报 success。
+    # 与既有 skip_delisted 同思路（都属「源已无记录、留在池里只会占名额」）。
+    # 事实来源是切换台账 stock_code_mapping（status='switched'），不靠代码段硬编码。
+    if exclude_switched_old:
+        with conn.cursor() as cur:
+            cur.execute("SELECT old_code FROM stock_code_mapping WHERE status='switched'")
+            dead = {str(r[0]) for r in cur.fetchall() if r[0] is not None}
+        eligible = [c for c in eligible if c not in dead]
+
     for code in eligible:
         dmax, umax = agg.get(code, (None, None))
         if not no_filter:

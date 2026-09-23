@@ -162,6 +162,12 @@ class StockSharesSyncCollector:
                 refresh_days=0 if self.full_sweep else self.refresh_days,
                 max_stocks=0 if self.full_sweep else self.max_stocks,
                 skip_delisted=True,
+                # 2026-09-22 新增：剔除 920 代码段切换前的旧码（43/83/87 段）。
+                # 旧码在 stock_shares 里仍有历史行（240 只 / 5,128 行），且 change_date 最陈旧
+                # → 长期霸占每轮 max_stocks 榜首；而巨潮切换后**只认 920 新码**，对旧码一律
+                # 返回 KeyError('公告日期') 计作「无数据」→ 整轮名额被吃光、upsert 恒 0。
+                # 实测（2026-09-22）：每轮选 246 只中 245 只是旧码，连续 ≥10 轮零产出仍报 success。
+                exclude_switched_old=True,
             )
         finally:
             conn.close()
@@ -234,6 +240,16 @@ class StockSharesSyncCollector:
         if scanned >= 20 and len(errors) >= scanned:
             raise RuntimeError(
                 f"全部 {scanned} 只均失败（疑似巨潮源不可达）：{errors[0] if errors else ''}")
+
+        # 「整轮零产出」保护（2026-09-22 新增）：不允许「全都查不到」被静默当成成功。
+        # 实测教训：候选池被已切换的旧码占满时，246/246 全返回「源无记录」（no_evt），
+        # written=0，而 status 仍为 success —— 股本表连续 ≥10 轮空转却无人发现，
+        # 最终以「北交所 920 段市值整段缺失」的形式在下游爆出来。
+        # 正常批次里在市股票应普遍有记录，故「≥50 只、0 写入、≥95% 无数据」必属异常。
+        if scanned >= 50 and written == 0 and no_evt >= scanned * 0.95:
+            raise RuntimeError(
+                f"{scanned} 只中 {no_evt} 只返回无可用事件、upsert 0 条（≥95% 无数据）——"
+                f"疑似候选池被已废代码占满或巨潮源整体失效；拒绝以 success 静默通过")
 
         msg = (f"股本变动：扫描 {scanned} 只，upsert {written} 条，失败 {len(errors)}，"
                f"无可用事件 {no_evt} 只")
