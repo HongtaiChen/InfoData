@@ -300,15 +300,37 @@ def derive_rows(code: str, raw: pd.DataFrame, hfq: pd.DataFrame | None, source: 
         hc = pd.to_numeric(d[["date"]].merge(hh, on="date", how="left")["hfq_close"],
                            errors="coerce").to_numpy(dtype=float)
         good = np.isfinite(hc) & (hc > 0) & np.isfinite(c) & (c > 0)
-        # 对齐率需够高才敢用 hfq 口径算收益（同源同接口，正常应接近 100%）
-        if good.sum() >= 1 and good.sum() >= 0.95 * n:
+
+        # ---- hfq 口径体检：含**负价** → 整只票弃用 ----
+        # 价格不可能为负。序列里只要出现一个负值，就说明这条 hfq **不是
+        # 「与 raw 同基准的后复权价」**，据此推出的 ret（→ pre_close / change_pct）
+        # 必然是畸变值。2026-09-22 实锤（见 docs/昨收与涨跌幅列失真取证_2026-09-22.md）：
+        #   akshare 1.18.94 的 `stock_zh_a_hist_tx(adjust="hfq")` 在退市/低价票上
+        #   返回的序列会**递减到负**（600811：04-01=2.31 → 04-08=0.42 → 04-09=-0.01
+        #   → 04-14=-1.06），而同一接口 `adjust="qfq"` 与 `adjust=""` 返回**完全相同**
+        #   （即复权参数未生效）。旧代码只把「单点 hc<=0」排除出 good、却仍用**全量 hc**
+        #   算 ret，于是坏点两侧各自造出一个巨幅畸变（-1.02 → 涨跌幅 -102%，
+        #   次日 +4200%），而 ret>-1 的护栏只拦 pre_close、不拦 change_pct。
+        #
+        # ⚠️ 判据用 `< 0` 而**不是** `<= 0`：停牌日 hfq 合法地写 0，若连 0 一起判负
+        # 会把「有停牌日的正常票」整只误伤。0 的局部影响由下面的 pair_ok 掩码处理。
+        fin = np.isfinite(hc)
+        hfq_has_negative = bool(fin.any() and (hc[fin] < 0).any())
+
+        # 对齐率需够高、且 hfq 无非正价，才敢用 hfq 口径算收益（同源同接口，正常应接近 100%）
+        if (not hfq_has_negative) and good.sum() >= 1 and good.sum() >= 0.95 * n:
             fs, n_cut = step_factor(c[good], hc[good], FACTOR_TOL)
             ser = pd.Series(np.nan, index=range(n))
             ser.loc[np.flatnonzero(good)] = fs
             fac = ser.ffill().bfill().to_numpy(dtype=float)
-            # 停牌日 hfq 可能为 0 → 除零产生 inf，必须先清成 NaN 再参与派生计算
+            # ⚠️ 比值只在「相邻两行 hfq 都是有效正值」时才有意义：
+            # 停牌日 hfq 为 0 → 除零得 inf；坏点为负 → 比值为负、ret<-1。
+            # 故先按 pair_ok（相邻两行同时在 good 内）掩码，不满足者留 NaN，
+            # 让该行的 pre_close / change_pct 落 NULL（**显式无值**优于静默错值）。
             with np.errstate(divide="ignore", invalid="ignore"):
-                ret[1:] = hc[1:] / hc[:-1] - 1
+                r1 = hc[1:] / hc[:-1] - 1.0
+            pair_ok = good[1:] & good[:-1]
+            ret[1:] = np.where(pair_ok, r1, np.nan)
             ret[~np.isfinite(ret)] = np.nan
             hfq_ok = True
 
