@@ -33,6 +33,10 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
                    分析研究消费端（钱贵不贵 / 跨市场对照 / 资金温度）后，
                    补「某一条腿、某一列还在更新吗」类规则（既有规则只守整表更新）。
                    配套新增 `date_floor_where` 检查器（见 data_quality_check.py）。详细理由见该列表头部注释。
+- REF_RULES        ：2026-09-24 引用完整性 + 名册停更守护 —— 名册曾漏收 89 只 A 股
+                   （含沪深300 成分 001280 中国铀业）**潜伏数月无人发现**，直到前端
+                   「行业分布」出现「其他(74)」被追问。配套新增 `ref_missing` 检查器
+                   （跨表判据的唯一形态：where 白名单不允许子查询）。见 REF_RULES 头部注释。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -873,6 +877,61 @@ DEBT_RULES = [
      "亮灯即代表源侧确有缺口，属真实信号"),
 ]
 
+# ============================================================================
+# REF_RULES：2026-09-24 引用完整性 + 名册停更守护（本次事故的直接产物）
+# ----------------------------------------------------------------------------
+# 背景：「其他(74)」故障的根因 —— `stock_info_sync` 的名单源曾是东财**实时行情快照**
+#   `stock_zh_a_spot_em()`，它只返回「当时有报价」的代码 ⇒ **漏收 89 只 A 股**
+#   （含 001280 中国铀业，沪深300 + 深证成指成分，2025-12-03 上市）。而采集器是
+#   upsert-only、逐源容错、无报错、行数只增不减 ⇒ 既有守护**全部 pass**：
+#     - `stock_info_rows`（row_count_total，min_rows=5856）：故障时 5927 行仍 > 下限；
+#     - `freshness_interval`：任务照常跑、`update_time` 照常前进；
+#     - `per_key_coverage`：**INNER JOIN** 取参照表，缺的 key 被 JOIN 直接丢弃、不进统计
+#       —— 本次故障里 stock_market_daily 同时缺那批代码，属**双重致盲**，历史上必然全绿；
+#     - `where_count` 类：`_validate` 的 where 白名单**不允许子查询**（`SELECT`/`FROM`
+#       都算非白名单标识符）⇒ 反向连接根本写不进去。
+#   ⇒ 故新增 `ref_missing` 检查器。这是「名册缺行」唯一能被 DQ 自动发现的形态。
+#   断链的代价是**级联**：stock_info 是 stock_daily_incr（FROM stock_info）与
+#   market_current_sync 的**上游股票池** ⇒ 名册缺 1 只 = 日线缺、快照缺、行业分布缺。
+#
+# ⚠️ 为什么只挂 index_constituents，不铺开到所有含 stock_code 的表：
+#   2026-09-24 全库实测：13 张表存在「stock_code 不在名册」的非零缺口，但其中 ~240 只
+#   是**北交所旧码段历史残留**（430 / 831~839 / 870~873；2025-10-09 起统一迁 920 段，
+#   老码→新码在 `stock_code_mapping`，status='switched'）——**属预期、不是缺陷**。
+#   `index_constituents` 实测为 0（成分快照只含现行代码、无旧码污染），是唯一可以
+#   `max_count=0` 严格守护的目标；给旧码表配这条规则会**恒红掩盖真问题**。
+#
+#   ✅ 2026-09-24 补充：**加时间窗口可以把两类问题分开** —— `stock_market_daily` 同样有旧码
+#   残留，但那些残留的最新交易日均 ≤2023-06-30；用 `where trade_date >= '2025-01-01'`
+#   限定「近期仍在交易」后，旧码被窗口挡掉，而「活跃股缺行」可被严格守护 ⇒ 增挂
+#   `daily_roster_link`。注意窗口必须是**静态起始日**：where 白名单（_WHERE_FUNCS）
+#   只放行 ABS/ROUND/COALESCE/IFNULL/NULL/NOT/AND/OR/IN/IS/LIKE/LEAST/GREATEST，
+#   DATE_SUB / CURDATE / INTERVAL 都不在，滚动区间写不进去。
+# ============================================================================
+REF_RULES = [
+    ("index_cons_roster_link", "index_constituents", "ref_missing",
+     {"key_col": "stock_code", "ref_table": "stock_info", "ref_key": "stock_code",
+      "max_count": 0},
+     "critical", 1,
+     "引用完整性：指数成分代码必须存在于本地名册 stock_info（2026-09-24 立，直接对应「其他(74)」故障）。"
+     "⚠️ 这是唯一能发现「跑成功但漏收」的规则——行数下限 / freshness / per_key_coverage "
+     "对该类故障全部无感（后者 INNER JOIN 丢键致盲）"),
+    ("daily_roster_link", "stock_market_daily", "ref_missing",
+     {"key_col": "stock_code", "ref_table": "stock_info", "ref_key": "stock_code",
+      "where": "trade_date >= '2025-01-01'",
+      "max_count": 0},
+     "warning", 1,
+     "引用完整性·活跃个股：2025 年起仍有行情的股票必须在名册内（守「名册缺行」类静默故障）。"
+     "实测 2026-09-24 孤行 6 只（含北交所老码），最新日均 ≤2023-06-30 被窗口排除 ⇒ PASS。"
+     "窗口取静态起始日：where 白名单不放行 DATE_SUB/CURDATE"),
+    ("stock_info_fresh", "stock_info", "freshness_interval",
+     {"time_col": "update_time", "pass_hours": 30, "fail_hours": 48},
+     "warning", 1,
+     "名册停更守护：stock_info.update_time 距今 ≤30h pass / ≤48h warning / 超则 fail。"
+     "2026-09-24 立——该表原有 10 条规则全是值域·口径类，无一能发现「名册停更」，"
+     "而采集器 upsert-only，整源静默失败既不报错、行数也不减"),
+]
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
     "frozen_dividend_rows",       # → dividend_fresh + dividend_rows
@@ -900,6 +959,7 @@ def main():
             + [(r, "daily") for r in BLUEPRINT_RULES]      # 2026-09-19 蓝图 P2/P3 落地（6 表 + 美债补盲点）
             + [(r, "daily") for r in CONSUMPTION_RULES]    # 2026-09-19 Batch C 消费端守护（5 表 3 模块）
             + [(r, "daily") for r in DEBT_RULES]           # 2026-09-19 Batch D3 已知技术债监控
+            + [(r, "daily") for r in REF_RULES]             # 2026-09-24 引用完整性 + 名册停更守护
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:

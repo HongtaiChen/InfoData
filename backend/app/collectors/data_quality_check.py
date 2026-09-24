@@ -47,6 +47,11 @@ dq_rules.params（JSON）契约，按 check_type 分：
   per_key_coverage  {date_col, key_col, window_days, min_rows, min_listed_days,
                      ref_table, ref_key, ref_status_col, ref_status_val, ref_date_col,
                      exclude_prefixes}                     近端每票行数下限（在市老票）
+  ref_missing       {key_col, ref_table, ref_key, where?, max_count}
+                                                           引用完整性：目标表满足 where 的 key
+                                                           必须存在于参照表（去重计数）。
+                                                           跨表判据的唯一可用形态 —— `where` 白名单
+                                                           不允许子查询，故不能用 where_count 表达。
   stale_running     {hours}                              僵尸 running 记录数（task_runs）
   long_finished_run {minutes, lookback_days}             已完成但耗时超长的运行数（task_runs）。
                                                          与 stale_running 互补：后者管「没跑完」，
@@ -70,7 +75,7 @@ logger = logging.getLogger(__name__)
 RUN_STEPS = [
     {"no": 1, "name": "读启用规则", "params": "dq_rules enabled=1（按 rule_group 分组过滤，按表排序）"},
     {"no": 2, "name": "规则预校验", "params": "表/列（含参照表）information_schema 白名单 + where 标识符白名单（防注入）"},
-    {"no": 3, "name": "执行检查器", "params": "15 类检查器（新鲜度/切片行数/空值率/列水位线/违规数/全史缺口/跨源衔接/覆盖率/僵尸运行…）；单条失败记 error 不中断"},
+    {"no": 3, "name": "执行检查器", "params": "20 类检查器（新鲜度/切片行数/空值率/列水位线/违规数/全史缺口/跨源衔接/覆盖率/引用完整性/僵尸运行…）；单条失败记 error 不中断"},
     {"no": 4, "name": "写入结果", "params": "dq_report 每规则一行 + gap_scan 明细写 dq_gap_detail（供 L3 修复闭环）"},
     {"no": 5, "name": "轮次保留清理", "params": "删除 run_date 早于 30 天的 dq_report / dq_gap_detail 历史"},
 ]
@@ -727,6 +732,74 @@ class DataQualityCheckCollector:
         msg = f"近 {window_days} 日行数 <{min_rows} 的在市老票 {n} 只（参照 {ref_table}，排除北交所前缀 {excludes}）"
         return {"status": status, "metric_value": str(n), "message": msg}
 
+    def _ref_missing(self, conn, rule: dict) -> dict:
+        """引用完整性：目标表的 key 必须存在于参照表（抓「跑成功但漏收」型静默缺口）
+
+        为什么必须**新增**一个检查器（2026-09-24 复盘本库最贵的一次数据事故）：
+        `stock_info_sync` 的名单源曾是东财**实时行情快照**（`stock_zh_a_spot_em`），
+        只返回「当时有报价」的代码 ⇒ **漏收 89 只 A 股**（含 001280 中国铀业，
+        沪深300 + 深证成指成分，2025-12-03 上市）。而该采集器是
+        **upsert-only、逐源容错、无报错、行数只增不减**，于是既有的四类守护**全部 pass**：
+          - `row_count_total`：故障时 5927 行仍 > 下限 5856 ⇒ 无感；
+          - `freshness_interval`：任务照常跑、`update_time` 照常前进 ⇒ 无感；
+          - `per_key_coverage`：它用 **INNER JOIN** 取参照表，参照表里缺的 key 会被 JOIN
+            **直接丢弃、不进统计** ⇒ 对本类故障**天生致盲**（本次故障里
+            `stock_market_daily` 同时缺那批代码，属双重致盲，历史上必然全绿）；
+          - `where_count` 等：`_validate` 的 where 白名单**不允许子查询**
+            （`SELECT`/`FROM` 都算非白名单标识符）⇒ 反向连接**写不进去**。
+
+        故本检查器是「名册缺行」**唯一**能被 DQ 自动发现的形态。
+
+        ⚠️ 断链的真实代价是**级联**：`stock_info` 是 `stock_daily_incr`（`FROM stock_info`）
+        与 `market_current_sync` 的**上游股票池** ⇒ 名册缺 1 只 = 日线缺、快照缺、行业分布缺。
+        该缺口曾潜伏数月无人发现，直到前端「行业分布」出现「其他(74)」才被用户追问出来。
+
+        params: {key_col, ref_table, ref_key, where?, max_count}
+          key_col    目标表的键列（默认 stock_code）
+          ref_table  参照表（与表名/列名一样走 information_schema 白名单校验）
+          ref_key    参照表的键列（默认同 key_col）
+          where      可选，缩小目标表扫描范围（受**单表白名单**约束，不可含子查询）
+        metric = **去重后的缺失 key 数**（「缺 N 只」比「缺 N 行」更贴合诊断语义）；
+        不为 0 时 message 附最多 5 个样本代码，便于直接定位。
+
+        ⚠️ 目标表与参照表的键列**排序规则必须一致**，否则 JOIN 报 1267
+        （本库实测 `index_constituents.stock_code` 与 `stock_info.stock_code` 同为
+        `utf8mb4_0900_ai_ci`；而库默认是 `utf8mb4_unicode_ci`，新建表要留意）。
+        """
+        p = rule.get("params") or {}
+        key_col = p.get("key_col", "stock_code")
+        ref_table = p["ref_table"]
+        ref_key = p.get("ref_key", key_col)
+        where = p.get("where")
+        max_count = int(p.get("max_count", 0))
+        table = rule["table_name"]
+        cond = f" AND ({where})" if where else ""
+        # 键为 NULL / 空串的行不计（空值属格式问题，由 regex_count 类规则负责）
+        # ⚠️ where 必须**下推到目标表的单表子查询**里，不能直接拼在 JOIN 之后：
+        # 目标表与参照表常有同名列（如都有 stock_code），拼在后面会报
+        # `1052 Column 'stock_code' in where clause is ambiguous`（实测踩到）。
+        # 这样写还让过滤先于 JOIN 生效，两端都更省。且 where 里的标识符仍只需是
+        # 目标表自己的列 → 与 `_validate` 的单表白名单校验天然一致。
+        inner = (
+            f"SELECT DISTINCT `{key_col}` AS k FROM `{table}` "
+            f"WHERE `{key_col}` IS NOT NULL AND `{key_col}` <> ''{cond}"
+        )
+        sql = (
+            f"SELECT DISTINCT d.k AS k FROM ({inner}) d "
+            f"LEFT JOIN `{ref_table}` s ON s.`{ref_key}` = d.k "
+            f"WHERE s.`{ref_key}` IS NULL"
+        )
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) AS n FROM ({sql}) t")
+            n = cur.fetchone()["n"]
+            sample = ""
+            if n > 0:
+                cur.execute(sql + " ORDER BY k LIMIT 5")
+                sample = "，样本 " + ",".join(str(r["k"]) for r in cur.fetchall())
+        status = "pass" if n <= max_count else "fail"
+        msg = f"缺失 key {n} 个（应 ≤ {max_count}）：{table}.{key_col} 未命中 {ref_table}.{ref_key}{sample}"
+        return {"status": status, "metric_value": str(n), "message": msg}
+
     def _stale_running(self, conn, rule: dict) -> dict:
         """僵尸 running 记录：status='running' 且 started_at 早于 N 小时前。
 
@@ -824,6 +897,7 @@ class DataQualityCheckCollector:
         "factor_link": _factor_link,
         "pct_limit": _pct_limit,
         "per_key_coverage": _per_key_coverage,
+        "ref_missing": _ref_missing,
         "stale_running": _stale_running,
         "long_finished_run": _long_finished_run,
     }
