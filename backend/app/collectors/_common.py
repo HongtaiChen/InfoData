@@ -340,7 +340,14 @@ def load_refresh_targets(conn, table: str, *, data_col: str | None = None,
                 continue
         picked.append((dmax, umax, code, names.get(code)))
 
-    # 最久未刷新优先；其次数据最旧优先（None 视为最旧）
+    # 排序：最久未刷新优先；其次数据最旧优先。
+    #
+    # ⚠️ 首键 `umax is not None` 的作用不是「排序」，而是**新股优先**（2026-09-24 实测确认）：
+    #   `umax is None` 表示该股**在本表里零记录**（典型 = 刚进名册的新股）⇒ 布尔 False 排最前。
+    #   这是「新股一入册就在下一轮被刷到」的唯一保证 —— 第二个键 refresh_days 的
+    #   `MAX(update_time) < today - refresh_days` 只对**已有记录**的股票生效，
+    #   零记录股票根本进不了那个条件，只能靠这个首键免于被 max_stocks 截断在外。
+    #   ⇒ 改这一行 = 改「新股补录速度」，动手前务必先看懂这层语义。
     def _key(x):
         dmax, umax, code, _ = x
         return (umax is not None, umax or _MIN_TS, dmax is not None, dmax or _MIN_DATE, code)

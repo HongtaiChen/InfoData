@@ -102,7 +102,8 @@ _INSERT_SQL = f"""
 # 代码变更后下一轮运行即携带最新模板，无需人工维护元数据。
 RUN_STEPS = [
     {"no": 1, "name": "读候选名单", "params": "stock_info 在市 A 股，含北交所（920 段）"},
-    {"no": 2, "name": "定位增量窗口", "params": f"回看 {DEFAULT_DAYS_BACK} 交易日（覆盖停牌/长假缺口）"},
+    {"no": 2, "name": "定位增量窗口", "params": f"有本地数据→从最新日+1 增量；无本地数据→从 list_date（上市日）拉全史；"
+                                                f"连上市日也缺才回退 {DEFAULT_DAYS_BACK} 交易日窗口"},
     {"no": 3, "name": "逐只增量判定", "params": f"最后日期 ≥ 判定线即跳过；STALE_DAYS={STALE_DAYS} 疑似退市软跳过"},
     {"no": 4, "name": "并发抓取 × 源阶梯", "params": "4 线程（建池前先预热 V8）；新浪→腾讯→东财→Tushare，raw/hfq 成对同源"},
     {"no": 5, "name": "归一 + 派生", "params": "实际价 + 后复权因子；volume 自适应归股、换手率自适应归 %；涨跌幅按 hfq 计真实收益"},
@@ -190,13 +191,22 @@ class StockDailyIncrementalCollector:
         - 排除名称含"退"或以"PT"开头的已退市股——数据源已无数据，逐个重试耗时巨大
         - include_bj=True（默认）时包含北交所 4/8/92 段；False 则剔除并返回只数
         排序规则：疑似退市（无数据或最后数据极旧）排最后，先处理活跃缺口股。
+
+        返回 4 元组 (code, short_name, last_date, list_date)，日期均为 'YYYYMMDD' 或 None。
+
+        ⚠️ list_date（2026-09-24 新增，P0 修复）：**从无本地数据的股票（多为新股）
+        必须用「上市日」而不是「近 N 天窗口」作为起始日**。原实现统一用
+        `cutoff = 目标日 - days_back(15)`，导致新股首次入库只能补最近 15 天、
+        上市初期的历史永久空洞（实测 688836 缺 08-19~09-08、001399 缺 06-26~09-08）。
+        背景：89 只在市股曾因名册漏收而零日线，2026-09-24 换源后首次进入候选池。
         """
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT a.stock_code, a.short_name,
                        (SELECT MAX(b.trade_date) FROM stock_market_daily b
-                        WHERE b.stock_code = a.stock_code) AS last_date
+                        WHERE b.stock_code = a.stock_code) AS last_date,
+                       a.list_date
                 FROM stock_info a
                 WHERE a.stock_code NOT LIKE '200%'      -- 深B（老代码段）
                   AND a.stock_code NOT LIKE '201%'      -- 深B（新代码段，如 201872 招港B）
@@ -208,7 +218,14 @@ class StockDailyIncrementalCollector:
                     a.stock_code ASC
                 """
             )
-            rows = [(r[0], r[1], r[2].strftime("%Y%m%d") if r[2] else None) for r in cur.fetchall()]
+            rows = [
+                (
+                    r[0], r[1],
+                    r[2].strftime("%Y%m%d") if r[2] else None,   # last_date
+                    r[3].strftime("%Y%m%d") if r[3] else None,   # list_date
+                )
+                for r in cur.fetchall()
+            ]
         if not include_bj:
             bj = [r for r in rows if r[0].startswith(("4", "8", "920"))]
             rows = [r for r in rows if not r[0].startswith(("4", "8", "920"))]
@@ -332,13 +349,23 @@ class StockDailyIncrementalCollector:
         return len(rows)
 
     # ---------- 主流程 ----------
-    def _process_one(self, code: str, name: str, stock_last: str | None, cutoff: str, end_date: str) -> tuple:
+    def _process_one(self, code: str, name: str, stock_last: str | None,
+                     list_date: str | None, cutoff: str, end_date: str) -> tuple:
         """处理单只股票（worker 内独立 DB 连接，避免 pymysql 连接跨线程复用），
-        返回 (code, name, written, source, error)"""
+        返回 (code, name, written, source, error)
+
+        起始日三级判定（2026-09-24 P0 修复，list_date 为新增参数）：
+          1. 本地已有数据 → 从「本地最新日 - 1」增量补齐（原行为）；
+          2. 本地无数据但有上市日 → **从上市日拉全史**。这是新增分支：原实现落到
+             第 3 档的 15 天窗口，会让新股上市初期的历史永久空洞。
+          3. 连上市日也没有 → 回退近 days_back 天窗口（保守兜底）。
+        """
         conn = self._connect()
         try:
             if stock_last:
                 start_date = (datetime.strptime(stock_last, "%Y%m%d") - timedelta(days=1)).strftime("%Y%m%d")
+            elif list_date:
+                start_date = list_date
             else:
                 start_date = cutoff
             gap_days = (datetime.strptime(end_date, "%Y%m%d") - datetime.strptime(start_date, "%Y%m%d")).days
@@ -518,12 +545,12 @@ class StockDailyIncrementalCollector:
 
             skipped = 0
             todo = []
-            for code, name, stock_last in stocks:
+            for code, name, stock_last, stock_list_date in stocks:
                 # 增量判定：该股数据是否已推进到最近已收盘交易日？是 → 跳过；否 → 补缺口
                 if stock_last and stock_last >= target_day:
                     skipped += 1
                     continue
-                todo.append((code, name, stock_last))
+                todo.append((code, name, stock_last, stock_list_date))
             logger.info(f"实际待采集 {len(todo)} 只（已推进到 {target_day} 跳过 {skipped} 只）")
 
             # ⚠️ 建线程池前必须先在主线程预热 V8（否则新浪接口并发调用会让进程硬崩溃）
@@ -539,8 +566,9 @@ class StockDailyIncrementalCollector:
             done = 0
             with ThreadPoolExecutor(max_workers=workers) as ex:
                 futures = {
-                    ex.submit(self._process_one, code, name, stock_last, cutoff, end_date): (code, name)
-                    for code, name, stock_last in todo
+                    ex.submit(self._process_one, code, name, stock_last, stock_list_date,
+                              cutoff, end_date): (code, name)
+                    for code, name, stock_last, stock_list_date in todo
                 }
                 for fut in as_completed(futures):
                     code, name, n, src, err = fut.result()
