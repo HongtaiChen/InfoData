@@ -437,6 +437,11 @@ def tables_flow():
                 {
                     "task_name": w,
                     "cron": cfg.get("cron") if cfg else None,
+                    # cron_human（2026-09-24 新增透传）：调度器已把 cron 渲染成中文语义，
+                    # 但本接口此前没带出来 ⇒ 前端只能展示原始数字。
+                    # 这是「排期权威源」：table_meta.flow_desc 里写死的时刻会随改 cron 漂移，
+                    # 前端一律以本字段为准（见 DataView 数据流明细的「排期」区块）。
+                    "cron_human": cfg.get("cron_human") if cfg else None,
                     "enabled": cfg.get("enabled") if cfg else None,
                     "scheduled": cfg.get("scheduled") if cfg else None,
                     "next_run": cfg.get("next_run") if cfg else None,

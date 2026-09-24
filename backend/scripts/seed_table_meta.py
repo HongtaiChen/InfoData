@@ -66,39 +66,30 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "已 ÷100 并在 canon() 加第三单位假设；③ 新浪 1990~92 volume 混乱，已用腾讯覆盖 55 只/10,464 行。"),
     ("stock_market_current", "行情",
      "本地聚合（无外部源）",
-     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,121 行，"
-     "双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每工作日 20:15"
-     "（**必须晚于 stock_daily_incr 跑完**——日线常态 15~50 分钟，原 19:30 会读到半量数据："
-     "2026-09-16 写出 2820/5119 行残快照并毒害下游 stock_info_sync 名单）。"
-     "⚠️ **8 个「东财实时专属列」的处置（2026-09-19）**：本表是「日线聚合」口径（data_source=daily-agg），"
-     "源里本没有这 8 列，按「能否本地精确派生」分两类："
-     "① **已补齐**——total_captital / float_captital 改由 stock_shares 每只 MAX(change_date) 的最新股本"
-     "本地派生（名单覆盖 100%），并顺带修好 api/market.py 里**静默失效**的「按市值排序」"
-     "（原因列恒 NULL 等于没排序）；② **仍为 NULL**——dynamic_pe / pb / volume_ratio / rise_speed /"
-     " 5m_change_pct。**涉及 PE/PB 的判断不要读这几列**。"
-     "不接实时源的原因：东财 push2 子域对本机是**间歇性 RST 风控**（首连可通、连续请求即被拒），"
-     "不适合作稳定依赖。"
-     "⚠️ **uk_stock_code 唯一索引是幂等护栏**：并发双跑会交错写入致整表双写"
-     "（实测 10,242/5,121=2.00x，行数类 DQ 规则察觉不到），唯一键让第二次 INSERT 直接报错而非静默双份。"
-     "⚠️ `turnover_ratio` 少量 >1 属源侧脏值（实测 25/5,121、max 9.05），分析层已用中位数口径绕行；"
-     "`stock_market_daily` 同名列是**百分比**量纲（>1 属正常、max 2766%），两表不可同比。"
-     "监控：DQ 规则 current_turnover_dirty。",
+     "每日行情快照：由 stock_market_daily 最新交易日聚合出全市场当日行情（TRUNCATE+全量重建 ~5,121 行，双重护栏拒写：①<1,000 行 ②不足上一交易日的 90%）；每"
+     "工作日 21:40（**必须晚于 stock_daily_incr 跑完**——日线常态 15~50 分钟，原 19:30 会读到半量数据：2026-09-16 写出 2820/5119 行残快照并毒"
+     "害下游 stock_info_sync 名单）。⚠️ **8 个「东财实时专属列」的处置（2026-09-19）**：本表是「日线聚合」口径（data_source=daily-agg），源里本没有这"
+     " 8 列，按「能否本地精确派生」分两类：① **已补齐**——total_captital / float_captital 改由 stock_shares 每只 MAX(change_date) 的"
+     "最新股本本地派生（920 段曾缺，2026-09-22 已修），并顺带修好 api/market.py 里**静默失效**的「按市值排序」（原因列恒 NULL 等于没排序）；② **仍为 NULL**"
+     "——dynamic_pe / pb / volume_ratio / rise_speed / 5m_change_pct。**涉及 PE/PB 的判断不要读这几列**。不接实时源的原因：东财 pus"
+     "h2 子域对本机是**间歇性 RST 风控**（首连可通、连续请求即被拒），不适合作稳定依赖。⚠️ **uk_stock_code 唯一索引是幂等护栏**：并发双跑会交错写入致整表双写（实测 10,2"
+     "42/5,121=2.00x，行数类 DQ 规则察觉不到），唯一键让第二次 INSERT 直接报错而非静默双份。⚠️ `turnover_ratio` 与 `stock_market_daily` 同"
+     "名列**同量纲（百分比）**——本表该列自 2026-09-20 从日线聚合后即为直拷（实测 5,465/5,465 行逐行相等）。旧说法「本表是比率量纲、两表不可同比」成立于 09-20 前（当时源"
+     "为东财实时快照），已失效，2026-09-22 更正；DQ 规则 current_turnover_dirty 的判据同步由 `>1` 改为 `>100%`（单日换手不可能超 100%）。",
      ["market_current_sync"], "股本 2 列已本地派生补齐、余 6 列为东财专属仍 NULL；uk_stock_code 为幂等护栏"),
     ("dc_index_market", "指数",
      "中证官网;国证+腾讯;东财",
-     "指数日线（21 个主流指数：市场基准 5 / 市值风格 5 / 科技成长 5 / 情绪温度 1 / 股息防守 4 / 政策周期 1，按指数实际体现的观察内容分组）：中证官网主源含全字段，国证+腾讯合并链（OHLCV 腾讯、成交额国证），东财降级；每工作日 18:30 增量。",
+     "指数日线（21 个主流指数：市场基准 5 / 市值风格 5 / 科技成长 5 / 情绪温度 1 / 股息防守 4 / 政策周期 1，按指数实际体现的观察内容分组）：中证官网主源含全字段，国证+腾讯合并"
+     "链（OHLCV 腾讯、成交额国证），东财降级；每工作日 19:05 增量（index_market_sync）。",
      ["index_market_sync"], ""),
     # 2026-09-14 补：分析研究·市场风向模块的物化表（此前漏登 table_meta）
     ("market_style_daily", "分析",
      "本地聚合（dc_index_market 派生 + stock_market_daily 个股聚合，无外部源）",
-     "市场风格日频物化表（5,253 行 / 2005-02-01~）：market_style_sync 每工作日 20:05（**晚于个股日线跑完**，"
-     "并带「日线充分性护栏」——当日行数不足上一交易日 90% 时上界退回上一交易日；原 18:45 必然早于日线完成）"
-     "按 dc_index_market 的 index_group 六分类等权合成收益（20/60 日）、大小盘剪刀差、风险偏好分数、"
-     "情绪温度、政策超额、250 日分位；2026-09-14 起增设**市场宽度** 12 列（个股涨跌家数/涨停跌停/"
-     "站上 MA20·MA60 占比/60 日新高新低/腾落线 ADL）+ **量能** 2 列，因为原 19 列全是指数间收益差、测不到"
-     "「上涨是否普遍」；2026-09-15 起增设**风险调整** 2 列（剪刀差/风偏 ÷ 其自身滚动σ，修正两条腿"
-     "波动率不对称）与**换手率中位数** 1 列（交叉印证的「微观结构」项所需，源列单位漂移已归一）；"
-     "纯库内计算，指数列全量重建 + 个股派生列 pandas 增量重算；供「分析研究·市场风向」消费。",
+     "市场风格日频物化表（5,253 行 / 2005-02-01~）：market_style_sync 每工作日 21:30（**晚于个股日线跑完**，并带「日线充分性护栏」——当日行数不足上一交易日 "
+     "90% 时上界退回上一交易日；原 18:45 必然早于日线完成）按 dc_index_market 的 index_group 六分类等权合成收益（20/60 日）、大小盘剪刀差、风险偏好分数、情绪温"
+     "度、政策超额、250 日分位；2026-09-14 起增设**市场宽度** 12 列（个股涨跌家数/涨停跌停/站上 MA20·MA60 占比/60 日新高新低/腾落线 ADL）+ **量能** 2 列"
+     "，因为原 19 列全是指数间收益差、测不到「上涨是否普遍」；2026-09-15 起增设**风险调整** 2 列（剪刀差/风偏 ÷ 其自身滚动σ，修正两条腿波动率不对称）与**换手率中位数** 1 列"
+     "（交叉印证的「微观结构」项所需，源列单位漂移已归一）；纯库内计算，指数列全量重建 + 个股派生列 pandas 增量重算；供「分析研究·市场风向」消费。",
      ["market_style_sync"], ""),
     ("bond_profit_daily", "债券",
      "中债;美债(akshare bond_zh_us_rate)",
@@ -172,7 +163,7 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["trade_calendar_sync"], ""),
     ("finance_calendar", "日历",
      "东财 RPT_CPH_FECALENDAR;JY(历史)",
-     "财经日历事件：每日拉未来 60 天窗口，窗口内 DELETE+重插幂等；EM-CAL 与历史 JY 源并存（data_source 区分）；每日 17:45。",
+     "财经日历事件：每日拉未来 60 天窗口，窗口内 DELETE+重插幂等；EM-CAL 与历史 JY 源并存（data_source 区分）；每日 19:10。",
      ["finance_calendar_sync"], ""),
     ("fund_info", "基金",
      "东财基金列表(akshare)",
@@ -180,24 +171,19 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["fund_info_sync"], ""),
     ("stock_info", "资料",
      "东财全A名单;Baostock;巨潮资讯;北交所官网",
-     "证券主表+公司档案宽表（34 列）：东财周更名单（短名/exchange，list_date 本地 MIN 推断）；"
-     "Baostock 周更上市/退市状态+退市日（ipoDate 仅补空）；巨潮日更档案 24 列（列级 UPDATE）。"
-     "data_source=EM;BAOSTOCK;CNINFO。"
-     "⚠️ **北交所（exchange='BJ'）走另一条链路（2026-09-20 立）**："
-     "巨潮不提供北交所档案、东财 spot 名单也不含北交所，"
-     "故 bj_stock_sync 专属维护 —— 北交所官网名册（344 只）提供简称与 "
-     "**证监会行业分类口径的 industry**（这是北交所行业字段的唯一来源，"
-     "以前 277 条全空导致北证50 行业分布画不出来）；"
-     "同时把 2025-10-09 代码切换（→920 段）后的旧码迁移到新码，"
-     "并补入切换后新上市的 69 只。"
-     "此外**只为北交所写 industry**：沪深标的的行业仍由巨潮档案提供。"
-     "数据源构成相应加 BSE（北交所官网）。",
+     "证券主表+公司档案宽表（34 列）：**交易所官方名单**日更短名/exchange —— 2026-09-24 v2.9 换源：沪主板A + 沪科创 + 深A + 北交所四路官方名单并集 → 东财代"
+     "码名称表兜底补漏；官方名单**自带上市日期**（仅缺值才回填 MIN(日线)）；Baostock 周更上市/退市状态+退市日（ipoDate 仅补空）；巨潮日更档案 24 列（列级 UPDATE）。d"
+     "ata_source=EM;BAOSTOCK;CNINFO。⚠️ v2.9 前主源是东财实时快照 stock_zh_a_spot_em —— 它是行情源不是名单源，实测漏收 89 只 A 股（含沪深3"
+     "00 成分 001280 中国铀业），并在除权日把 XD 前缀写进 short_name，已弃用。⚠️ **北交所（exchange='BJ'）**：industry 由 bj_stock_sync "
+     "专属维护 —— 巨潮不提供北交所档案，北交所官网名册（344 只）的「所属行业」是该字段唯一来源（2026-09-20 前 277 条全空，导致北证50 行业分布画不出来）；bj_stock_sync"
+     " 同时负责 2025-10-09 代码切换（→920 段）的旧码迁移。沪深标的行业由巨潮档案提供。",
      ["stock_info_sync", "stock_status_sync", "stock_company_sync", "bj_stock_sync"],
      "三源构成见列注释；北交所名册与行业由 bj_stock_sync 单独维护"),
     ("stock_info_ex", "资料",
      "东财全A名单;北交所官网",
-     "股票信息扩展：随 stock_info 周更同步全市场名单；人工 is_gxlstock（高股息）标记保留。"
-     "北交所段代码由 bj_stock_sync 按对照台账同步迁移（东财 spot 不含北交所，本表该段不会被周更刷新）。",
+     "股票信息扩展：随 stock_info_sync 日更同步全市场名单（2026-09-24 v2.9 起源为交易所官方名单 ∪ 东财代码名表，**已含北交所**）；人工 is_gxlstock（高股息"
+     "）标记保留。北交所段代码由 bj_stock_sync 按对照台账同步迁移；v2.9 前该段因「写方取自东财 spot、而东财不含北交所」而永远不刷新，该边界已随换源消失（实测 920 段 347 行"
+     "已全量刷新）。",
      ["stock_info_sync", "bj_stock_sync"], ""),
     ("finance_concept_analysis", "AI",
      "豆包方舟(ARK)",
@@ -254,30 +240,27 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      ["margin_sync"], "口径已定论：rzrqyecz=净额(融资−融券)"),
     ("stock_financial_abstract_ths", "财务",
      "同花顺(akshare stock_financial_abstract_ths)",
-     "财务关键指标 8 列（34.4 万行 / 5,854 只）：financial_abstract_sync 每日 23:00 "
-     "只补「MAX(报告期) < max(本地全局 MAX, 披露日历推算最近期)」的滞后股票；"
-     "候选池排除退市股（其报告期恒滞后，会永久占满 max_stocks 名额）；"
-     "缺失值清洗——akshare 对缺失返回布尔 False（非 NaN）→ 统一 NULL，'--' 同处理。"
+     "财务关键指标 8 列（34.4 万行 / 5,854 只）：financial_abstract_sync 每日 22:15 只补「MAX(报告期) < max(本地全局 MAX, 披露日历推算最近期"
+     ")」的滞后股票；候选池排除退市股（其报告期恒滞后，会永久占满 max_stocks 名额）；缺失值清洗——akshare 对缺失返回布尔 False（非 NaN）→ 统一 NULL，'--' 同处理。"
      "uk_stock_report 幂等 upsert。",
      ["financial_abstract_sync"], ""),
     ("ths_stock_dividend", "财务",
      "同花顺(akshare stock_fhps_detail_ths)",
-     "分红送配明细（11 业务列与源列一一对应）：ths_dividend_sync 每月 1/15 日 03:00 逐股增量补齐，仅插入源有而本地缺的 report_period，不重写既有行；被 analysis/dividend 分红率分析消费（前端「股息率排行」）。",
+     "分红送配明细（11 业务列与源列一一对应）：ths_dividend_sync 每月 1/15 日 21:30 逐股增量补齐，仅插入源有而本地缺的 report_period，不重写既有行；被 ana"
+     "lysis/dividend 分红率分析消费（前端「股息率排行」）。",
      ["ths_dividend_sync"], "含历史重复行约 9.5 万，粒度待专项确认"),
     ("stock_shares", "基本面",
      "巨潮资讯(akshare stock_share_change_cninfo)",
-     "股本变动明细（事件型表，源单位万股→×10000 存股数）：stock_shares_sync 每日 22:40 "
-     "逐股滚动刷新——事件型表 change_date 常年不变，故按 MAX(update_time) 判「久未刷新」"
-     "（refresh_days=30）轮转；退市股源侧无记录（akshare 抛 KeyError 公告日期）归一为"
-     "「无数据」，候选池亦排除；upsert 覆盖（巨潮会回溯修订）。字段口径实证："
-     "list_a_shares←人民币普通股（A 股流通股，非「已流通股份」）、limit_shares←流通受限股份。",
+     "股本变动明细（事件型表，源单位万股→×10000 存股数）：stock_shares_sync 每日 21:45 逐股滚动刷新——事件型表 change_date 常年不变，故按 MAX(update"
+     "_time) 判「久未刷新」（refresh_days=30）轮转；退市股源侧无记录（akshare 抛 KeyError 公告日期）归一为「无数据」，候选池亦排除（2026-09-22 起一并剔除 "
+     "920 切换前旧码，见 stock_code_mapping.status='switched'）；upsert 覆盖（巨潮会回溯修订）。字段口径实证：list_a_shares←人民币普通股（A 股"
+     "流通股，非「已流通股份」）、limit_shares←流通受限股份。",
      ["stock_shares_sync"], ""),
     ("stock_industry_sw", "行业",
      "申万宏源(akshare index_component_sw)",
-     "申万一二级成分快照（10,428 行 / 5,214 只 / 162 行业 = 31 一级 + 131 二级）："
-     "sw_industry_sync 每月 1 日 03:30 整体重建（DELETE+INSERT 小事务，调样即全量刷新）；"
-     "目录来自 sw_index_first/second_info 遍历，覆盖率 <85% 判源异常回滚。"
-     "uk_stock_level（stock_code+industry_type）幂等。",
+     "申万一二级成分快照（10,428 行 / 5,214 只 / 162 行业 = 31 一级 + 131 二级）：sw_industry_sync 每月 1 日 21:00 整体重建（DELETE+IN"
+     "SERT 小事务，调样即全量刷新）；目录来自 sw_index_first/second_info 遍历，覆盖率 <85% 判源异常回滚。uk_stock_level（stock_code+indus"
+     "try_type）幂等。",
      ["sw_industry_sync"], ""),
     ("stock_jgdy_detail", "调研",
      "东财(akshare stock_jgdy_tj_em)",
@@ -298,7 +281,9 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      [], ""),
     ("dq_rules", "质量",
      "手动维护;seed_dq_rules",
-     "数据质量规则配置（104 条 / 15 类检查器，daily 99 + weekly 5；2026-09-19 新增 column_watermark 检查器专治「有列无值」）；数据质量栏目可维护。",
+     "数据质量规则配置（132 条 / 20 类检查器，daily 124 + weekly 8；2026-09-19 新增 column_watermark "
+     "检查器专治「有列无值」；2026-09-24 新增 ref_missing 引用完整性 —— 名册曾漏收 89 只 A 股"
+     "潜伏数月无人发现，该检查器是唯一能发现「跑成功但漏收」的形态）；数据质量栏目可维护。",
      [], ""),
     ("stock_company_profile_bak_20260905", "资料",
      "备份(巨潮)",

@@ -1606,6 +1606,31 @@ onMounted(async () => {
             </div>
             <div v-else style="color:#aaa;">—</div>
           </div>
+          <!-- 排期（2026-09-24 新增）：**本区块是排期的唯一权威**，实时读调度器。
+               动因：table_meta.flow_desc 是人工维护的散文，改 cron 后极易漏改 →
+               实测 8 张表的描述里时刻与 task_config.cron 长期不一致（21:40 写成 20:15 等），
+               且 seed 重跑还会把库内已订正的内容回退。故把「时刻」的权威源前移到本区块，
+               flow_desc 中出现的时刻一律降级为历史叙述（常含「原 xx:xx 会怎样」的因果说明，不可删）。 -->
+          <div v-if="flowOf.jobs.length">
+            <div style="font-size:11px;color:#888;margin-bottom:4px;">
+              排期
+              <span style="color:#aaa;">（实时读调度器 · 权威）</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div
+                v-for="j in flowOf.jobs"
+                :key="j.task_name"
+                style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:5px 9px;"
+              >
+                <span style="font-family:monospace;color:#185FA5;">{{ j.task_name }}</span>
+                <NTag v-if="j.cron_human" size="tiny" :bordered="false" type="info">{{ j.cron_human }}</NTag>
+                <span v-else style="color:#aaa;">无排期</span>
+                <span v-if="j.cron" style="font-size:11px;color:#999;font-family:monospace;">{{ j.cron }}</span>
+                <span v-if="j.enabled === false" style="font-size:11px;color:#B45309;">[已停用]</span>
+                <span v-if="j.next_run" style="font-size:11px;color:#888;">下次 {{ fmtDqTime(j.next_run) }}</span>
+              </div>
+            </div>
+          </div>
           <div v-if="flowOf.flow_desc">
             <div style="font-size:11px;color:#888;margin-bottom:4px;">清洗口径 / 数据流</div>
             <div style="line-height:1.7;color:#444;overflow-wrap:anywhere;background:#FAFBFC;border:1px solid #f0f0f0;border-radius:6px;padding:8px 10px;">
