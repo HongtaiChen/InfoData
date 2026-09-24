@@ -161,10 +161,17 @@ def stock_detail(code: str = Query(..., description="股票代码")):
 
 @router.get("/index-detail")
 def index_detail(code: str = Query(..., description="指数代码")):
-    """指数详情：释义档案 + 成分股列表（join 东财行业） + 行业分布聚合
+    """指数详情：释义档案 + 成分股列表（join stock_info.industry） + 行业分布聚合
 
     - 000001 上证指数为全市场指数：成分按「沪市全部上市股」实时派生
     - 行业分布：成分股有权重时按权重加权占比，否则按等权只数占比
+    - 行业口径为 **stock_info.industry（证监会行业分类）**，不是东财行业 —— 原注释
+      「join 东财行业」失实（2026-09-24 勘误）：该列注释即写明「所属行业（证监会行业分类）」，
+      这也解释了为什么前端看到的是「计算机、通信和其他电子设备制造业」这类长名称，
+      而非东财口径的「电子元件」。
+    - 「未分类」桶与「其他 N 个行业」是两回事：前者是成分在本地名册查不到 industry 的
+      兜底桶（数据缺口），后者是前端把第 11 名及以后的**真实行业**折叠起来的显示聚合。
+      两者绝不可共用一个「其他」标签（见下方聚合段落注释）。
     """
     # 1) 指数档案（释义/基准）
     prof = query_all(
@@ -242,14 +249,24 @@ def index_detail(code: str = Query(..., description="指数代码")):
     if cons and ind_cover < 50:
         industry_note = (
             f"该指数 {len(cons)} 只成分中仅 {matched} 只在本地行业库中有分类，"
-            f"覆盖不足五成——画出来只会是「其他」主导的假饼图，故暂不展示行业分布"
+            f"覆盖不足五成——画出来只会是「未分类」主导的假饼图，故暂不展示行业分布"
         )
 
     # 3) 行业分布聚合
+    #    「未分类」= 成分在本地名册查不到 industry（LEFT JOIN 落空）的**兜底桶**，它不是行业。
+    #    必须与前端那个「其他 N 个行业」（真实行业被折叠的**显示聚合**）区分开 ——
+    #    改造前两者共用同一个「其他」标签，实测中证全指「其他(74)」显示 34.99%，
+    #    其中 34.89% 是 73 个真实行业被折叠、真正的数据缺口只有 21 只 / 0.10%，
+    #    一个 0.1% 的缺口被伪装成 34.9% 的行业折叠量。故此处独立成桶并打标记，
+    #    前端据此分别渲染（饼图分片 + 表格行 + 只数标注）。
+    UNCLASSIFIED = "未分类"
     dist: dict[str, dict] = {}
     for r in cons:
-        ind = r["industry"] or "其他"
-        d = dist.setdefault(ind, {"industry": ind, "count": 0, "weight": 0.0})
+        ind = r["industry"] or UNCLASSIFIED
+        d = dist.setdefault(ind, {
+            "industry": ind, "count": 0, "weight": 0.0,
+            "is_unclassified": ind == UNCLASSIFIED,
+        })
         d["count"] += 1
         if r["weight"] is not None:
             d["weight"] += float(r["weight"])
@@ -261,7 +278,14 @@ def index_detail(code: str = Query(..., description="指数代码")):
         else:
             d["weight_pct"] = round(100.0 * d["count"] / len(cons), 2) if cons else 0.0
         industry_items.append(d)
-    industry_items.sort(key=lambda x: -x["weight_pct"])
+    # 次级排序键用 industry 名称：权重相同的行业不再靠字典插入序决定先后（结果可稳定复现）
+    industry_items.sort(key=lambda x: (-x["weight_pct"], x["industry"]))
+
+    unc = next((d for d in industry_items if d["is_unclassified"]), None)
+    industry_unclassified = {
+        "count": unc["count"] if unc else 0,
+        "weight_pct": unc["weight_pct"] if unc else 0.0,
+    }
 
     return {
         "profile": profile,
@@ -274,6 +298,9 @@ def index_detail(code: str = Query(..., description="指数代码")):
             "items": cons,
         },
         "industry_dist": industry_items,
+        # 「未分类」桶汇总（本地名册查不到行业分类的成分）：前端据此单独标注只数，
+        # 不再与「其他 N 个行业」混为一谈
+        "industry_unclassified": industry_unclassified,
         # 行业覆盖度与不足时的说明（前端据此不画假饼图）
         "industry_coverage": ind_cover,
         "industry_note": industry_note,

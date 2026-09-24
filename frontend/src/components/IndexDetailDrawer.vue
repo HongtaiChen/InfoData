@@ -1,8 +1,19 @@
 <script setup lang="ts">
 /**
  * IndexDetailDrawer —— 指数详情抽屉
- * 释义档案（index_profile）+ 成分股列表（index_constituents join 东财行业）+ 行业分布（权重加权/等权）
+ * 释义档案（index_profile）+ 成分股列表（index_constituents join stock_info.industry）
+ *   + 行业分布（权重加权/等权）
  * 数据源：GET /api/market/index-detail?code=
+ *
+ * 行业口径是 **stock_info.industry = 证监会行业分类**，不是东财行业（2026-09-24 勘误：
+ * 原注释写「join 东财行业」失实）—— 这也是为什么榜单里是「计算机、通信和其他电子设备
+ * 制造业」这类长名称，而非东财口径的「电子元件」。
+ *
+ * ⚠️ 这里有两个语义完全不同的「其他」，不可合并展示（2026-09-24 重构）：
+ *   · 「其他 N 个行业」—— 第 11 名及以后的**真实行业**被折叠（显示聚合，通常是最大一块）
+ *   · 「未分类 M 只」 —— 后端兜底桶：成分在本地名册查不到 industry（**数据缺口**，通常极小）
+ *   改造前两者共用「其他(N)」一个标签，实测中证全指显示「其他(74) 34.99%」，
+ *   而其中真正的数据缺口只有 21 只 / 0.10% —— 一个 0.1% 的缺口被伪装成 34.9% 的折叠量。
  */
 import { computed, h, ref, watch } from 'vue'
 import {
@@ -31,6 +42,13 @@ interface ConRow {
   source: string
   industry: string | null
 }
+interface IndustryRow {
+  industry: string
+  count: number
+  weight_pct: number
+  /** 后端兜底桶标记：该行不是行业，而是「本地名册查不到行业」的成分合计（数据缺口） */
+  is_unclassified?: boolean
+}
 interface Detail {
   profile: {
     index_code: string
@@ -43,7 +61,9 @@ interface Detail {
   /** 口径不适用说明（债券指数等）：非空时 UI 展示说明，而不是笼统的「暂缺」 */
   cons_note: string | null
   constituents: { total: number; has_weight: boolean; items: ConRow[] }
-  industry_dist: { industry: string; count: number; weight_pct: number }[]
+  industry_dist: IndustryRow[]
+  /** 「未分类」桶汇总（本地名册无行业分类的成分）：单独标注只数，不混进「其他」 */
+  industry_unclassified: { count: number; weight_pct: number }
   /** 成分在本地行业库的匹配率（%）：过低时 industry_note 给说明，不画假饼图 */
   industry_coverage: number
   industry_note: string | null
@@ -114,8 +134,12 @@ const rowProps = () => ({ style: 'cursor: default;' })
 const pieOption = computed(() => {
   const dist = detail.value?.industry_dist ?? []
   if (!dist.length) return null
-  const top = dist.slice(0, 10)
-  const rest = dist.slice(10)
+  // 「未分类」不是行业，先摘出来单独成片 —— 否则它会混进「其他 N 个行业」，
+  // 把「数据缺口」和「行业被折叠」两件事糊成一个数字（改造前实测正是如此）
+  const real = dist.filter((d) => !d.is_unclassified)
+  const unc = dist.find((d) => d.is_unclassified)
+  const top = real.slice(0, 10)
+  const rest = real.slice(10)
   const data = top.map((d, i) => ({
     name: d.industry,
     value: d.weight_pct,
@@ -123,7 +147,22 @@ const pieOption = computed(() => {
   }))
   if (rest.length) {
     const restPct = rest.reduce((s, d) => s + d.weight_pct, 0)
-    data.push({ name: `其他(${rest.length})`, value: Number(restPct.toFixed(2)), itemStyle: { color: '#D5DBE3' } })
+    // 名字里带上是「几个行业」，而不是那几个行业里的几只股票 —— 原实现写作「其他(74)」，
+    // 极易被读成「74 只成分股」
+    data.push({
+      name: `其他 ${rest.length} 个行业`,
+      value: Number(restPct.toFixed(2)),
+      itemStyle: { color: '#D5DBE3' },
+    })
+  }
+  if (unc) {
+    data.push({
+      name: `未分类 ${unc.count} 只`,
+      value: unc.weight_pct,
+      // 中性信息灰（同 .cons-note 边框色）：与「行业被折叠」的浅灰底 `#D5DBE3` 明显区分，
+      // 又不抢占色板位置（色板刻意避开红/绿，防止与红涨绿跌混淆）
+      itemStyle: { color: '#8A919C' },
+    })
   }
   return {
     backgroundColor: '#fff',
@@ -154,8 +193,17 @@ const pieOption = computed(() => {
 
 // ⚠️ 必须是 computed：原实现是普通常量，在 setup 阶段求值一次 —— 那时 detail 还是 null，
 //    has_weight 恒为 undefined，列标题永远显示「只数占比」（含官方权重的指数也显示错）。
-const distColumns = computed<DataTableColumns<{ industry: string; count: number; weight_pct: number }>>(() => [
-  { title: '行业', key: 'industry', ellipsis: { tooltip: true } },
+const distColumns = computed<DataTableColumns<IndustryRow>>(() => [
+  {
+    title: '行业',
+    key: 'industry',
+    ellipsis: { tooltip: true },
+    // 兜底桶行显式标注「非行业」：与饼图口径一致，避免把数据缺口当成一个行业来读
+    render: (r) =>
+      r.is_unclassified
+        ? h('span', { style: { color: '#B45309' } }, `${r.industry}（本地名册无行业数据）`)
+        : r.industry,
+  },
   { title: '只数', key: 'count', width: 70, align: 'right' },
   {
     title: detail.value?.constituents.has_weight ? '权重占比' : '只数占比',
@@ -261,6 +309,13 @@ const distColumns = computed<DataTableColumns<{ industry: string; count: number;
                 />
                 <div v-if="!detail.constituents.has_weight" class="equal-note">
                   成分快照未含官方权重（深证系兜底源），行业占比按等权只数口径统计
+                </div>
+                <!-- 两个「其他」的释义：不解释的话，「其他 74 个行业」与「未分类 21 只」
+                     仍容易被当成一回事（这正是改造前误读的来源） -->
+                <div v-if="detail.industry_unclassified?.count" class="equal-note">
+                  「未分类 {{ detail.industry_unclassified.count }} 只」= 这些成分在本地名册中查不到
+                  行业分类（占 {{ detail.industry_unclassified.weight_pct.toFixed(2) }}%）；
+                  「其他 N 个行业」是真实行业按权重排序后被折叠展示，两者含义不同。
                 </div>
               </template>
             </NTabPane>
