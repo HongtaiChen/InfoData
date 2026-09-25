@@ -456,25 +456,24 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "消费方：分析研究「货币流动性」模块的「全球央行方向」表。",
      ["cb_policy_rate_sync"], ""),
     ("global_usd_index_daily", "汇率",
-     "自算(人民币中间价 currency_boc_safe 6 成分货币) + 新浪 DINIW 实时快照",
-     "美元指数**自算**日线（2,380 行，2016-12-12 起）：按 ICE 标准公式给 6 个成分货币的"
-     "**人民币中间价交叉汇率**加权 —— `50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × "
-     "GBPUSD^-0.119 × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036`；"
-     "另存新浪 `hq.sinajs.cn/list=DINIW` 的实时快照列做**标定基准**（逐日累积）。"
-     "⚠️ **口径 = 人民币中间价交叉汇率，不是 ICE 官方 DXY**（UI 已标注「自算」）："
-     "用于看趋势与相对位置，**不作绝对值引用**。实测与快照偏差 **+0.085%**（2026-09-24 单点标定）。"
-     "⚠️ 官方历史源全部实测不可用：东财 `push2his` 域名不通（kline 路径被拦）、"
-     "新浪 hq/daily 不支持 UDI/DINIW、`futures_foreign_hist('DX')` 只返 13 行（2019 年）"
-     "⇒ 自算是唯一可行路径。"
-     "⚠️ **标价法混用是本表最大的坑**（2026-09-25 实测事故）：`currency_boc_safe` 宽表里"
-     "**直接标价 = 人民币/100 外币**（美元 674.89 → 6.7489、日元 4.259 → 0.04259）而"
-     "**间接标价 = 外币/100 人民币**（瑞典克朗 147.31 → 0.67884），**只有这两种、不是「按 1 单位」**；"
-     "采集器初版把 SEK 当直标 ⇒ USDSEK 算成 4.58（真值 9.94）⇒ DXY 偏低 3.3%，"
-     "还伪装成「中间价与市场价的固有偏离」。现由 `_CROSS_RANGE` 逐币量级断言 + "
-     "`dxy_vs_snapshot` DQ 规则（整值偏差 ≤1.5 点）双重守护。"
-     "⚠️ 快照落位用 `_stitch_snapshot()`：按**快照自带报价日**对齐（exact → latest 回落到表内最新行），"
-     "不能只挂 `d == today` —— 中间价宽表末行是 T 或 T−1，只靠 INSERT 会让快照永远写不进去。"
-     "消费方：分析研究「货币流动性」模块的「外部约束」分区（G1 全球美元总闸门）。",
+     "新浪官方美元指数日线(NewForexService.getDayKLine) + 自算(中间价 currency_boc_safe) + 新浪 DINIW 实时快照",
+     "美元指数日线，三口径并存（10,573 行，1985-11-08 起）："
+     "★主口径 dxy_sina = 新浪官方日线（NewForexService.getDayKLine?symbol=DINIW，ICE 口径；"
+     "列序「日期,开,低,高,收」由 OHLC 不变量实测反推，10573/10573 命中）；"
+     "辅口径 dxy_calc = 自算（中间价 6 成分交叉汇率 × ICE 公式，2380 行 / 2016-12 起）；"
+     "标定锚 dxy_snapshot = hq.sinajs.cn 实时值（需带 Referer，否则 403）。"
+     "🎯 精度：官方日线 101.2632 vs 官方快照 101.2675 = −0.004%；自算 +0.085% ⇒ 官方日线升主口径、可用绝对值。"
+     "⚠️ 自算与官方日线的偏差**不是常数、勿引用带符号均值**：2380 个共有日 |偏差| 中位 0.28% / p90 0.74% / "
+     "最大 2.29%（带符号均值 +0.074% 会低估离散度）。成因是机制差 —— 中间价每日 9:15 定盘、基于前一交易日篮子 "
+     "⇒ 趋势日自算滞后约 1 天。"
+     "⚠️ 官方历史源复测：东财 push2his 全族不通（新发现：akshare index_global_hist_em 默认参数就叫「美元指数」，"
+     "但底层正走 push2his ⇒ 亦挂）、akshare forex_hist_em 的 190 个品种全是货币对、外盘 DX 仅 13 行、"
+     "Yahoo 403 / FRED 与 investing 超时 / marketwatch 验证码。"
+     "⚠️ 标价法混用是自算最大坑：currency_boc_safe 直标 = 人民币/100 外币、间接标 = 外币/100 人民币；"
+     "初版把 SEK 当直标 ⇒ USDSEK 4.58（真值 9.94）⇒ DXY 偏低 3.3%，还伪装成「固有口径偏离」写进了设计文档。"
+     "现由 _CROSS_RANGE + dxy_sina_vs_calc_latest(2.5%) + dxy_sina_vs_calc(1.5%) 三重守护。"
+     "⚠️ 快照落位改为按日期并集在 Python 侧合并；增量水位必须按列取，否则「只有快照的行」会顶前水位、静默跳过另一条腿一整天。"
+     "消费方：货币流动性「外部约束」。",
      ["usd_index_sync"], ""),
 ]
 
@@ -999,23 +998,31 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
     },
     "global_usd_index_daily": {
         "usd_index_sync": {
-            "source": "自算(akshare currency_boc_safe 中间价) + 新浪 DINIW 实时快照",
-            "cols": ["trade_date", "dxy_calc", "dxy_snapshot", "eur_usd", "usd_jpy",
+            "source": "新浪官方美元指数日线 DINIW(getDayKLine) + 自算(akshare currency_boc_safe 中间价) + 新浪 DINIW 实时快照",
+            "cols": ["trade_date", "dxy_sina", "dxy_calc", "dxy_snapshot", "eur_usd", "usd_jpy",
                      "gbp_usd", "usd_cad", "usd_sek", "usd_chf"],
             "derived": ["dxy_calc", "eur_usd", "usd_jpy", "gbp_usd", "usd_cad", "usd_sek",
                         "usd_chf"],
-            "note": "ICE 标准公式：`50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × "
-                    "GBPUSD^-0.119 × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036`；"
+            "note": "★主口径 dxy_sina 是**官方源直取**（非派生）；dxy_calc 走 ICE 标准公式："
+                    "`50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × GBPUSD^-0.119 × "
+                    "USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036`；"
                     "`_SAFE_COL` 逐币声明**标价法**（direct 6 个 / inverse 1 个 = 瑞典克朗），"
-                    "`_CROSS_RANGE` 逐币量级断言；快照落位用 `_stitch_snapshot()` "
-                    "按快照自带报价日对齐（exact → latest 回落）",
+                    "`_CROSS_RANGE` 逐币量级断言；官方日线的列序由 OHLC 不变量实测反推"
+                    "（`_fetch_sina_daily` 内 `bad_ohlc` 自检兜住列序变更）；"
+                    "快照按日期并集在 Python 侧合并落位（不再用 UPDATE 兜底）",
             "col_notes": {
-                "dxy_calc": "⚠️ **口径 = 人民币中间价交叉汇率，不是 ICE 官方 DXY** —— "
-                            "看趋势与相对位置，不作绝对值引用。实测与快照偏差 +0.085%"
-                            "（2026-09-24 单点标定）",
+                "dxy_sina": "★**主口径**：新浪官方美元指数日线（`vip.stock.finance.sina.com.cn/"
+                            "forex/api/jsonp.php/...NewForexService.getDayKLine?symbol=DINIW`），"
+                            "ICE 口径，1985-11-08 起 10,573 行。实测与官方实时快照偏差 −0.004% "
+                            "⇒ 可直接用绝对值。首次采集**全量回填**（不再从今天起累积）",
+                "dxy_calc": "⚠️ 已降级为**交叉校验口径**（非主口径）：人民币中间价交叉汇率，"
+                            "看趋势与相对位置。与 dxy_sina 在 2380 个共有日 |偏差| 中位 0.28% / "
+                            "p90 0.74% / 最大 2.29%；**勿引用带符号均值 +0.074%**（正负相抵会低估"
+                            "离散度）。偏差成因是中间价「每日 9:15 定盘 + 前一日篮子」的约 1 天滞后",
                 "dxy_snapshot": "新浪 `hq.sinajs.cn/list=DINIW` 的实时值（GB18030 解码，"
                                 "取 parts[1] 与 parts[10] 报价日）。**自 2026-09-24 起逐日累积**，"
-                                "是 `dxy_vs_snapshot` 规则的标定基准",
+                                "是 `dxy_sina_vs_calc*` 之外的整值标定基准。"
+                                "⚠️ 不带 Referer 会 403（2026-09-25 复测）",
                 "usd_sek": "⚠️ **唯一走间接标价的成分货币**（源值 = 外币/100 人民币，需 100/v）；"
                            "其余 5 个都走直接标价（源值 = 人民币/100 外币，需 v/100）。"
                            "把 SEK 当直标算会得到 4.58（真值 9.94）并把 DXY 拉低 3.3% —— "

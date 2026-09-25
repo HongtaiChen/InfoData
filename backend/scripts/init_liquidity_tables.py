@@ -9,7 +9,11 @@ InvestBuddy 货币流动性域初始化脚本（幂等，可重复执行）
   1. cn_liquidity_monthly      中国货币与信用月度（M0/M1/M2 + 信贷 + 社融 + 准备金率）
   2. cn_cb_balance_monthly     中国央行资产负债表月度（28 科目）
   3. cb_policy_rate            多国央行政策利率（决议事件表：美/欧/日/英）
-  4. global_usd_index_daily    美元指数日频（自算 + 新浪 DINIW 快照标定）
+  4. global_usd_index_daily    美元指数日频（新浪官方日线为主 + 自算交叉校验 + 实时快照标定）
+
+⚠️ 本脚本同时承担**幂等列迁移**（见 `ensure_column`）：`CREATE TABLE IF NOT EXISTS`
+   对已存在的表不会补列，故新增列必须显式走 ALTER + information_schema 判存，
+   否则「本地已有该表」的环境永远拿不到新列（本项目已被此坑绊过）。
 
 ⚠️ 三条建表纪律（本项目已踩过的坑，勿回退）：
 
@@ -135,9 +139,10 @@ COMMENT='多国央行政策利率决议（美/欧/日/英，事件表：只在�
 # ---------------------------------------------------------------- 4. 美元指数
 DDL_GLOBAL_USD_INDEX = f"""
 CREATE TABLE IF NOT EXISTS global_usd_index_daily (
-  trade_date   DATE          NOT NULL COMMENT '交易日期（人民币中间价口径的报价日）',
-  dxy_calc     DECIMAL(10,4) DEFAULT NULL COMMENT '自算美元指数（ICE DXY 标准公式 × 6 成分货币交叉汇率）',
-  dxy_snapshot DECIMAL(10,4) DEFAULT NULL COMMENT '新浪 DINIW 实时快照（仅采集当日写入，作标定基准）',
+  trade_date   DATE          NOT NULL COMMENT '交易日期（两个源的日期**并集**：dxy_sina 走全球汇市日历、dxy_calc 走人民币中间价中国工作日历；每列只在各自有值的日期非空）',
+  dxy_sina     DECIMAL(10,4) DEFAULT NULL COMMENT '★美元指数官方日线收盘（ICE 口径）。源：新浪 NewForexService.getDayKLine?symbol=DINIW（1985-11-08 起，实测 10573 行、列序 日期,开,低,高,收）。与官方实时快照偏差仅 0.004% ⇒ 本列为主口径',
+  dxy_calc     DECIMAL(10,4) DEFAULT NULL COMMENT '自算美元指数（ICE DXY 标准公式 × 6 成分货币交叉汇率，源为人民币中间价宽表）。⚠️ 已降级为**交叉校验**列：与 dxy_sina 实测 2380 个共有日 |偏差| 中位 0.28% / p90 0.74% / p99 1.43% / 最大 2.29%（带符号均值仅 +0.074%，因正负相抵而低估离散度，勿当精度引用）；成因是机制差——中间价每日 9:15 定盘、基于前一交易日篮子，趋势日系统性滞后约 1 天',
+  dxy_snapshot DECIMAL(10,4) DEFAULT NULL COMMENT '新浪 DINIW 实时快照（仅采集当日写入，作标定基准；需带 Referer 否则 403）',
   eur_usd      DECIMAL(12,6) DEFAULT NULL COMMENT '成分货币交叉汇率 欧元/美元（由人民币中间价反算）',
   usd_jpy      DECIMAL(12,6) DEFAULT NULL COMMENT '成分货币交叉汇率 美元/日元',
   gbp_usd      DECIMAL(12,6) DEFAULT NULL COMMENT '成分货币交叉汇率 英镑/美元',
@@ -148,8 +153,32 @@ CREATE TABLE IF NOT EXISTS global_usd_index_daily (
   data_source  VARCHAR(100)  DEFAULT NULL,
   PRIMARY KEY (trade_date)
 ) {COLLATE}
-COMMENT='美元指数日频（自算为主 + 新浪快照标定）。口径：自算走人民币中间价交叉汇率（SAFE 25 币种宽表），权重用 ICE DXY 标准公式。实测（2026-09-24）自算 101.3532 vs 新浪官方快照 101.2675，偏差 +0.085% —— 两套口径基本一致，可直接用绝对值。⚠️ 勘误（2026-09-25）：设计文档初稿曾记「偏差 -3.09%、中间价口径有约 ±3% 系统性偏离」，该结论实为标价法单位错误所致（把间接标价的瑞典克朗当直接标价，USDSEK 算成 4.58 而真值 9.94，DXY 因此偏低 3.3%）；修正后偏差 <0.1%。⚠️ 为什么自算：官方历史源全部实测失败（东财 push2his 域名被拦、新浪 gi 接口不支持 UDI/DINIW、外盘期货 DX 只返 13 行）。6 个成分货币交叉汇率一并存表，便于口径溯源复核。'
+COMMENT='美元指数日频。★主口径 = dxy_sina（新浪官方日线，ICE 口径，1985-11-08 起 10573 行）；辅口径 = dxy_calc（人民币中间价交叉汇率自算，2016-12 起 2380 行，仅作交叉校验）+ dxy_snapshot（实时快照，标定用）。实测（2026-09-25）：dxy_sina 收盘 101.2632 vs 官方快照 101.2675 偏差 -0.004%；dxy_calc 101.3532 偏差 +0.085%。两口径互比：2380 个共有日 |偏差| 中位 0.28% / p90 0.74% / p99 1.43% / 最大 2.29%（带符号均值 +0.074% 会低估离散度，勿当精度引用）—— 成因是机制差：中间价每日 9:15 定盘、基于前一交易日篮子，趋势日系统性滞后约 1 天（实例 2022-09-23 英国迷你预算日官方日线跳升 1.6% 而自算几乎不动）。⚠️ 勘误（2026-09-25）：设计文档初稿曾记「自算偏差 -3.09%、中间价口径有约 ±3% 系统性偏离」，该结论实为标价法单位错误所致（把间接标价的瑞典克朗当直接标价，USDSEK 算成 4.58 而真值 9.94，DXY 因此偏低 3.3%）；修正后偏差 <0.1%。⚠️ 官方历史源复测（2026-09-25）：「东财 push2his 域名被拦」仍成立（全族含编号镜像与 http 均 RemoteDisconnected），新浪 gi 接口仍不支持 UDI/DINIW，外盘期货 DX 仍只返 13 行（2019 陈年）；**但新浪外汇 jsonp 的 getDayKLine 通道可用**，即 dxy_sina 的来源。6 个成分货币交叉汇率一并存表，便于口径溯源复核。'
 """
+
+# 幂等列迁移：CREATE TABLE IF NOT EXISTS 不会给已存在的表补列，必须显式判存 + ALTER，
+# 否则「本地已在跑该表」的环境永远拿不到新列（本项目已被此坑绊过：列不存在 → 采集器静默丢数据）。
+COLUMN_MIGRATIONS: list[tuple[str, str, str]] = [
+    # (表名, 列名, ALTER 片段)
+    ("global_usd_index_daily", "dxy_sina",
+     "ADD COLUMN dxy_sina DECIMAL(10,4) DEFAULT NULL "
+     "COMMENT '★美元指数官方日线收盘（ICE 口径）。源：新浪 NewForexService.getDayKLine?symbol=DINIW"
+     "（1985-11-08 起，实测 10573 行、列序 日期,开,低,高,收）。与官方实时快照偏差仅 0.004% ⇒ 本列为主口径' "
+     "AFTER trade_date"),
+]
+
+
+def ensure_column(cur, table: str, column: str, ddl_fragment: str) -> bool:
+    """幂等补列 → True=本次新增，False=已存在"""
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.columns "
+        "WHERE table_schema=DATABASE() AND table_name=%s AND column_name=%s",
+        (table, column))
+    if cur.fetchone()[0]:
+        return False
+    cur.execute(f"ALTER TABLE {table} {ddl_fragment}")
+    return True
+
 
 TABLES = [
     ("cn_liquidity_monthly", DDL_CN_LIQUIDITY),
@@ -179,6 +208,12 @@ def main() -> None:
                 else:
                     created.append(name)
                     print(f"  [已创建] {name}")
+            # 幂等列迁移（给已存在的表补新列）
+            print()
+            print("列迁移：")
+            for table, column, frag in COLUMN_MIGRATIONS:
+                added = ensure_column(cur, table, column, frag)
+                print(f"  {'[已补列]' if added else '[列已存在]'} {table}.{column}")
             # 复核：确认建出来的 collation 与业务表一致
             cur.execute(
                 "SELECT table_name, table_collation, table_comment FROM information_schema.tables "
@@ -188,6 +223,11 @@ def main() -> None:
             print("复核：")
             for r in cur.fetchall():
                 print(f"  {r[0]:<24} collation={r[1]}")
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema=DATABASE() AND table_name='global_usd_index_daily' "
+                "ORDER BY ordinal_position")
+            print(f"  global_usd_index_daily 列 = {[r[0] for r in cur.fetchall()]}")
         conn.commit()
     finally:
         conn.close()

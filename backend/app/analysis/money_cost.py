@@ -48,11 +48,18 @@
    （实测滞后 1~2 个交易日）、美元指数走 `global_usd_index_daily`（滞后 1 日）。
    ⇒ 外部约束块必须**自带各自的截至日**（`external.as_of_*`）并在 UI 上显示，
    绝不能把美债的昨收价挂在「数据截至今天」的标题下 —— 那是时点口径错误。
-5. **美元指数是自算值，不是 ICE 官方 DXY**（口径见 `usd_index_sync`）：按 ICE 标准公式用
-   人民币中间价的 6 个成分货币交叉汇率加权。实测与新浪 `DINIW` 实时快照对标偏差 **+0.085%**
-   （2026-09-24 单点标定；⚠️ 设计文档初稿写的「−3.09% / ±3% 系统性偏离」是**标价法单位算错**
-   导致的假偏差，见该文档勘误）。表内 `dxy_snapshot` 自 2026-09-24 起每日累积，可长期复核偏差。
-   ⇒ UI 必须标注「自算 · 人民币中间价交叉汇率口径」。
+5. **美元指数走「三口径并存」，主口径已换成官方日线**（2026-09-25 实测定案，见 `usd_index_sync`）：
+   ① **主口径 `dxy_sina` = 新浪官方日线**（`NewForexService.getDayKLine?symbol=DINIW`，ICE 口径，
+      1985-11-08 起 10,573 行），实测与官方实时快照偏差 **−0.004%**；
+   ② `dxy_calc` = 自算（人民币中间价 6 成分货币交叉汇率 × ICE 公式），与官方日线在 2,380 个共有日
+      互比：**|偏差| 中位 0.28% / p90 0.74% / p99 1.43% / 最大 2.29%**
+      （⚠️ 带符号均值 +0.074% 因正负相抵而低估离散度，**不可当精度引用**；成因是中间价
+      「每日 9:15 定盘 + 基于前一交易日篮子」带来的约 1 天滞后，趋势日会系统性偏离）⇒ 保留它作
+      **独立第二口径**（两条互比能立刻暴露单位错，本项目正是靠它抓出瑞典克朗标价法的 bug）；
+   ③ `dxy_snapshot` = 实时快照，作标定锚（自 2026-09-24 起每日累积）。
+   ⚠️ 设计文档初稿写的「自算偏差 −3.09% / ±3% 系统性偏离」是**标价法单位算错**导致的假偏差
+   （把间接标价的瑞典克朗当直接标价），修正后偏差 <0.1%，见该文档勘误。
+   ⇒ UI 必须标注「官方日线（ICE 口径）」而非「自算」。
 6. **多国央行政策利率上游已停更**（2026-09-25 实测）：`macro_bank_{usa,euro,japan,english}_interest_rate`
    全族最后有效决议统一停在 2025-07~08，表内最后一行的日期在 2025-09/10 但「今值」为空。
    本模块只展示**有效决议**并显式标注「源停更 N 个月」，不把它当当前利率用。
@@ -100,8 +107,10 @@ EXTERNAL_NOTE = (
     "外部约束为什么算「货币流动性」而不算「资金温度」：这里放的都是**钱的价格**（因）——"
     "美债收益率是全球风险资产的贴现率、中美利差决定跨境资金的方向、美元指数是全球美元的总闸门；"
     "而「钱有没有真的进到市场里」（汇率体现的外资流入、基金发行、回购）归「资金温度」，那是**果**。"
-    "⚠️ 美元指数为**自算值**（人民币中间价交叉汇率口径，非 ICE 官方 DXY，用于看趋势与相对位置，"
-    "不作绝对值引用）；美债与中债走 `bond_profit_daily`，**比 A 股日线滞后 1~2 个交易日**，"
+    "⚠️ 美元指数主口径为**新浪官方日线**（ICE 口径，1985-11-08 起 10,573 行，与官方实时快照"
+    "实测偏差 −0.004%），表内另存**自算**（人民币中间价交叉汇率，与官方日线互比 |偏差| 中位 0.28%、"
+    "最大 2.29% —— 勿看带符号均值，它会被正负相抵压小）"
+    "与**实时快照**两条校验口径；美债与中债走 `bond_profit_daily`，**比 A 股日线滞后 1~2 个交易日**，"
     "故本区单独标注各自截至日。"
 )
 
@@ -178,11 +187,25 @@ def _sub(a, b) -> float | None:
     return None if (va is None or vb is None) else va - vb
 
 
+def _dxy_primary(x: dict):
+    """★美元指数主口径 = 新浪官方日线 `dxy_sina`（ICE 口径）；该列缺失才回落到自算 `dxy_calc`
+
+    ⚠️ 为什么不是自算当主口径（2026-09-25 实测定案）：官方日线可直取（1985 起 10,573 行），
+       与官方实时快照偏差仅 −0.004%；自算偏差 +0.085%、且单日最大可差 2.29%（偶发跳点）。
+       自算改作**交叉校验口径**（两条互比能立刻暴露单位错，本项目正是靠它抓出瑞典克朗的标价法 bug）。
+    """
+    for col in ("dxy_sina", "dxy_calc"):
+        v = f(x.get(col))
+        if v is not None:
+            return v
+    return None
+
+
 _EXT_DERIVE = {
     "cn_us_10y": lambda x: _sub(x.get("cn_bond_10y"), x.get("us_bond_10y")),
     "us_10y": lambda x: f(x.get("us_bond_10y")),
     "us_10y_2y": lambda x: _sub(x.get("us_bond_10y"), x.get("us_bond_2y")),
-    "dxy": lambda x: f(x.get("dxy_calc")),
+    "dxy": _dxy_primary,
 }
 
 
@@ -198,16 +221,18 @@ def _fetch_bond(days: int, as_of: str | None) -> list[dict]:
 
 
 def _fetch_dxy(days: int, as_of: str | None) -> list[dict]:
-    """自算美元指数（global_usd_index_daily）。表在旧环境可能不存在 → 降级为空，不抛"""
+    """美元指数三口径（global_usd_index_daily）。表在旧环境可能不存在 → 降级为空，不抛"""
     cond = "WHERE trade_date <= %s" if as_of else ""
     args: list = [as_of] if as_of else []
     try:
         return query_all(
-            "SELECT trade_date, dxy_calc, dxy_snapshot FROM global_usd_index_daily "
-            f"{cond} ORDER BY trade_date DESC LIMIT %s", args + [days])
+            "SELECT trade_date, dxy_sina, dxy_calc, dxy_snapshot "
+            f"FROM global_usd_index_daily {cond} ORDER BY trade_date DESC LIMIT %s",
+            args + [days])
     except Exception as e:                                   # noqa: BLE001
         logger.warning("global_usd_index_daily 取数失败，外部约束降级：%s", str(e)[:80])
         return []
+
 
 
 def _ext_pairs(rows: list[dict], key: str,
@@ -456,33 +481,48 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                       "max_1y": r(max(win), 2) if win else None,
                       "chg20": chg20, "tight": tg})
 
-    # ---- 美元指数（自算 + DINIW 快照标定）----
+    # ---- 美元指数（★主口径 = 新浪官方日线；自算与实时快照作交叉校验）----
     dpairs = _ext_pairs(dxy, "dxy")
     snap = next(({"date": str(x["trade_date"]), "value": f(x["dxy_snapshot"])}
                  for x in dxy if x.get("dxy_snapshot") is not None), None)
+    # 最近一个「官方日线 + 自算」同时有值的日期 → 两口径互比（比 only-snapshot 的比对样本多得多）
+    dual = next((x for x in dxy if x.get("dxy_sina") is not None
+                 and x.get("dxy_calc") is not None), None)
+    calc_ref = ({"date": str(dual["trade_date"]), "value": f(dual["dxy_calc"]),
+                 "dev_pct": r((f(dual["dxy_sina"]) / f(dual["dxy_calc"]) - 1) * 100, 3)}
+                if dual and f(dual["dxy_calc"]) else None)
     dxy_item = None
     if dpairs:
         a0, cur = dpairs[0]
         vals = [v for _, v in dpairs]
+        primary_row = next((x for x in dxy
+                            if f(x.get("dxy_sina")) is not None
+                            or f(x.get("dxy_calc")) is not None), None)
         p = pctile(vals[:WINDOW_1Y], cur)
         chg20 = r(cur - vals[20], 2) if len(vals) > 20 else None
         dev = r((cur / snap["value"] - 1) * 100, 3) if (snap and snap["value"]) else None
         dxy_item = {
-            "key": "dxy", "label": "美元指数（自算）", "value": r(cur, 2), "unit": "",
+            "key": "dxy", "label": "美元指数", "value": r(cur, 2), "unit": "",
             "tone": "neutral",
             "status": f"{_usd_word(p)}｜20日 {('%+.2f' % chg20) if chg20 is not None else '--'}",
             "pct": p, "scale": scale(p, "近一年"), "highlight": is_extreme(p),
             "anchor": "mc-ext-dxy",
-            "hint": "自算美元指数：按 ICE DXY 标准公式，给 6 个成分货币（欧元/日元/英镑/加元/"
-                    "瑞典克朗/瑞士法郎）的人民币中间价交叉汇率加权。⚠️ **不是 ICE 官方 DXY**，"
-                    "口径是人民币中间价，用于看趋势与相对位置，不作绝对值引用。"
-                    "表内另有新浪 `DINIW` 实时快照逐日标定（实测偏差 +0.085%，2026-09-24 单点）",
+            "hint": "美元指数 = 全球美元松紧的总闸门。**主口径取新浪官方日线**"
+                    "（ICE 口径，1985-11-08 起 10,573 行）；表内另有两条交叉校验口径："
+                    "① 自算（人民币中间价交叉汇率，与官方日线互比 |偏差| 中位 0.28%、最大 2.29%）；"
+                    "② 新浪 `DINIW` 实时快照（标定锚，实测偏差 −0.004%）。",
             "as_of": str(a0), "chg20": chg20, "prev_year": r(vals[WINDOW_1Y], 2)
             if len(vals) > WINDOW_1Y else None,
             "snapshot": snap, "deviation_pct": dev,
+            "calc": calc_ref,
+            # 主口径是否为官方日线（前端据此在读数旁标口径；自算回落时要说清）
+            "source": ("sina_official" if (primary_row
+                                           and f(primary_row.get("dxy_sina")) is not None)
+                       else "calc_fallback"),
             "tight": _is_tight(p, True),
         }
         tight["dxy"] = dxy_item["tight"]
+
 
     cbs, cb_note = _central_banks(data_as_of, as_of)
     reading = _external_reading(items, dxy_item, tight, dom_pct)

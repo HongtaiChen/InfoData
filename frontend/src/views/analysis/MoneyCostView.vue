@@ -25,8 +25,10 @@
  *    （同步 A 股交易日），而美债/中债走 `bond_profit_daily`（滞后 1~2 个交易日）、
  *    美元指数走 `global_usd_index_daily`（滞后 1 日）。⇒ 本区**自带截至日**（`extAsOfText`），
  *    绝不套用页头的"数据截至"，否则就是把昨收价挂在今天的标题下。
- * 5. **美元指数是自算值**（人民币中间价交叉汇率口径），不是 ICE 官方 DXY ——
- *    卡片上必须带"自算"字样，并与 `DINIW` 实时快照对账（偏差随响应下发）。
+ * 5. **美元指数主口径 = 新浪官方日线**（ICE 口径，1985-11-08 起 10,573 行，与官方实时快照
+ *    实测偏差 −0.004%）；自算（人民币中间价交叉汇率）与实时快照降为**两条独立交叉校验口径**。
+ *    卡片标题必须写明当前主口径（`dxy.source`），三口径对账表逐行标出各自口径与偏差 ——
+ *    ⚠️ 旧文案「美元指数是自算值、不是 ICE 官方 DXY」已被实测推翻，勿回退。
  */
 import { computed, onMounted, ref } from 'vue'
 import { NCard, NDatePicker, NSelect, NSpin } from 'naive-ui'
@@ -64,6 +66,10 @@ interface ExtKpi {
   tight: boolean | null
   snapshot?: { date: string; value: number } | null
   deviation_pct?: number | null
+  /** 交叉校验口径：最近一个「官方日线 + 自算」同时有值的日期与互比偏差 */
+  calc?: { date: string; value: number; dev_pct: number | null } | null
+  /** 主口径来源：sina_official = 官方日线；calc_fallback = 官方缺失、回落自算 */
+  source?: string
 }
 interface UsCurveRow {
   term: string; cur: number | null; as_of: string | null; prev_year: number | null
@@ -190,13 +196,14 @@ function rangePos(c: UsCurveRow): number {
   return Math.min(100, Math.max(0, ((c.cur - c.min_1y) / (c.max_1y - c.min_1y)) * 100))
 }
 
-/** 自算 DXY 与 ICE 官方快照的偏差标签：≤0.3% 视为口径一致（蓝），否则提醒（琥珀） */
+/** 口径偏差标签：|偏差| ≤0.3% 视为口径一致（蓝）；≤1.5% 提醒（琥珀）；>1.5% 警示（深红棕）
+ *  ⚠️ 三档而非两档的必要：官方日线 vs 自算实测单日最大 2.29%（自算偶发跳点），
+ *     若只分两档，这 2.29% 会和 0.1% 的正常波动一起被涂成同一个「提醒」色，看不出严重程度。 */
 function devTag(dev: number | null | undefined): { text: string; cls: string } {
   if (dev == null) return { text: '--', cls: 'mc-tag--na' }
-  return {
-    text: `偏差 ${dev >= 0 ? '+' : ''}${dev}%`,
-    cls: Math.abs(dev) <= 0.3 ? 'mc-tag--ok' : 'mc-tag--warn',
-  }
+  const a = Math.abs(dev)
+  const cls = a <= 0.3 ? 'mc-tag--ok' : a <= 1.5 ? 'mc-tag--warn' : 'mc-tag--bad'
+  return { text: `偏差 ${dev >= 0 ? '+' : ''}${dev}%`, cls }
 }
 
 /** 外部数据的实际截至日（美债/中债与美元指数不同轴 —— 口径必须随数字一起显示） */
@@ -386,23 +393,40 @@ const dxyChgText = computed(() => {
         </div>
       </div>
 
-      <!-- 美元指数：自算口径 + 与官方快照对账 -->
+      <!-- 美元指数：★官方日线主口径 + 自算/实时快照两条交叉校验 -->
       <div id="mc-ext-dxy" class="mc-ext-block">
-        <div class="card-sub">美元指数（自算）· 与官方快照对账</div>
+        <div class="card-sub">
+          美元指数（三口径对账）·
+          <span v-if="external?.dxy?.source === 'sina_official'">主口径 = 新浪官方日线（ICE 口径）</span>
+          <span v-else>主口径 = 自算回落（官方日线未就绪）</span>
+        </div>
         <table class="mc-table">
           <thead>
             <tr><th>口径</th><th>数值</th><th>截至日</th><th>一年前</th><th>20 日变化 / 偏差</th></tr>
           </thead>
           <tbody>
             <tr>
-              <td class="mc-term">自算（人民币中间价交叉汇率）</td>
+              <td class="mc-term">
+                <b>官方日线</b>（新浪 DINIW · ICE 口径）
+              </td>
               <td class="mc-num">{{ external?.dxy?.value ?? '--' }}</td>
               <td class="mc-num mc-dim">{{ external?.as_of_dxy ?? '--' }}</td>
               <td class="mc-num mc-dim">{{ external?.dxy?.prev_year ?? '--' }}</td>
               <td class="mc-num mc-dim">{{ dxyChgText }}</td>
             </tr>
+            <tr v-if="external?.dxy?.calc">
+              <td class="mc-term">自算（人民币中间价交叉汇率 · 校验口径）</td>
+              <td class="mc-num">{{ external.dxy.calc.value }}</td>
+              <td class="mc-num mc-dim">{{ external.dxy.calc.date }}</td>
+              <td class="mc-num mc-dim">--</td>
+              <td>
+                <span class="mc-tag" :class="devTag(external.dxy.calc.dev_pct).cls">
+                  {{ devTag(external.dxy.calc.dev_pct).text }}
+                </span>
+              </td>
+            </tr>
             <tr v-if="external?.dxy?.snapshot">
-              <td class="mc-term">ICE 官方 DXY（新浪 DINIW 快照）</td>
+              <td class="mc-term">实时快照（标定锚 · 仅当日）</td>
               <td class="mc-num">{{ external.dxy.snapshot.value }}</td>
               <td class="mc-num mc-dim">{{ external.dxy.snapshot.date }}</td>
               <td class="mc-num mc-dim">--</td>
@@ -415,8 +439,13 @@ const dxyChgText = computed(() => {
           </tbody>
         </table>
         <div class="card-cap">
-          两行不是同一口径：自算是「人民币中间价的 6 个成分货币交叉汇率」，官方快照是 ICE 的
-          美元指数。两者对账偏差小 ⇒ 自算可用；快照自 2026-09-24 起逐日累积，可长期复核。
+          主口径已从「自算」切到 <b>官方日线</b>：新浪 `NewForexService.getDayKLine` 返回 ICE 口径日线，
+          1985-11-08 起 10,573 行（实测与官方实时快照偏差 <b>−0.004%</b>）。
+          自算与实时快照保留作<b>独立交叉校验</b> —— 自算与官方日线在 2,380 个共有日互比：
+          |偏差| 中位 0.28%、p90 0.74%、最大 2.29%（<b>带符号均值 +0.074% 会低估离散度，勿当精度看</b>）。
+          偏差来自机制差（中间价每日 9:15 定盘、基于前一交易日篮子 ⇒ 趋势日滞后约 1 天），
+          而单位错是「全体平移」型的 3%+ 偏离 —— 两条口径互比正是为把后者抓出来。
+          偏差标签按 |偏差| 分档：≤0.3% 蓝、≤1.5% 琥珀、&gt;1.5% 警示。
         </div>
       </div>
 
@@ -536,6 +565,7 @@ const dxyChgText = computed(() => {
 .mc-tag--ok { background: #E6F1FB; color: #185FA5; }
 .mc-tag--flat { background: #F5F7FA; color: #6B7280; }
 .mc-tag--warn { background: #FAEEDA; color: #B45309; font-weight: 600; }
+.mc-tag--bad { background: #F6E8E8; color: #791F1F; font-weight: 600; }
 .mc-tag--na { background: #F5F7FA; color: #9CA3AF; }
 .mc-foot { font-size: 11px; color: #9CA3AF; margin-top: 10px; line-height: 1.65; }
 /* 页脚为**模板内静态文案**（非后端下发），故用 <b> 而非 `**`：`**` 只由 RichText 解析，

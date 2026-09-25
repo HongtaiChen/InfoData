@@ -975,21 +975,29 @@ REF_RULES = [
 # 2026-09-25 货币流动性批次 2（LIQUIDITY_RULES）
 # 《货币流动性观测体系设计_2026-09-25.md》§6 批次 2：新增 3 张表
 # （cn_liquidity_monthly / cn_cb_balance_monthly / cb_policy_rate）
-# + 1 张自算派生表（global_usd_index_daily）。
+# + 1 张美元指数表（global_usd_index_daily，D2 后已改为「官方日线主口径 + 自算校验」）。
 #
 # 每张表按「四件套」配：unique_index（幂等）/ 新鲜度 / column_watermark（"这一列还在更新吗"）
 # / 值域 where_count（口径守护）。两条刻意 enabled=0 的规则在下面逐条说明理由。
 #
-# ★ 本批最有价值的一条是 `dxy_vs_snapshot` —— 它是**「标价法单位错」的通用网**，
-#   直接来自 2026-09-25 的一起实测事故（本轮最大发现）：
+# ★ 本批最有价值的一组是 `dxy_sina_vs_calc_latest` + `dxy_sina_vs_calc` ——
+#   **「标价法单位错」的通用网**（D2 后从「自算 vs 快照」升级为「官方日线 vs 自算」，
+#   样本从 1 行变成 2,380 行，网从"几乎没样本"变成"天天有样本"）：
+#     直接来自 2026-09-25 的一起实测事故（本轮最大发现）：
 #     `currency_boc_safe` 宽表**混用两种标价法**：
 #       直接标价 = 人民币 / 100 外币（美元 674.89 → 6.7489、日元 4.259 → 0.04259）
 #       间接标价 = 外币 / 100 人民币（瑞典克朗 147.31 → 0.67884）
 #     采集器初版把间接标价的 SEK 当直标处理 ⇒ USDSEK 算成 4.58（真值 9.94）
 #     ⇒ 自算 DXY 偏低 3.3%，且这个偏差**恰好伪装成**「人民币中间价与市场价的固有偏离」，
-#     设计文档初稿据此写下「±3% 系统性偏离」的错误结论（已勘误为 +0.085%）。
+#     设计文档初稿据此写下「±3% 系统性偏离」的错误结论（已勘误）。
 #   教训：单币种量级错不会报错、行数不变、成分列也「看起来正常」，
 #   只有跟独立来源做整值对账才能一眼看出来。
+#
+# ⚠️ D2 落地时又补出一条重要分寸：**两条口径的偏差不是常数**。
+#   实测 2,380 个共有日：中位 0.28%、p90 0.74%、p99 1.43%、最大 2.29%
+#   （带符号均值只有 +0.074%，因正负相抵而**严重低估**离散度，不可当作"精度"引用）。
+#   成因是机制差：中间价每日 9:15 定盘、基于前一交易日篮子 ⇒ 趋势日系统性滞后约 1 天。
+#   ⇒ 阈值必须取在**实测极值之上**（本组取 2.5% / 1.5%），才既不误报、又能抓住 3.3% 那类系统性错误。
 # ============================================================================
 LIQUIDITY_RULES = [
     # ---------- cn_liquidity_monthly（中国「数量维度」：M0/M1/M2 + 信贷 + 社融 + 准备金率） ----------
@@ -1087,7 +1095,7 @@ LIQUIDITY_RULES = [
      "`macro_bank_*_interest_rate` 全族最后有效「今值」停在 2025-07~08（距今 14 个月），"
      "穷举 11 个 macro_bank_* 皆然。⇒ 本表只能读历史方向，不能当当前政策利率用（UI 已标注）。"
      "钩子规则：上游恢复后改 enabled=1"),
-    # ---------- global_usd_index_daily（自算美元指数 + DINIW 快照标定） ----------
+    # ---------- global_usd_index_daily（★官方日线主口径 + 自算交叉校验 + DINIW 快照标定） ----------
     ("dxy_uniq", "global_usd_index_daily", "unique_index",
      {"cols": ["trade_date"], "expect": "exists"},
      "info", 1, "幂等保障：trade_date 主键"),
@@ -1127,6 +1135,49 @@ LIQUIDITY_RULES = [
      "快照列水位线（容忍 5 行：DINIW 是实时报价、非交易日无新值，且快照自 2026-09-24 起才逐日累积）。"
      "该列是 `dxy_vs_snapshot` 的标定基准 —— 它一旦断供，整值对账会**静默退化**成「无从校验」，"
      "所以必须单独守它"),
+    # ---------- 2026-09-25 D2：新增官方日线主口径 dxy_sina 的四条守护 ----------
+    # 背景：用户要求「再找找网上有无现成可以拉取历史的数据源」，实测找到新浪外汇 jsonp
+    #   `NewForexService.getDayKLine?symbol=DINIW`（ICE 口径，1985-11-08 起 10,573 行）⇒ 写入 dxy_sina 并升为主口径。
+    #   自算 dxy_calc 降为交叉校验列 ⇒ 两条独立口径互比成为**最有价值的一道网**（见下两行）。
+    ("dxy_sina_fresh", "global_usd_index_daily", "date_floor_where",
+     {"date_col": "trade_date", "where": "dxy_sina IS NOT NULL", "days_back": 6},
+     "warning", 1,
+     "★主口径新鲜度：官方日线（dxy_sina）子集内 MAX(trade_date) 不得早于今天-6 天。"
+     "它现在顶在最前面出数，一旦停更 = 整个「美元指数」KPI 直接失效（自算虽能兜，但那是校验口径）；"
+     "6 天容差覆盖全球汇市周末休市 + 圣诞/新年长假"),
+    ("dxy_sina_wm", "global_usd_index_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "dxy_sina", "max_gap_rows": 2},
+     "warning", 1,
+     "官方日线列水位线（容忍 2 行：与人民币中间价的交易日历有 1~2 日天然错位）。"
+     "`dxy_sina_fresh` 管「停更多久」，本条管「中间断档几行」—— 两者互补，缺一不可"),
+    ("dxy_sina_range", "global_usd_index_daily", "where_count",
+     {"where": "dxy_sina IS NOT NULL AND (dxy_sina < 40 OR dxy_sina > 250)",
+      "max_count": 0},
+     "warning", 1,
+     "官方日线整值域（ICE DXY 历史区间约 70~165，放宽到 40~250 只为拦量级错，"
+     "实测全史 10,573 行 0 行越界）。解析层的 OHLC 不变量自检也拦一层（`bad_ohlc`），本条管**库内存量**"),
+    ("dxy_sina_vs_calc_latest", "global_usd_index_daily", "violation_count",
+     {"where": "dxy_sina IS NOT NULL AND dxy_calc IS NOT NULL "
+               "AND ABS(dxy_sina - dxy_calc) / dxy_calc > 0.025",
+      "max_count": 0},
+     "warning", 1,
+     "★★ 两条口径互比的**当日切片**快网（阈值 2.5%）：官方日线 vs 自算的整值偏差必须 ≤2.5%。"
+     "为什么不取 1.5%：实测 2,380 个共有日 |偏差|>1.5% 有 16 天、最大 2.29%，根源是**机制差**"
+     "（中间价每日 9:15 定盘、基于前一日篮子 ⇒ 趋势日滞后约 1 天，"
+     "如 2022-09-23 英国迷你预算日官方跳升 1.6% 而自算不动）。"
+     "⇒ 2.5% 之上全史零发生，超过它的只可能是**系统性单位错**（如瑞典克朗标价法事故 = 3.3%），"
+     "故零假阳性且当日即触发"),
+    ("dxy_sina_vs_calc", "global_usd_index_daily", "where_count",
+     {"where": "dxy_sina IS NOT NULL AND dxy_calc IS NOT NULL "
+               "AND ABS(dxy_sina - dxy_calc) / dxy_calc > 0.015",
+      "max_count": 30},
+     "warning", 1,
+     "两条口径互比的**全史上账**网（阈值 1.5%，上账 30 行 = 实测 16 行 + 约 1 倍余量）。"
+     "与上一条的关系：上一条管「最新那天有没有出大事」（快，需最新日有 dxy_calc），"
+     "本条管「全史累计有没有悄悄变多」（慢，但永远有样本）。"
+     "为什么要全史：dxy_calc 是**独立第二口径**，价值全在「两条互比」——本项目正是靠它发现了"
+     "「瑞典克朗标价法算错 ⇒ 自算 DXY 偏低 3.3%」那个伪装成「固有口径偏离」的 bug。"
+     "上账式设固定上限：平时静止、一旦增长即说明有新故障落入"),
 ]
 
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
