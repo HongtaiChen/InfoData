@@ -298,6 +298,36 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "自产(daily_recon)",
      "外部对账差异明细（L2 recon 产出）：仅记差异，零差异轮次明细为空；30 天保留。",
      ["daily_recon_window", "daily_recon_sample"], ""),
+    # ---- L3 存量处置交付物（2026-09-22/23 全库审计产出，3 张只读清单/备份表）----
+    # 三张都**没有常驻产出脚本**（审计用一次性脚本落库，故 writers=[]），
+    # 也**不被任何采集链或分析模块消费**，纯粹是留证 + 可回滚；
+    # 但它们是「数据质量体检」这条线的一部分，故 category=质量（此前漏登 ⇒ 左侧树落到「未分类」）。
+    ("dq_pct_anomaly_detail", "质量",
+     "审计交付物(一次性脚本,2026-09-22)",
+     "涨跌幅异常行级清单（4,721 行；审计报告 #24 交付物）：按 `run_date` 幂等重写。"
+     "`judgement` 三档：confirmed_dirty 92 / possible_dirty 241 / possible_legal 4,388。"
+     "判定走「adj_factor 未变却 pre_close≠prev_close」这条不变量，"
+     "配 same_factor / eq_violated / dev_ratio 三个辅助列。⚠️ possible_legal 占九成是**正常的**——"
+     "退市整理期首日不设涨跌幅、4 月末停牌 6 月复牌等真实行情都在这一档，别当成待修清单。",
+     [], ""),
+    ("dq_pct_fix_backup_20260922", "质量",
+     "审计备份(2026-09-22)",
+     "207 行涨跌幅修正的**原值备份**（审计报告 #23）：仅存被改的 3 列原值"
+     "（`pre_close_before` / `change_pct_before` / `change_amount_before` + `backed_at`）。"
+     "修正案 = 63 行「因子未变却 pre_close≠prev_close 且偏差>5%」+ 144 行"
+     "「pre_close IS NULL 且 change_pct≤−100 且因子未变」（价格跌为负，**任何市场都物理不可能**）。"
+     "实测修正效果 `+4900% → -9.68%`、`-4100% → -9.09%`。⚠️ 名字含 `backup` 但**不含 `_bak_`**，"
+     "故前端不会自动归入「备份归档」组，而是按 category 落在「质量与体检」。",
+     [], ""),
+    ("dq_close_nonpositive_detail", "质量",
+     "审计交付物(一次性脚本,2026-09-23)",
+     "全史 `close ≤ 0` 与 `close` 为空的行级清单（4,152 行；审计报告 #28 交付物）："
+     "close_negative 3,947 / close_zero 184 / close_null 21；按 `run_date` 幂等重写，"
+     "**只读主表、不改任何行情数据**；附 board / era / vwap_proxy 便于分类研判。"
+     "⚠️ 这批缺陷此前**从未被任何规则扫到**：`daily_value_bounds` 的 where 字面虽含 `close<=0`，"
+     "但带「最新交易日切片」谓词（同 §7.1 病灶）；`daily_pct_limit_rows` 也命中不了"
+     "（这些行大多 |pct| 很小）⇒ 本表就是为该规则缺口补的行级证据。",
+     [], ""),
     # ---- 系统与配置表 ----
     ("table_meta", "系统",
      "手动维护;seed_table_meta",

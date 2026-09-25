@@ -300,7 +300,14 @@ const GROUPS: { key: string; title: string; icon: string; categories: string[] }
     key: 'biz',
     title: '业务数据',
     icon: '📊',
-    categories: ['行情', '资料', '概念', '日历', '基金', '资金', '财务', '债券', '指数', 'AI', '商品', '资讯', '行业', '调研', '基本面'],
+    // ⚠️ 这份声明必须覆盖 `table_meta.category` 的**全部取值** —— 凡出现在库里、
+    //    却不在此列表的分类，其表行会被下面的 groupByTables 静默滤掉（组头计数照算，
+    //    于是出现「组头 38 张 / 实际只显示 28 张」这种对不上）。
+    //    2026-09-25 补齐 7 个既有分类（宏观/利率/汇率/海外/估值/分析/回购）——
+    //    此前 10 张表（含「投资日历/概念联动」链路里的 global_usd_index_daily、
+    //    cn_liquidity_monthly 等）在左侧树里完全不可见。
+    categories: ['行情', '资料', '概念', '日历', '基金', '资金', '财务', '债券', '指数', 'AI', '商品', '资讯', '行业', '调研', '基本面',
+                 '宏观', '利率', '汇率', '海外', '估值', '分析', '回购'],
   },
   {
     key: 'dq',
@@ -411,7 +418,13 @@ const groupedTables = computed<GroupBucket[]>(() => {
     const declared = orderFor(GROUPS[i])
     const m = catMapByGroup.get(g.key)!
     // 二级分类：声明顺序 → 套用用户自定义顺序（增量覆盖，未记录项追加在后）
-    const visibleCatKeys = declared.filter((k) => m.has(k))
+    // ⚠️ `declared` 只覆盖 GROUPS 显式声明的分类；库里若出现**未声明**的新分类，
+    //    必须兜底追加到末尾 —— 否则整类表行会凭空消失（组头计数却照算，静默漏表）。
+    //    这正是 2026-09-25 查明「组头 38 / 实显 28」的病灶：声明与数据脱节。
+    const declaredSet = new Set(declared)
+    const visibleCatKeys = declared
+      .filter((k) => m.has(k))
+      .concat(Array.from(m.keys()).filter((k) => !declaredSet.has(k)))
     const orderedCatKeys = applyOrder(visibleCatKeys, sidebarOrder.value.cats[g.key])
     g.categories = orderedCatKeys.map((k) => {
       const c = m.get(k)!
