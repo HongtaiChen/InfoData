@@ -50,7 +50,7 @@ def money_cost(
     as_of: str | None = Query(None, description="历史回放锚点 YYYY-MM-DD；空则取最新"),
     trend_days: int = Query(500, ge=60, le=2000, description="时序图回看的交易日数"),
 ):
-    """钱贵不贵：Shibor 期限结构 + 3M 近一年分位 + LPR 政策姿态 + 政策/市场背离 + 资金×权益位置
+    """货币流动性：Shibor 期限结构 + 3M 近一年分位 + LPR 政策姿态 + 政策/市场背离 + 资金×权益位置
     """
     return money_cost_mod.money_cost(as_of, trend_days)
 

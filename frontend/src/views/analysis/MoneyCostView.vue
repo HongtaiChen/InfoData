@@ -1,12 +1,17 @@
 <script setup lang="ts">
 /**
- * MoneyCostView —— 钱贵不贵模块（分析研究·资金与情绪）
+ * MoneyCostView —— 货币流动性模块（分析研究·资金与情绪）
+ *   2026-09-25 领域更名：「钱贵不贵」→「货币流动性」（原名为蓝图A 代号，只覆盖价格一维）
  * 数据：GET /api/analysis/money-cost
  *
  * 落的是设计规范 §1.0 的 ② **自身纵比**（3M 现在处于近一年什么位置）、
  * ① **同类横比**（ON→1W→1M→3M 的利率阶梯）、⑤ **结构分解**（曲线陡/平/倒挂 ——
  * 同一个 3M 利率，曲线形状不同含义完全不同），末尾做 ④ **交叉印证**
  * （政策利率按兵不动 ↔ 市场利率在动；资金价格 ↔ 权益位置）。
+ *
+ * 2026-09-25 批次 1 新增第四面 **外部约束**（`mc-external`）：美债曲线 / 中美 10Y 利差 /
+ * 美元指数 / 全球央行方向。落的是设计规范 §1.0 的 ④ **交叉印证**里最新的一对
+ * 「国内松紧 ↔ 外部约束」（内松外紧 / 内外同向，四种组合各有含义）。
  *
  * ⚠️ 三条口径纪律（后端已下发，前端只透传，不要自作主张改写）：
  * 1. **利率绝对值跨期不可比** → 所有"贵不贵"的判断一律走近一年分位，
@@ -16,6 +21,12 @@
  *    （`history` 给 Shibor，`lpr.step` 给政策利率），本视图分两张图渲染。
  * 3. **政策利率与市场利率分属两个观察窗**，它们的差（政策不动而市场在动）本身就是信息，
  *    故单独做成一张"政策 vs 市场"面板，而不是把两个数并排放下就完事。
+ * 4. **外部约束的时点与主模块不同轴**（批次 1 实测）：主数据截至日来自 `interbank_rate_daily`
+ *    （同步 A 股交易日），而美债/中债走 `bond_profit_daily`（滞后 1~2 个交易日）、
+ *    美元指数走 `global_usd_index_daily`（滞后 1 日）。⇒ 本区**自带截至日**（`extAsOfText`），
+ *    绝不套用页头的"数据截至"，否则就是把昨收价挂在今天的标题下。
+ * 5. **美元指数是自算值**（人民币中间价交叉汇率口径），不是 ICE 官方 DXY ——
+ *    卡片上必须带"自算"字样，并与 `DINIW` 实时快照对账（偏差随响应下发）。
  */
 import { computed, onMounted, ref } from 'vue'
 import { NCard, NDatePicker, NSelect, NSpin } from 'naive-ui'
@@ -39,6 +50,40 @@ interface CurveRow {
 }
 interface LprEvent { date: string; lpr_1y: number | null; lpr_5y: number | null }
 
+/** 外部约束 KPI（后端 external_kpis）—— 与主 KPI 同构，多带 as_of / 区间 / 倾向 */
+interface ExtKpi {
+  key: string; label: string; value: number | null; unit?: string
+  tone?: 'updown' | 'diff' | 'neutral'
+  status?: string; hint?: string
+  pct?: number | null; scale?: { pct: number; label: string } | null
+  highlight?: boolean; anchor?: string
+  as_of: string | null; prev_year: number | null
+  min_1y: number | null; max_1y: number | null
+  chg20: number | null
+  /** 该项是否指向「外部收紧」（美债/期差/美元越强、利差越窄越紧） */
+  tight: boolean | null
+  snapshot?: { date: string; value: number } | null
+  deviation_pct?: number | null
+}
+interface UsCurveRow {
+  term: string; cur: number | null; as_of: string | null; prev_year: number | null
+  chg20_bp: number | null; min_1y: number | null; max_1y: number | null
+  spread_2y_bp: number | null
+}
+interface CbRow {
+  code: string; name: string; bank: string; date: string; rate: number | null
+  change_bp: number | null; last_move_date: string | null; last_move_bp: number | null
+  stale_months: number | null
+}
+interface ExternalBlock {
+  items: ExtKpi[]; dxy: ExtKpi | null; curve: UsCurveRow[]
+  central_banks: CbRow[]; cb_note: string | null
+  reading: { headline: string; detail: string; tone: string
+    tight_n: number; total_n: number; combo?: string | null } | null
+  as_of_bond: string | null; as_of_us: string | null; as_of_dxy: string | null
+  note: string
+}
+
 const loading = ref(false)
 const asOf = ref('')
 const baseDate1y = ref('')
@@ -57,6 +102,8 @@ const equityCross = ref<{ bench_pos_pct: number | null; bench_date: string | nul
   reading: string | null; level?: string } | null>(null)
 const median1y = ref<number | null>(null)
 const note = ref('')
+const externalKpis = ref<ExtKpi[]>([])
+const external = ref<ExternalBlock | null>(null)
 
 const replayTs = ref<number | null>(null)
 const trendDays = ref(500)
@@ -86,6 +133,8 @@ async function load() {
     lpr.value = resp.lpr ?? null
     policyMarket.value = resp.policy_vs_market ?? null
     equityCross.value = resp.equity_cross ?? null
+    externalKpis.value = resp.external_kpis ?? []
+    external.value = resp.external ?? null
   } catch (e) {
     console.error('[money-cost]', e)
   } finally {
@@ -120,6 +169,51 @@ function shapeTag(v: number | null): { text: string; cls: string } {
   return { text: '正常', cls: 'mc-tag--ok' }
 }
 const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
+
+/* ---------------- 外部约束（批次 1，2026-09-25）辅助 ---------------- */
+
+/** 央行利率变动语义：降息=宽松（蓝）/ 加息=收紧（琥珀）/ 维持（灰）。
+ *  ⚠️ 刻意不走红绿 —— 红涨绿跌是**行情数字**的约定（规范 §契约④），
+ *     利率决议的变动不是「某个资产在涨跌」，染红绿会把它误读成涨跌。 */
+function cbTag(bp: number | null): { text: string; cls: string } {
+  if (bp == null) return { text: '--', cls: 'mc-tag--na' }
+  if (bp < 0) return { text: `降息 ${Math.abs(bp)}bp`, cls: 'mc-tag--ok' }
+  if (bp > 0) return { text: `加息 ${bp}bp`, cls: 'mc-tag--warn' }
+  return { text: '维持不变', cls: 'mc-tag--flat' }
+}
+
+/** 当前值在「近一年高低区间」里的位置（0=区间最低，100=最高）。
+ *  ⚠️ 这是**区间位置**而非分位（分位看 KPI 区的刻度条）—— 它只用来一眼看出
+ *     「四个期限是不是一起被抬到了近一年高位」。 */
+function rangePos(c: UsCurveRow): number {
+  if (c.cur == null || c.min_1y == null || c.max_1y == null || c.max_1y === c.min_1y) return 50
+  return Math.min(100, Math.max(0, ((c.cur - c.min_1y) / (c.max_1y - c.min_1y)) * 100))
+}
+
+/** 自算 DXY 与 ICE 官方快照的偏差标签：≤0.3% 视为口径一致（蓝），否则提醒（琥珀） */
+function devTag(dev: number | null | undefined): { text: string; cls: string } {
+  if (dev == null) return { text: '--', cls: 'mc-tag--na' }
+  return {
+    text: `偏差 ${dev >= 0 ? '+' : ''}${dev}%`,
+    cls: Math.abs(dev) <= 0.3 ? 'mc-tag--ok' : 'mc-tag--warn',
+  }
+}
+
+/** 外部数据的实际截至日（美债/中债与美元指数不同轴 —— 口径必须随数字一起显示） */
+const extAsOfText = computed(() => {
+  const e = external.value
+  if (!e) return ''
+  const bits: string[] = []
+  if (e.as_of_bond) bits.push(`美债/中债 ${e.as_of_bond}`)
+  if (e.as_of_dxy) bits.push(`美元指数 ${e.as_of_dxy}`)
+  return bits.join(' · ')
+})
+
+/** 美元指数近 20 日变化（带符号；空值给 '--'） */
+const dxyChgText = computed(() => {
+  const v = external.value?.dxy?.chg20
+  return v == null ? '--' : `${v >= 0 ? '+' : ''}${v}`
+})
 </script>
 
 <template>
@@ -189,14 +283,15 @@ const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
            :title="`Shibor 期限利率走势（截至 ${asOf || '--'}）`">
       <DualLineTrend :dates="history.dates" :series="history.series" height="300px" />
       <div class="mc-foot">
-        隔夜波动最大、3M 最稳。⚠️ 三条线都是**利率水平**而非涨跌，
+        隔夜波动最大、3M 最稳。⚠️ 三条线都是<b>利率水平</b>而非涨跌，
         故不用红绿着色 —— 利率下行不等于"跌"，它意味着资金变便宜。
       </div>
     </NCard>
 
-    <!-- 政策利率：独立纵轴的阶梯图 + 变动点 -->
-    <NCard id="mc-lpr" size="small" class="mc-card"
-           :title="`政策利率阶梯（LPR 1Y ${lpr?.lpr_1y ?? '--'}% · 已连续 ${lpr?.idle_months ?? '--'} 个月未动）`">
+    <!-- 政策利率：独立纵轴的阶梯图 + 变动点
+         原标题「政策利率阶梯（LPR 1Y 3.00% · 已连续 16 个月未动）」把两个读数写进标题，
+         而卡内 mc-lpr-sum 一字不差地又显示了一遍 ⇒ 标题只留问题，数字归卡内。 -->
+    <NCard id="mc-lpr" size="small" class="mc-card" title="政策利率阶梯：政策动没动？">
       <DualLineTrend v-if="lpr?.step" :dates="lpr.step.dates" :series="lprSeries" height="220px" />
       <div class="mc-lpr-sum">
         <span>当前 1Y <b class="mc-num-strong">{{ lpr?.lpr_1y ?? '--' }}%</b></span>
@@ -232,9 +327,150 @@ const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
       </div>
     </NCard>
 
-    <!-- ④ 交叉印证 ×2 -->
-    <NCard id="mc-cross" size="small" class="mc-card"
-           title="交叉印证（政策 ↔ 市场 · 资金价格 ↔ 权益位置）">
+    <!-- ④ 外部约束（批次 1，2026-09-25）
+         为什么这些数属于「货币流动性」而不属于「资金温度」（D6 因果位置划法）：
+           本区放的都是**钱的价格**（因）—— 美债收益率是全球贴现率、中美利差决定跨境资金方向、
+           美元指数是全球美元总闸门；而「钱有没有真的进到市场里」（汇率背后的外资流向、
+           基金发行、产业资本回购）归「资金温度」，那是**果**。
+         ⚠️ 遵守上一轮已拍板的「不拆大卡」原则：本区是**大卡内的分区**，卡片墙仍是 3 张 track 卡
+           （《货币流动性观测体系设计》§6 批次 3），故这几个 KPI **不标 card_rank**。 -->
+    <NCard id="mc-external" size="small" class="mc-card"
+           title="外部约束：美元和美债，在收紧还是在放松？">
+      <template #header-extra>
+        <DrillLink :items="[{ label: '跨市场对照看海外', to: '/analysis/cross-market' }]" />
+      </template>
+      <div class="mc-hint">
+        开放经济下国内流动性受外部硬约束：<b>美债收益率</b>是全球风险资产的贴现率、
+        <b>中美利差</b>决定跨境资金的方向、<b>美元指数</b>是全球美元的总闸门。
+        只盯 Shibor 会把「外部在收、国内在放」误读成纯宽松。
+      </div>
+
+      <KpiCards v-if="externalKpis.length" :items="externalKpis" />
+
+      <!-- 美债曲线：四腿 + 各自在近一年区间里的位置 -->
+      <div id="mc-ext-curve" class="mc-ext-block">
+        <div class="card-sub">美债曲线 · 四个期限（长端是全市场的贴现基准）</div>
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>期限</th><th>当前（%）</th><th>一年前（%）</th><th>20 日变化</th>
+              <th>近一年区间（%）</th><th>在区间的位置</th><th>相对 2Y</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in external?.curve ?? []" :key="c.term">
+              <td class="mc-term">{{ c.term }}</td>
+              <td class="mc-num">{{ c.cur ?? '--' }}</td>
+              <td class="mc-num mc-dim">{{ c.prev_year ?? '--' }}</td>
+              <td class="mc-num mc-dim">
+                {{ c.chg20_bp == null ? '--' : (c.chg20_bp >= 0 ? '+' : '') + c.chg20_bp + 'bp' }}
+              </td>
+              <td class="mc-num mc-dim">{{ c.min_1y ?? '--' }} ~ {{ c.max_1y ?? '--' }}</td>
+              <td>
+                <div class="mc-bar-wrap">
+                  <span class="mc-bar-track">
+                    <span class="mc-bar" :style="{ width: rangePos(c) + '%' }" />
+                  </span>
+                </div>
+              </td>
+              <td class="mc-num mc-dim">
+                {{ c.spread_2y_bp == null ? '--' : (c.spread_2y_bp >= 0 ? '+' : '') + c.spread_2y_bp + 'bp' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="card-cap">
+          四条腿一起被抬到近一年高位、而 10Y−2Y 却在近一年最平 —— 「收益率高位 + 曲线走平」，
+          是紧缩中后段的典型形态。⚠️ 「在区间的位置」是当前值在近一年高低区间里的相对位置，
+          <b>不是分位</b>（分位看上方 KPI 的刻度条）。
+        </div>
+      </div>
+
+      <!-- 美元指数：自算口径 + 与官方快照对账 -->
+      <div id="mc-ext-dxy" class="mc-ext-block">
+        <div class="card-sub">美元指数（自算）· 与官方快照对账</div>
+        <table class="mc-table">
+          <thead>
+            <tr><th>口径</th><th>数值</th><th>截至日</th><th>一年前</th><th>20 日变化 / 偏差</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term">自算（人民币中间价交叉汇率）</td>
+              <td class="mc-num">{{ external?.dxy?.value ?? '--' }}</td>
+              <td class="mc-num mc-dim">{{ external?.as_of_dxy ?? '--' }}</td>
+              <td class="mc-num mc-dim">{{ external?.dxy?.prev_year ?? '--' }}</td>
+              <td class="mc-num mc-dim">{{ dxyChgText }}</td>
+            </tr>
+            <tr v-if="external?.dxy?.snapshot">
+              <td class="mc-term">ICE 官方 DXY（新浪 DINIW 快照）</td>
+              <td class="mc-num">{{ external.dxy.snapshot.value }}</td>
+              <td class="mc-num mc-dim">{{ external.dxy.snapshot.date }}</td>
+              <td class="mc-num mc-dim">--</td>
+              <td>
+                <span class="mc-tag" :class="devTag(external.dxy.deviation_pct).cls">
+                  {{ devTag(external.dxy.deviation_pct).text }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="card-cap">
+          两行不是同一口径：自算是「人民币中间价的 6 个成分货币交叉汇率」，官方快照是 ICE 的
+          美元指数。两者对账偏差小 ⇒ 自算可用；快照自 2026-09-24 起逐日累积，可长期复核。
+        </div>
+      </div>
+
+      <!-- 全球央行方向：⚠️ 上游停更，只能读历史方向 -->
+      <div class="mc-ext-block">
+        <div class="card-sub">全球央行方向 · 最新有效决议</div>
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>央行</th><th>最新决议日</th><th>利率（%）</th><th>本次决议</th>
+              <th>最后一次实际变动</th><th>距今</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in external?.central_banks ?? []" :key="c.code">
+              <td class="mc-term">{{ c.bank }}</td>
+              <td class="mc-num mc-dim">{{ c.date }}</td>
+              <td class="mc-num">{{ c.rate ?? '--' }}</td>
+              <td>
+                <span class="mc-tag" :class="cbTag(c.change_bp).cls">{{ cbTag(c.change_bp).text }}</span>
+              </td>
+              <td class="mc-num mc-dim">
+                {{ c.last_move_date ?? '--' }}<template v-if="c.last_move_bp != null">
+                  （{{ c.last_move_bp > 0 ? '+' : '' }}{{ c.last_move_bp }}bp）</template>
+              </td>
+              <td class="mc-num mc-dim">{{ c.stale_months == null ? '--' : c.stale_months + ' 个月' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="external?.cb_note" class="mc-warn"><RichText :text="external.cb_note" /></div>
+      </div>
+
+      <!-- 内外组合：这才是本区的结论（四项读数 + 与国内松紧的组合判定） -->
+      <div v-if="external?.reading" class="mc-cross"
+           :class="external.reading.tone === 'caution' ? 'mc-cross--warn' : ''">
+        <span class="mc-cross-badge">外部约束 × 国内松紧</span>
+        <span class="mc-cross-text">
+          <b>{{ external.reading.headline }}</b>
+          <template v-if="external.reading.detail">
+            <br /><RichText :text="external.reading.detail" />
+          </template>
+        </span>
+      </div>
+      <div class="card-cap">
+        数据截至：{{ extAsOfText || '--' }}。⚠️ 美债/中债走 `bond_profit_daily`，
+        比 A 股日线滞后 1~2 个交易日 —— 故本区单独标注截至日，不套用页头的「数据截至」。
+      </div>
+      <div class="mc-note"><RichText :text="external?.note ?? ''" /></div>
+    </NCard>
+
+    <!-- ④ 交叉印证 ×2
+         原标题「交叉印证（政策 ↔ 市场 · 资金价格 ↔ 权益位置）」是两张子卡的清单（功能清单进标题），
+         改为一句话问题，清单下沉为 caption。 -->
+    <NCard id="mc-cross" size="small" class="mc-card" title="政策与市场、钱与权益，是否互相印证？">
       <div v-if="policyMarket?.reading" class="mc-cross">
         <span class="mc-cross-badge">政策 vs 市场</span>
         <span class="mc-cross-text">
@@ -254,6 +490,7 @@ const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
           <span class="mc-dim">（中证全指位置 {{ equityCross.bench_pos_pct }}% 分位，{{ equityCross.bench_date }}）</span>
         </span>
       </div>
+      <div class="card-cap">对照的两组：政策利率 ↔ 市场资金价格 · 资金价格 ↔ 权益位置</div>
       <div class="mc-note"><RichText :text="note" /></div>
     </NCard>
   </NSpin>
@@ -301,6 +538,9 @@ const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
 .mc-tag--warn { background: #FAEEDA; color: #B45309; font-weight: 600; }
 .mc-tag--na { background: #F5F7FA; color: #9CA3AF; }
 .mc-foot { font-size: 11px; color: #9CA3AF; margin-top: 10px; line-height: 1.65; }
+/* 页脚为**模板内静态文案**（非后端下发），故用 <b> 而非 `**`：`**` 只由 RichText 解析，
+   写在模板里会原样渲染（2026-09-25 全站扫描实测漏点）。 */
+.mc-foot b { color: #1F2937; font-weight: 600; }
 .mc-lpr-sum {
   display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
   font-size: 12px; color: #6B7280; margin: 12px 0 10px;
@@ -321,4 +561,16 @@ const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
 .mc-cross--warn .mc-cross-badge { background: #FEF3C7; color: #B45309; }
 .mc-cross-text { font-size: 12px; color: #374151; line-height: 1.7; }
 .mc-note { font-size: 11px; color: #9CA3AF; margin-top: 10px; line-height: 1.65; }
+/* 外部约束分区（2026-09-25 批次 1）：同一张大卡内的子块，用虚线分隔。
+   卡内 KpiCards 自带白底描边，在 NCard 白底上仍可见（KpiCards 的 .kpi-card 有边框）。 */
+.mc-ext-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #EDEFF2; }
+.mc-ext-block .mc-table { margin-top: 2px; }
+.mc-ext-block .card-cap b { color: #1F2937; font-weight: 600; }
+/* 预警块（上游停更 / 口径风险）：琥珀系，与 .mc-tag--warn 同族；
+   ⚠️ 不用亮红 —— 项目配色铁律：失败用深红棕、警告用琥珀（见颜色体系规范）。 */
+.mc-warn {
+  font-size: 11px; line-height: 1.7; color: #7A4A0B; background: #FAEEDA;
+  border-left: 3px solid #B45309; border-radius: 4px; padding: 8px 10px; margin-top: 10px;
+}
+.mc-warn :deep(strong) { color: #7A2E0B; }
 </style>
