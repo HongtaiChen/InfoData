@@ -330,30 +330,46 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "那不是「钱便宜」而是「没经历过钱荒」，属窗口选错导致的伪信号。",
      ["interbank_rate_sync"], ""),
     ("overseas_index_daily", "海外",
-     "新浪财经(akshare stock_hk_index_daily_sina / index_us_stock_sina)",
-     "海外与港股指数日线（20,367 行）：HSI 恒生（`stock_hk_index_daily_sina`）"
-     "+ DJI/SPX/IXIC 道指·标普500·纳指（`index_us_stock_sina`）。"
+     "新浪财经(akshare stock_hk_index_daily_sina / index_us_stock_sina / 直连 gi 接口)",
+     "海外与港股指数日线（**10 个指数**，跨亚/欧/美三个时区）：HSI 恒生"
+     "（`stock_hk_index_daily_sina`）+ DJI/SPX/IXIC 道指·标普500·纳指（`index_us_stock_sina`）"
+     "+ **2026-09-25 新增** DAX/CAC/UKX/SX5E/N225/KOSPI —— 这 6 个**直连**新浪 "
+     "`gi.finance.sina.com.cn/hq/daily`，不走 akshare 函数（实测 `index_global_hist_sina` "
+     "符号映射表 key 对不上、`index_global_hist_em` 因东财 kline 域名被拦全数失败）。"
      "uk_code_date 幂等增量；每自然日 19:50（美股为 T-1 收盘，源侧天然滞后一天，别当缺数）。"
-     "回答蓝图E「外围环境」。"
-     "消费方：分析研究「跨市场对照」模块（各指数 20 日收益 + 相对 A股 中证全指超额 + "
-     "隔夜传导同向率）。⚠️ 与 A股 交易日不同步（时差 + 各自休市），"
+     "⚠️ 新增 6 个指数**只有 1,000 行（约 4 年，2022-08 起）**——`num=10000` 实测只返 1000 行，"
+     "够算近一年分位与 20/60 日变化，**不够做长周期历史类比**。"
+     "⚠️ 新浪 gi 在亚洲盘中会返回**当日未完成的 bar**（2026-09-25 实测 10:04 时 N225 已有当日行、"
+     "而其余 9 条腿都停在 T-1）⇒「最新日行数」是**时点耦合量**、不可作判据：既有规则 "
+     "`overseas_rows_latest`（最新日行数 ≥3）已因此退休，改为 spx/dax/n225/kospi 四条逐腿 "
+     "`date_floor_where`。"
+     "消费方：分析研究「跨市场对照」模块 —— 它仍只用 SPX/IXIC/DJI/HSI 四个"
+     "（`INDEXES` 是显式白名单，扩表不影响它）。⚠️ 与 A股 交易日不同步（时差 + 各自休市），"
      "该模块按**日期并集 + 前值填充**对齐；按下标对齐会把相差近一个月的日期画成同一时刻，"
      "产生的错位恰好会被读成「美股领先 A股」。隔夜传导只用『标普500 × 中证全指』这一对 —— "
      "恒生与 A股 交易时段部分重叠，混算会把两个机制平均掉。",
      ["overseas_index_sync"], ""),
     ("currency_boc_daily", "汇率",
      "新浪财经-中行人民币牌价(akshare currency_boc_sina)",
-     "人民币外汇牌价与中间价（5,615 行 / 4 币种 USD·EUR·JPY·HKD）："
+     "人民币外汇牌价与中间价（**17 币种 = 源侧合法全集**；2026-09-25 由 4 个扩到 17）。"
+     "扩集两个理由：① 覆盖 **ICE DXY 的 6 个成分货币**（欧元/日元/英镑/加元/瑞典克朗/瑞士法郎），"
+     "使「美元指数自算」多一条独立口径可交叉复核；② 外部约束维度要看**一篮子货币的相对强弱**，"
+     "只盯美元会漏掉日元/英镑的独立行情。"
+     "⚠️ 口径纠正：设计文档初稿写的「扩到 26 币种」是把 `currency_boc_safe`（SAFE 宽表）"
+     "的币种数误套到了本表上 —— `currency_boc_sina`（中行牌价）**只有 17 个**。"
      "mid_price=央行中间价（政策意图）、spot_buy/sell=中行汇买/汇卖（市场实现），"
      "两者背离本身即信息（中间价稳而即期弱 = 贬值压力靠逆周期因子硬压）。"
      "⚠️ 源按**每 100 外币**报价，采集器已 ÷100 归一为**元/1 外币**（下游无需再除）。"
-     "⚠️ 源 symbol 必须逐字对齐（'港币' 而非 '港元'，拼错在映射表里抛 KeyError）。"
-     "uk_currency_date 幂等；每自然日 20:05。回答蓝图E「汇率破位=外资流出压力」。"
-     "消费方：分析研究「资金温度」模块（外部资金环境线索）。"
+     "⚠️ 源 symbol 必须逐字对齐（'港币' 而非 '港元'、'韩国元' 而非 '韩元'、'澳门元' 而非 '澳门币'，"
+     "拼错在映射表里抛 KeyError 而非报「不支持」）。"
+     "uk_currency_date 幂等；每自然日 20:05。"
      "⚠️ mid_price 有空值，且**最新一日常为空** —— 当日中间价发布晚于采集时刻"
-     "（实测 2026-09-19 的 mid_price 为 NULL 而 ref_price 有值）。消费端一律 "
+     "（实测 2026-09-19 与 2026-09-25 的 mid_price 为 NULL 而 ref_price 有值）。消费端一律 "
      "`mid_price IS NOT NULL`，**不要用 ref_price 兜底**：两者口径不同"
-     "（央行中间价 vs 中行折算价），混用会让序列出现台阶。",
+     "（央行中间价 vs 中行折算价），混用会让序列出现台阶。"
+     "双消费方：①「资金温度」模块用美元中间价看外部资金环境；"
+     "②「货币流动性」模块只把它当作 **DXY 自算的成分来源**（真正参与 DXY 计算的是 "
+     "`currency_boc_safe`，本表是**对照口径**）。",
      ["currency_boc_sync"], ""),
     ("fund_new_issue", "基金",
      "东财数据中心(akshare fund_new_found_em)",
@@ -386,6 +402,80 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "diverge_keys 列出具体背离项。⚠️ 必须**晚于 market_style_sync 与 index_market_sync** 跑，"
      "否则读到的是半量风向数据。PRIMARY KEY(trade_date) 幂等 upsert。",
      ["xcheck_sync"], ""),
+
+    # ---- 2026-09-25 货币流动性批次 2（3 张新表 + 1 张自算派生表）----
+    # 出处：《货币流动性观测体系设计_2026-09-25.md》§6 批次 2。
+    # 一句话背景：原「钱贵不贵」领域只有**银行间利率**一条腿（价格维度），
+    # 补上「数量维度（货币供应/央行资产表）+ 央行行为（多国利率）+ 外部约束（美元指数）」。
+    ("cn_liquidity_monthly", "宏观",
+     "央行-金融统计数据(akshare macro_china_money_supply / _new_financial_credit / "
+     "_reserve_requirement_ratio / _shrzgm)",
+     "中国货币数量维度月表（224 期，2015-01 起）：M0/M1/M2 的余额 + 同比 + 环比（`m*_mom` "
+     "为本地派生，由余额按日期间隔归一算得，故列宽 DECIMAL(8,4)）、`m1_m2_gap` = M1 同比 − M2 同比"
+     "（**资金活化度**：剪刀差收窄 = 钱从定期转向活期 = 实体意愿回升，比单看 M2 更有信息量）、"
+     "新增人民币信贷（月增/累计/同比）、社融 8 列、准备金率（大行/中小行 + 生效日，按「下一生效日顺延」"
+     "填充到月份，不做前向填充）。stat_month 取四源并集 + 主键幂等 upsert。"
+     "⚠️ **上游时效各不相同（逐列水位由采集器 run_steps 分别暴露）**：M1/M2/M0 与信贷至 2026-08；"
+     "准备金率最后生效 2025-05-15；**社融源已停更于 2026-04 且无替代源** —— `macro_china_shrzgm`"
+     "（商务数据中心，无参 POST）之后不再更新，东财 datacenter 无对应报告名，"
+     "`macro_china_bank_financing` 实为「银行理财产品发行数量」（名字骗人）。"
+     "⇒ 社融只是**辅助参考列**，主口径以 M1/M2 + 信贷为准；对应的 DQ 规则 `cnliq_shrzgm_wm` "
+     "已 enabled=0 留作钩子（找到替代源再开）。"
+     "⚠️ 建表三纪律：显式 COLLATE utf8mb4_0900_ai_ci（库默认是 unicode_ci，不写死 JOIN 会报 1267）、"
+     "CREATE TABLE IF NOT EXISTS、口径写进列注释。"
+     "消费方：分析研究「货币流动性」模块的「数量维度」（暂未接入前端，属批次 3 视图重构范围）。",
+     ["cn_liquidity_sync"], ""),
+    ("cn_cb_balance_monthly", "宏观",
+     "央行-货币当局资产负债表(akshare macro_china_central_bank_balance)",
+     "中国央行资产负债表月表（356 期，1993-03 起，28 科目 + stat_month）："
+     "**纯源值镜像，不存任何派生列**（派生逻辑留给消费端，避免口径分叉在两层各写一遍）。"
+     "最具信息量的科目是 `claims_other_dep_banks`（对其他存款性公司债权）—— 它就是央行通过 "
+     "MLF/逆回购/PSL 投给银行的资金：**扩张 = 放水、收缩 = 收水**。中国没有官方「QE 规模」公告，"
+     "只能从这一列倒推；用它可以区分「主动投放」与「外汇占款被动投放」两个时代"
+     "（2014 年前靠外汇占款、之后转为主动投放，这是中国货币投放机制的分水岭）。"
+     "⚠️ `_period()` 解析源里的 `'2026.8'` 格式（年.月，**月不补零**，`'2026.10'` 才会两位数）。"
+     "⚠️ `COL_MAP` 必须逐字对齐 27 个源列名（含 `其中:中央政府` 的**半角冒号**）；"
+     "源列名缺失即 raise —— 防「拼错后静默写 NULL」这个本项目已踩过的坑。"
+     "DQ 侧配了资产负债表恒等式（总资产 = 总负债，容差 1 亿）作物理约束。"
+     "消费方：分析研究「货币流动性」模块的「央行行为/数量维度」（批次 3 视图重构范围）。",
+     ["cn_cb_balance_sync"], ""),
+    ("cb_policy_rate", "宏观",
+     "各国央行决议(akshare macro_bank_usa/euro/japan/english_interest_rate)",
+     "多国央行政策利率决议（1,395 条，美/欧/日/英四国）：一国一表结构，"
+     "`uk_country_date(country_code, event_date)` 幂等。**只写入「今值」非空的有效决议行**"
+     "（源表里更晚的日期行「今值」为空 —— 那是「尚未发布」，不是「利率为 0」）。"
+     "`prev_rate` / `change_bp` **本地自算**（按同国 event_date 的相邻有效决议），"
+     "**不取源里的「前值」列**（源该列口径不稳）。"
+     "⚠️ **上游整体停更（2026-09-25 实测）**：11 个 `macro_bank_*` 接口的最后一条有效「今值」"
+     "统一停在 2025-07~08（距今 14 个月），换接口无用。"
+     "⇒ 本表只能读**历史方向**（各国加息/降息周期的相对位置），**不能当当前政策利率用**；"
+     "前端「货币流动性」的「外部约束」分区已强制标注「源已停更 N 个月」。"
+     "对应的 DQ 规则 `cbpr_fresh` 已 enabled=0 留作钩子。"
+     "⚠️ 缺口登记：韩国央行利率 akshare **无接口**（实测 AttributeError），"
+     "韩国层只能做「结果观测」（KOSPI + 韩元汇率），这是设计文档 §2.4 A4 明确接受的缺口。"
+     "消费方：分析研究「货币流动性」模块的「全球央行方向」表。",
+     ["cb_policy_rate_sync"], ""),
+    ("global_usd_index_daily", "汇率",
+     "自算(人民币中间价 currency_boc_safe 6 成分货币) + 新浪 DINIW 实时快照",
+     "美元指数**自算**日线（2,380 行，2016-12-12 起）：按 ICE 标准公式给 6 个成分货币的"
+     "**人民币中间价交叉汇率**加权 —— `50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × "
+     "GBPUSD^-0.119 × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036`；"
+     "另存新浪 `hq.sinajs.cn/list=DINIW` 的实时快照列做**标定基准**（逐日累积）。"
+     "⚠️ **口径 = 人民币中间价交叉汇率，不是 ICE 官方 DXY**（UI 已标注「自算」）："
+     "用于看趋势与相对位置，**不作绝对值引用**。实测与快照偏差 **+0.085%**（2026-09-24 单点标定）。"
+     "⚠️ 官方历史源全部实测不可用：东财 `push2his` 域名不通（kline 路径被拦）、"
+     "新浪 hq/daily 不支持 UDI/DINIW、`futures_foreign_hist('DX')` 只返 13 行（2019 年）"
+     "⇒ 自算是唯一可行路径。"
+     "⚠️ **标价法混用是本表最大的坑**（2026-09-25 实测事故）：`currency_boc_safe` 宽表里"
+     "**直接标价 = 人民币/100 外币**（美元 674.89 → 6.7489、日元 4.259 → 0.04259）而"
+     "**间接标价 = 外币/100 人民币**（瑞典克朗 147.31 → 0.67884），**只有这两种、不是「按 1 单位」**；"
+     "采集器初版把 SEK 当直标 ⇒ USDSEK 算成 4.58（真值 9.94）⇒ DXY 偏低 3.3%，"
+     "还伪装成「中间价与市场价的固有偏离」。现由 `_CROSS_RANGE` 逐币量级断言 + "
+     "`dxy_vs_snapshot` DQ 规则（整值偏差 ≤1.5 点）双重守护。"
+     "⚠️ 快照落位用 `_stitch_snapshot()`：按**快照自带报价日**对齐（exact → latest 回落到表内最新行），"
+     "不能只挂 `d == today` —— 中间价宽表末行是 T 或 T−1，只靠 INSERT 会让快照永远写不进去。"
+     "消费方：分析研究「货币流动性」模块的「外部约束」分区（G1 全球美元总闸门）。",
+     ["usd_index_sync"], ""),
 ]
 
 # 列级血缘：table_name -> { 任务名: {source, cols[], derived[], note?, col_notes{}} }
@@ -794,13 +884,23 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
     },
     "overseas_index_daily": {
         "overseas_index_sync": {
-            "source": "akshare 新浪外盘指数",
+            "source": "akshare 新浪外盘指数(HSI/美股) + 直连新浪 gi(日韩欧)",
             "cols": ["index_code", "index_name", "trade_date", "open", "high", "low", "close",
                      "volume", "amount"],
-            "note": "HSI 走 stock_hk_index_daily_sina；DJI/SPX/IXIC 走 index_us_stock_sina；"
-                    "uk_code_date 幂等增量",
+            "note": "**两套取数路径**：HSI 走 `stock_hk_index_daily_sina`；DJI/SPX/IXIC 走 "
+                    "`index_us_stock_sina`；DAX/CAC/UKX/SX5E/N225/KOSPI（2026-09-25 新增）"
+                    "**直连** `gi.finance.sina.com.cn/hq/daily`（akshare 的 "
+                    "`index_global_hist_sina` 符号表对不上、`index_global_hist_em` 因东财 "
+                    "kline 域名被拦全数失败）。uk_code_date 幂等增量",
             "col_notes": {
-                "trade_date": "当地交易日；美股为 T-1 收盘，源侧天然滞后一天（非缺数）",
+                "trade_date": "当地交易日；美股为 T-1 收盘，源侧天然滞后一天（非缺数）。"
+                              "⚠️ 新浪 gi 在亚洲盘中会返回当日**未完成的 bar** ⇒「最新日行数」"
+                              "是时点耦合量，别拿它做判据（参见 table_meta.flow_desc）",
+                "volume": "新浪 gi 返回的 v<=0 一律转 NULL（该接口对部分指数、部分日期不提供成交量；"
+                          "实测空值率 CAC 216/1000、SX5E 404/1000、N225 91/1000、KOSPI 6/1000）",
+                "amount": "**新增的 6 个指数（DAX/CAC/UKX/SX5E/N225/KOSPI）整列为 NULL** —— "
+                          "新浪 gi 接口不返回成交额（实测 1000/1000 空）；"
+                          "做「量能」类指标时只能用 volume、且必须先处理空值",
             },
         },
     },
@@ -810,14 +910,116 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
             "cols": ["currency", "currency_name", "trade_date", "mid_price", "spot_buy",
                      "spot_sell", "ref_price"],
             "derived": ["mid_price", "spot_buy", "spot_sell", "ref_price"],
-            "note": "uk_currency_date(currency, trade_date) 幂等 upsert；4 币种 USD/EUR/JPY/HKD",
+            "note": "uk_currency_date(currency, trade_date) 幂等 upsert；"
+                    "**17 币种 = 源侧合法全集**（2026-09-25 由 4 个扩到 17，含 ICE DXY 的 6 个成分货币）",
             "col_notes": {
-                "mid_price": "央行中间价，**元/1 外币**——源按每 100 外币报价，已 ÷100 归一",
+                "mid_price": "央行中间价，**元/1 外币**——源按每 100 外币报价，已 ÷100 归一。"
+                             "⚠️ 有空值且最新一日常为空（当日中间价发布晚于采集时刻）",
                 "spot_buy": "中行汇买价（元/1 外币，已 ÷100）",
                 "spot_sell": "中行钞卖价/汇卖价（元/1 外币，已 ÷100）",
-                "ref_price": "中行折算价（元/1 外币，已 ÷100）",
-                "currency_name": "⚠️ 源 symbol 必须逐字对齐 akshare 合法取值：'港币' 而非 '港元'，"
+                "ref_price": "中行折算价（元/1 外币，已 ÷100）。⚠️ **不要用它兜底 mid_price** —— "
+                             "两者口径不同，混用会让序列出现台阶",
+                "currency_name": "⚠️ 源 symbol 必须逐字对齐 akshare 合法取值：'港币' 而非 '港元'、"
+                                 "'韩国元' 而非 '韩元'、'澳门元' 而非 '澳门币'、'澳大利亚元' 而非 '澳元'，"
                                  "拼错在 _currency_boc_sina_map 抛 KeyError（不报「不支持」）",
+            },
+        },
+    },
+    "cn_liquidity_monthly": {
+        "cn_liquidity_sync": {
+            "source": "akshare macro_china_money_supply / _new_financial_credit / "
+                      "_reserve_requirement_ratio / _shrzgm",
+            "cols": ["stat_month", "m0", "m0_yoy", "m0_mom", "m1", "m1_yoy", "m1_mom",
+                     "m2", "m2_yoy", "m2_mom", "m1_m2_gap", "credit_month", "credit_cum",
+                     "credit_yoy", "shrzgm", "shrzgm_rmb_loan", "shrzgm_fx_loan",
+                     "shrzgm_entrust", "shrzgm_trust", "shrzgm_undiscounted",
+                     "shrzgm_ent_bond", "shrzgm_equity", "rrr_large", "rrr_small",
+                     "rrr_effective_date"],
+            "derived": ["m0_mom", "m1_mom", "m2_mom", "m1_m2_gap", "rrr_large", "rrr_small",
+                        "rrr_effective_date"],
+            "note": "四接口合一：`*_mom` = 余额环比的**按日期间隔归一**（不是简单差分）；"
+                    "`m1_m2_gap` = M1 同比 − M2 同比；准备金率按「下一生效日」顺延填充到月份"
+                    "（该月早于首个事件则留 NULL，刻意不做前向填充 —— 那会造出假历史）",
+            "col_notes": {
+                "stat_month": "统计月份归一为月初 1 日；取四源月份**并集**，主键幂等 upsert",
+                "m1_m2_gap": "**资金活化度**：剪刀差收窄 = 钱从定期转向活期 = 实体意愿回升。"
+                             "比单看 M2 更有信息量（本表最有判断力的派生列）",
+                "shrzgm": "⚠️ **源已停更于 2026-04 且无替代源**（详见 table_meta.flow_desc）—— "
+                          "列仍在、表还在长，但这一列不再有新值。DQ 规则 `cnliq_shrzgm_wm` "
+                          "已 enabled=0 留作钩子",
+                "rrr_effective_date": "准备金率的**生效日**（不是公告日）。该月若无事件则继承"
+                                      "上一次生效值；若该月早于首个事件则整组留 NULL",
+            },
+        },
+    },
+    "cn_cb_balance_monthly": {
+        "cn_cb_balance_sync": {
+            "source": "akshare macro_china_central_bank_balance",
+            "cols": ["stat_month", "foreign_assets", "fx_reserve", "monetary_gold",
+                     "other_foreign_assets", "claims_gov", "claims_central_gov",
+                     "claims_other_dep_banks", "claims_other_fin_cos", "claims_non_monetary",
+                     "claims_non_fin_cos", "other_assets", "total_assets", "reserve_money",
+                     "currency_issue", "fin_cos_deposit", "other_dep_banks_dep",
+                     "other_fin_cos_dep", "fin_liab", "reserve_deposit", "non_fin_cos_dep",
+                     "demand_deposit", "bonds", "foreign_liab", "gov_deposit", "own_capital",
+                     "other_liab", "total_liab"],
+            "note": "**纯源值镜像，不存派生列**（派生留给消费端，避免口径在两层各写一遍）。"
+                    "`_period()` 解析源的 `'2026.8'` 格式（年.月，月不补零）；"
+                    "`COL_MAP` 逐字对齐 27 个源列名（含 `其中:中央政府` 的**半角冒号**），"
+                    "源列名缺失即 raise（防拼错后静默写 NULL）",
+            "col_notes": {
+                "stat_month": "统计月份归一为月初 1 日；主键幂等 upsert",
+                "claims_other_dep_banks": "**本表最有信息量的科目**（对其他存款性公司债权）："
+                                          "MLF/逆回购/PSL 的投放总量。扩张 = 放水、收缩 = 收水 —— "
+                                          "中国没有官方 QE 公告，只能从这一列倒推",
+                "fx_reserve": "外汇占款（被动投放时代的主力）。与 claims_other_dep_banks 对照，"
+                              "可看出「被动投放 → 主动投放」的结构切换（分水岭在 2014 年）",
+                "total_liab": "与 total_assets 构成恒等式，DQ 规则 `cncb_identity` 守护（容差 1 亿）",
+            },
+        },
+    },
+    "cb_policy_rate": {
+        "cb_policy_rate_sync": {
+            "source": "akshare macro_bank_usa/euro/japan/english_interest_rate",
+            "cols": ["country_code", "country_name", "central_bank", "event_date", "rate",
+                     "prev_rate", "change_bp"],
+            "derived": ["prev_rate", "change_bp"],
+            "note": "uk_country_date(country_code, event_date) 幂等 upsert；"
+                    "**只写入「今值」非空的有效决议行**（源表更晚的日期行今值为空 = 尚未发布，"
+                    "不是利率为 0）；`prev_rate`/`change_bp` 按同国相邻有效决议**本地自算**，"
+                    "不取源里的「前值」列",
+            "col_notes": {
+                "event_date": "决议**公布日**（不是生效日）",
+                "change_bp": "本行利率 − 上一条有效决议的利率（bp）。自算而非取源，"
+                             "因为源该列口径不稳",
+                "country_code": "白名单 US/EU/JP/UK（韩国央行 akshare 无接口，属已接受的缺口）；"
+                                "DQ 规则 `cbpr_country_whitelist` 守护",
+            },
+        },
+    },
+    "global_usd_index_daily": {
+        "usd_index_sync": {
+            "source": "自算(akshare currency_boc_safe 中间价) + 新浪 DINIW 实时快照",
+            "cols": ["trade_date", "dxy_calc", "dxy_snapshot", "eur_usd", "usd_jpy",
+                     "gbp_usd", "usd_cad", "usd_sek", "usd_chf"],
+            "derived": ["dxy_calc", "eur_usd", "usd_jpy", "gbp_usd", "usd_cad", "usd_sek",
+                        "usd_chf"],
+            "note": "ICE 标准公式：`50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × "
+                    "GBPUSD^-0.119 × USDCAD^0.091 × USDSEK^0.042 × USDCHF^0.036`；"
+                    "`_SAFE_COL` 逐币声明**标价法**（direct 6 个 / inverse 1 个 = 瑞典克朗），"
+                    "`_CROSS_RANGE` 逐币量级断言；快照落位用 `_stitch_snapshot()` "
+                    "按快照自带报价日对齐（exact → latest 回落）",
+            "col_notes": {
+                "dxy_calc": "⚠️ **口径 = 人民币中间价交叉汇率，不是 ICE 官方 DXY** —— "
+                            "看趋势与相对位置，不作绝对值引用。实测与快照偏差 +0.085%"
+                            "（2026-09-24 单点标定）",
+                "dxy_snapshot": "新浪 `hq.sinajs.cn/list=DINIW` 的实时值（GB18030 解码，"
+                                "取 parts[1] 与 parts[10] 报价日）。**自 2026-09-24 起逐日累积**，"
+                                "是 `dxy_vs_snapshot` 规则的标定基准",
+                "usd_sek": "⚠️ **唯一走间接标价的成分货币**（源值 = 外币/100 人民币，需 100/v）；"
+                           "其余 5 个都走直接标价（源值 = 人民币/100 外币，需 v/100）。"
+                           "把 SEK 当直标算会得到 4.58（真值 9.94）并把 DXY 拉低 3.3% —— "
+                           "这是 2026-09-25 实测事故的根因",
             },
         },
     },

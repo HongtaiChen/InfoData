@@ -37,6 +37,11 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
                    （含沪深300 成分 001280 中国铀业）**潜伏数月无人发现**，直到前端
                    「行业分布」出现「其他(74)」被追问。配套新增 `ref_missing` 检查器
                    （跨表判据的唯一形态：where 白名单不允许子查询）。见 REF_RULES 头部注释。
+- LIQUIDITY_RULES   ：2026-09-25 货币流动性批次 2 —— 3 张新表（中国货币供应月度 /
+                   中国央行资产负债表月度 / 多国央行政策利率）+ 1 张自算派生表
+                   （美元指数自算 + DINIW 快照标定）。**两条刻意 enabled=0**（已知上游停更：
+                   社融无源可采、macro_bank_* 全族停更），理由逐条写在规则 description 里。
+                   含一条「标价法单位错」通用网 `dxy_vs_snapshot`，来自本轮实测事故。见该列表头部注释。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -778,6 +783,9 @@ BLUEPRINT_RULES = [
 #   在既有规则下会**静默通过**（这是本批的真实价值，不是凑数）：
 #     ① `overseas_index_daily` 的恒生腿整条停更 → 当日仍有 3 行（3 个美股），
 #        `overseas_rows_latest` 的 min_rows 只能设 3（港股与美股日历本就不同）→ 通过；
+#        （⚠️ 2026-09-25 更新：该规则本身已**退休** —— 海外指数扩到 10 条腿跨三个时区后，
+#          「全表最新日行数」变成时点耦合量，盘中跑会因只有 N225 的未完成 bar 而假 fail。
+#          现由 spx/dax/n225/kospi 四条逐腿 date_floor_where 替代，见下方该段注释）
 #     ② `stock_repurchase` 的 **start_date 腿**停更 → `repurchase_fresh` 看的是
 #        announce_date，而它会被后续公告覆盖、永远新鲜 → 通过；
 #        但新模块只按 start_date 统计，腿死了模块会静默退化成 0；
@@ -802,6 +810,37 @@ CONSUMPTION_RULES = [
      "**既有 overseas_rows_latest 看不见这条** —— 它数的是最新日的行数，"
      "恒生停更当日仍有 3 个美股 → 计数 3、min_rows 3 → 照常通过。"
      "15 天容忍：港股与 A股 假期不同步，且春节/圣诞前后各有长假"),
+
+    # -- 2026-09-25 货币流动性批次 2C：海外指数由 4 个扩到 10 个（新增 DAX/CAC/UKX/SX5E/N225/KOSPI）--
+    # ⚠️ 这次扩展**打掉了 overseas_rows_latest 的前提**（已退休，见 RETIRED_RULES）：
+    #    该规则数「全表 MAX(trade_date) 那一日的行数」，在 4 条腿同一时区时够用；
+    #    扩到 10 条腿横跨亚/欧/美三个时区后，它的结果开始**取决于体检时刻**——
+    #    2026-09-25 10:04 手工跑实测：新浪 `gi` 接口会返回当日**盘中未完成的 bar**，
+    #    当时只有 N225 有当日行 ⇒ 「最新日 1 行 < 3」直接判 fail，
+    #    而同一张表在 08:11 跑是 4 行 pass。这是**时点耦合**造成的假信号，不是真故障。
+    #    ⇒ 改用「逐腿 date_floor_where」：一条腿的 MAX(trade_date) 只会向前走，
+    #      与体检时刻无关，且能直接答出「哪一国的腿停了」。
+    ("overseas_spx_fresh", "overseas_index_daily", "date_floor_where",
+     {"date_col": "trade_date", "where": "index_code = 'SPX'", "days_back": 15}, "warning", 1,
+     "美股腿（标普500）新鲜度：子集内 MAX(trade_date) 不得早于今天-15 天。"
+     "SPX 是「隔夜传导」唯一使用的海外指数（恒生与 A股 时段重叠，混算会把两个机制平均掉），"
+     "它停更 = 跨市场对照的传导腿直接失效"),
+    ("overseas_dax_fresh", "overseas_index_daily", "date_floor_where",
+     {"date_col": "trade_date", "where": "index_code = 'DAX'", "days_back": 15}, "warning", 1,
+     "欧洲腿（德国DAX）新鲜度：以 DAX 代表欧洲四指数（DAX/CAC/UKX/SX5E 同一时区、同一接口，"
+     "同时停更的概率极高，逐条配规则只会产生 4 倍联动告警）。"
+     "15 天容忍：欧洲假期与 A股 不同步"),
+    ("overseas_n225_fresh", "overseas_index_daily", "date_floor_where",
+     {"date_col": "trade_date", "where": "index_code = 'N225'", "days_back": 15}, "warning", 1,
+     "日本腿（日经225）新鲜度。**这条最容易被时点假信号误导**：新浪 `gi` 接口在日股盘中"
+     "就返回当日未完成的 bar，故「当日行数」在盘中看只有 1 行（其余市场还没开盘）—— "
+     "而 MAX(trade_date) 永远是单调向前，不受体检时刻影响，这正是改用 date_floor_where 的原因"),
+    ("overseas_kospi_fresh", "overseas_index_daily", "date_floor_where",
+     {"date_col": "trade_date", "where": "index_code = 'KOSPI'", "days_back": 20}, "warning", 1,
+     "韩国腿（KOSPI）新鲜度。20 天容忍（比其它腿多 5 天）：韩国中秋（추석，公历 9~10 月浮动）"
+     "连休可达 5 天，叠加周末与接口本身 1 天的发布滞后。"
+     "⚠️ 韩国是设计文档 §2.4 A4 明确记录的缺口层：akshare 无韩国央行利率接口，"
+     "该层只能做「结果观测」（KOSPI + 韩元汇率），因此这条腿断了就没有替代读数"),
 
     # -- 「资金温度」：汇率腿 --
     ("currency_usd_mid_fresh", "currency_boc_daily", "date_floor_where",
@@ -932,8 +971,172 @@ REF_RULES = [
      "而采集器 upsert-only，整源静默失败既不报错、行数也不减"),
 ]
 
+# ============================================================================
+# 2026-09-25 货币流动性批次 2（LIQUIDITY_RULES）
+# 《货币流动性观测体系设计_2026-09-25.md》§6 批次 2：新增 3 张表
+# （cn_liquidity_monthly / cn_cb_balance_monthly / cb_policy_rate）
+# + 1 张自算派生表（global_usd_index_daily）。
+#
+# 每张表按「四件套」配：unique_index（幂等）/ 新鲜度 / column_watermark（"这一列还在更新吗"）
+# / 值域 where_count（口径守护）。两条刻意 enabled=0 的规则在下面逐条说明理由。
+#
+# ★ 本批最有价值的一条是 `dxy_vs_snapshot` —— 它是**「标价法单位错」的通用网**，
+#   直接来自 2026-09-25 的一起实测事故（本轮最大发现）：
+#     `currency_boc_safe` 宽表**混用两种标价法**：
+#       直接标价 = 人民币 / 100 外币（美元 674.89 → 6.7489、日元 4.259 → 0.04259）
+#       间接标价 = 外币 / 100 人民币（瑞典克朗 147.31 → 0.67884）
+#     采集器初版把间接标价的 SEK 当直标处理 ⇒ USDSEK 算成 4.58（真值 9.94）
+#     ⇒ 自算 DXY 偏低 3.3%，且这个偏差**恰好伪装成**「人民币中间价与市场价的固有偏离」，
+#     设计文档初稿据此写下「±3% 系统性偏离」的错误结论（已勘误为 +0.085%）。
+#   教训：单币种量级错不会报错、行数不变、成分列也「看起来正常」，
+#   只有跟独立来源做整值对账才能一眼看出来。
+# ============================================================================
+LIQUIDITY_RULES = [
+    # ---------- cn_liquidity_monthly（中国「数量维度」：M0/M1/M2 + 信贷 + 社融 + 准备金率） ----------
+    ("cnliq_uniq", "cn_liquidity_monthly", "unique_index",
+     {"cols": ["stat_month"], "expect": "exists"},
+     "info", 1, "幂等保障：stat_month 主键"),
+    ("cnliq_fresh", "cn_liquidity_monthly", "date_floor",
+     {"date_col": "stat_month", "days_back": 75},
+     "warning", 1,
+     "月度新鲜度：stat_month 不得早于今天-75 天。金融统计数据通常次月 10~15 日发布（央行），"
+     "75 天容忍覆盖「发布偏晚 + 机器离线数天」的极端情形；再晚就是采集断档"),
+    ("cnliq_m1m2_wm", "cn_liquidity_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "m1_yoy", "max_gap_rows": 1},
+     "warning", 1,
+     "M1 同比列水位线（本表核心列，M1−M2 剪刀差的分子）。⚠️ 容忍 1 行而非 0：本表 stat_month "
+     "取自 4 个源的**并集**，准备金率按「下一次生效月」落行 —— 若央行提前公告下月降准，"
+     "会先出现一行只有 rrr 的行，此时 m1_yoy 为空但并非断供（次月 10~15 日补上）。gap > 1 才是真落后"),
+    ("cnliq_credit_wm", "cn_liquidity_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "credit_month", "max_gap_rows": 1},
+     "warning", 1,
+     "新增人民币信贷列水位线（第二条腿）。与 m1_yoy 分开守：money_supply 与 new_financial_credit "
+     "是两个独立接口，一条腿停更不该把另一条也判红（否则真实故障被淹没在联动告警里）"),
+    ("cnliq_yoy_range", "cn_liquidity_monthly", "where_count",
+     {"where": "m1_yoy IS NOT NULL AND (m1_yoy < -20 OR m1_yoy > 60)", "max_count": 0},
+     "warning", 1,
+     "M1 同比取值域 (-20, 60]%。实测历史区间约 -10~40%，宽松上限只为挡量纲错（源改成小数、"
+     "或误把余额绝对值写进同比列）"),
+    ("cnliq_m0_scale", "cn_liquidity_monthly", "where_count",
+     {"where": "m0 IS NOT NULL AND (m0 < 1000 OR m0 > 1000000)", "max_count": 0},
+     "warning", 1,
+     "M0 余额量级守护（单位亿元：实测 2026-08 = 148,312 亿）。挡「把同比写进余额列」这类串列"),
+    ("cnliq_shrzgm_wm", "cn_liquidity_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "shrzgm", "max_gap_rows": 6},
+     "warning", 0,
+     "社融列水位线 —— **已知无源可采，刻意关闭（enabled=0）**。2026-09-25 实测："
+     "`macro_china_shrzgm` 最后数据 2026-04；东财 datacenter 无对应报告名；"
+     "`macro_china_bank_financing` 实为「银行理财发行数量」（名字骗人）。"
+     "⇒ 社融为无源辅助指标，主口径以 M1/M2 + 信贷为准。钩子规则：找到替代源后改 enabled=1"),
+    # ---------- cn_cb_balance_monthly（央行资产负债表：中国式 QE 的直接观测） ----------
+    ("cncb_uniq", "cn_cb_balance_monthly", "unique_index",
+     {"cols": ["stat_month"], "expect": "exists"},
+     "info", 1, "幂等保障：stat_month 主键"),
+    ("cncb_fresh", "cn_cb_balance_monthly", "date_floor",
+     {"date_col": "stat_month", "days_back": 75},
+     "warning", 1, "月度新鲜度：央行资产负债表通常次月中下旬发布，75 天容忍同上"),
+    ("cncb_total_wm", "cn_cb_balance_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "total_assets", "max_gap_rows": 0},
+     "warning", 1, "总资产列水位线（本表存在的意义就是这一列：扩张 = 放水、收缩 = 收水）"),
+    ("cncb_claims_wm", "cn_cb_balance_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "claims_other_dep_banks", "max_gap_rows": 0},
+     "warning", 1,
+     "「对其他存款性公司债权」列水位线 —— 本表**最有信息量的科目**（2026-08 实测 21.34 万亿）："
+     "它是央行通过 MLF/逆回购/PSL 投给银行的资金总量。中国没有官方 QE 公告，"
+     "只能从这一列倒推「主动投放 vs 外汇占款」的结构切换"),
+    ("cncb_identity", "cn_cb_balance_monthly", "where_count",
+     {"where": "total_assets IS NOT NULL AND total_liab IS NOT NULL "
+               "AND ABS(total_assets - total_liab) > 1",
+      "max_count": 0},
+     "warning", 1,
+     "资产负债表恒等式：总资产 = 总负债（单位亿元，容差 1 亿）。这是**物理约束**、与口径无关 —— "
+     "任一侧列被错映射（源列改名后错位、COL_MAP 漏改）都会立刻打破它"),
+    ("cncb_scale", "cn_cb_balance_monthly", "where_count",
+     {"where": "total_assets IS NOT NULL AND (total_assets < 10000 OR total_assets > 1000000)",
+      "max_count": 0},
+     "warning", 1,
+     "总资产量级守护（单位亿元：实测 2026-08 = 498,568 亿 ≈ 49.9 万亿）。"
+     "挡单位切换（亿元↔万元↔元）与「取到同名但含义不同的科目」"),
+    # ---------- cb_policy_rate（多国央行政策利率决议：美/欧/日/英） ----------
+    ("cbpr_uniq", "cb_policy_rate", "unique_index",
+     {"cols": ["country_code", "event_date"], "expect": "exists"},
+     "info", 1, "幂等保障：uk_country_date(country_code, event_date)"),
+    ("cbpr_rate_notnull", "cb_policy_rate", "where_count",
+     {"where": "rate IS NULL", "max_count": 0},
+     "warning", 1,
+     "利率非空：采集器**只写「今值」非空的有效决议行**（源表更晚的日期行今值为空 —— 那是"
+     "「尚未发布」而不是「利率为 0」）。本规则守住这个约定：否则表内会混入空决议，"
+     "下游「最新一次决议」的判断会被推到根本没有利率的那天"),
+    ("cbpr_country_whitelist", "cb_policy_rate", "where_count",
+     {"where": "country_code NOT IN ('US', 'EU', 'JP', 'UK')", "max_count": 0},
+     "warning", 1,
+     "国家白名单：只有美/欧/日/英四个央行（韩国央行 akshare 无接口 —— 属已知缺口，见设计文档 §2.4 A4，"
+     "该层降级为「结果观测」：只用 KOSPI + 韩元汇率）"),
+    ("cbpr_rate_range", "cb_policy_rate", "where_count",
+     {"where": "rate IS NOT NULL AND (rate < -2 OR rate > 30)", "max_count": 0},
+     "warning", 1,
+     "政策利率取值域 [-2, 30]%。负值合法（欧元区 2014-2019 曾 -0.5%），上限 30% 覆盖全部历史高利率期，"
+     "只挡量纲错（百分数↔小数会差 100 倍）"),
+    ("cbpr_rows", "cb_policy_rate", "row_count_total",
+     {"min_rows": 1300}, "warning", 1,
+     "决议总行数下限（实测 1,395 条；防误清空）"),
+    ("cbpr_fresh", "cb_policy_rate", "date_floor",
+     {"date_col": "event_date", "days_back": 400},
+     "warning", 0,
+     "央行决议新鲜度 —— **上游整体停更，刻意关闭（enabled=0）**。2026-09-25 实测："
+     "`macro_bank_*_interest_rate` 全族最后有效「今值」停在 2025-07~08（距今 14 个月），"
+     "穷举 11 个 macro_bank_* 皆然。⇒ 本表只能读历史方向，不能当当前政策利率用（UI 已标注）。"
+     "钩子规则：上游恢复后改 enabled=1"),
+    # ---------- global_usd_index_daily（自算美元指数 + DINIW 快照标定） ----------
+    ("dxy_uniq", "global_usd_index_daily", "unique_index",
+     {"cols": ["trade_date"], "expect": "exists"},
+     "info", 1, "幂等保障：trade_date 主键"),
+    ("dxy_fresh", "global_usd_index_daily", "freshness_daily",
+     {"date_col": "trade_date", "warn_days": 5, "grace_days": 2},
+     "warning", 1,
+     "自算美元指数新鲜度（依赖人民币中间价宽表 `currency_boc_safe`，随银行间工作日更新；"
+     "grace 2 天覆盖周末与假期）"),
+    ("dxy_calc_wm", "global_usd_index_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "dxy_calc", "max_gap_rows": 2},
+     "warning", 1,
+     "自算 DXY 列水位线（本表核心列；容忍 2 行 = 中间价与快照之间固有的 1~2 日错位）"),
+    ("dxy_vs_snapshot", "global_usd_index_daily", "where_count",
+     {"where": "dxy_calc IS NOT NULL AND dxy_snapshot IS NOT NULL "
+               "AND ABS(dxy_calc - dxy_snapshot) > 1.5",
+      "max_count": 0},
+     "warning", 1,
+     "★ 标价法单位错的通用网：自算 DXY 与 ICE 官方快照（新浪 DINIW）的整值偏差不得超过 1.5 点（≈1.5%）。"
+     "2026-09-25 事故：`currency_boc_safe` 混用两种标价法，采集器把间接标价的瑞典克朗当直标 ⇒ "
+     "USDSEK 算成 4.58（真值 9.94）、自算 DXY 偏低 3.3%，还伪装成「固有口径偏离」骗过了人工复核；"
+     "修正后偏差 +0.085 点。成分列自己不会报错、行数也不变，只有整值对账能一眼看出来"),
+    ("dxy_component_range", "global_usd_index_daily", "where_count",
+     {"where": "(eur_usd IS NOT NULL AND (eur_usd < 0.8 OR eur_usd > 1.7)) "
+               "OR (usd_jpy IS NOT NULL AND (usd_jpy < 70 OR usd_jpy > 220)) "
+               "OR (gbp_usd IS NOT NULL AND (gbp_usd < 0.9 OR gbp_usd > 2.0)) "
+               "OR (usd_cad IS NOT NULL AND (usd_cad < 0.85 OR usd_cad > 2.0)) "
+               "OR (usd_sek IS NOT NULL AND (usd_sek < 5.5 OR usd_sek > 15)) "
+               "OR (usd_chf IS NOT NULL AND (usd_chf < 0.55 OR usd_chf > 1.5))",
+      "max_count": 0},
+     "warning", 1,
+     "六个成分交叉汇率的量级守护（区间取 2015 以来实测极值再放约 15% 余量）。"
+     "采集器内已有同款断言（`_CROSS_RANGE`，越界即 raise），本条是**第二道网**："
+     "断言只管本次写入，规则管**已在库里的历史行**（含手工修补、历史回填、源口径变更后的存量）"),
+    ("dxy_snapshot_wm", "global_usd_index_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "dxy_snapshot", "max_gap_rows": 5},
+     "warning", 1,
+     "快照列水位线（容忍 5 行：DINIW 是实时报价、非交易日无新值，且快照自 2026-09-24 起才逐日累积）。"
+     "该列是 `dxy_vs_snapshot` 的标定基准 —— 它一旦断供，整值对账会**静默退化**成「无从校验」，"
+     "所以必须单独守它"),
+]
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
+    # 2026-09-25 货币流动性批次 2C：海外指数扩到 10 条腿（跨亚/欧/美三个时区）后，
+    # 本规则「全表 MAX(trade_date) 那一日的行数 ≥ 3」的结果开始取决于体检时刻
+    # （新浪 gi 会返回当日盘中 bar，盘中跑时只有 N225 一行 → 假 fail），
+    # 已由 overseas_spx_fresh / overseas_dax_fresh / overseas_n225_fresh / overseas_kospi_fresh
+    # 四条逐腿 date_floor_where 替代。详见 CONSUMPTION_RULES 中该段的注释。
+    "overseas_rows_latest",
     "frozen_dividend_rows",       # → dividend_fresh + dividend_rows
     "frozen_margin_rows",         # → margin_freshness + margin_rows
     "frozen_jgdy_rows",           # → jgdy_fresh + jgdy_rows
@@ -960,6 +1163,7 @@ def main():
             + [(r, "daily") for r in CONSUMPTION_RULES]    # 2026-09-19 Batch C 消费端守护（5 表 3 模块）
             + [(r, "daily") for r in DEBT_RULES]           # 2026-09-19 Batch D3 已知技术债监控
             + [(r, "daily") for r in REF_RULES]             # 2026-09-24 引用完整性 + 名册停更守护
+            + [(r, "daily") for r in LIQUIDITY_RULES]       # 2026-09-25 货币流动性批次 2（3 新表 + 自算 DXY）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:

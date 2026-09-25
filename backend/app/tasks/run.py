@@ -55,6 +55,12 @@ from ..collectors.overseas_index_sync import OverseasIndexSyncCollector
 from ..collectors.currency_boc_sync import CurrencyBocSyncCollector
 from ..collectors.fund_new_issue_sync import FundNewIssueSyncCollector
 from ..collectors.stock_repurchase_sync import StockRepurchaseSyncCollector
+# 2026-09-25 货币流动性批次 2（中国数量维度 + 多国央行利率 + 美元指数自算）
+# 对应《货币流动性观测体系设计_2026-09-25.md》§6 批次 2 的三张新表
+from ..collectors.cn_liquidity_sync import CnLiquiditySyncCollector
+from ..collectors.cn_cb_balance_sync import CnCbBalanceSyncCollector
+from ..collectors.cb_policy_rate_sync import CbPolicyRateSyncCollector
+from ..collectors.usd_index_sync import UsdIndexSyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -776,6 +782,76 @@ def run_stock_repurchase_sync(params: dict) -> int:
     return result["records_written"]
 
 
+def run_cn_liquidity_sync(params: dict) -> int:
+    """中国货币供应 / 社融 / 信贷 / 准备金率同步（cn_liquidity_monthly，月度）
+
+    货币流动性批次 2A「数量维度」——价格只反映边际供需，数量反映水位。
+    ⚠️ 上游时效实测：M0/M1/M2 与信贷至 2026-08，**社融源停更于 2026-04**
+      （`macro_china_shrzgm` 出自商务数据中心，东财 datacenter 无对应报告名），
+      故社融列允许整体为空，逐列水位由采集器 run_steps 分别暴露。
+    params: timeout_sec(120)
+    """
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = CnLiquiditySyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 中国流动性 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_cn_cb_balance_sync(params: dict) -> int:
+    """中国央行资产负债表同步（cn_cb_balance_monthly，月度，28 科目）
+
+    货币流动性批次 2A「央行行为」——「对其他存款性公司债权」就是央行通过
+    MLF/逆回购/PSL 投给银行的资金：扩张 = 放水、收缩 = 收水（中国式 QE 的直接观测）。
+    ⚠️ 该表**只镜像源值、不存派生列**；源列名缺失即 raise（防拼错静默写 NULL）。
+    params: timeout_sec(90)
+    """
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = CnCbBalanceSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_cb_policy_rate_sync(params: dict) -> int:
+    """多国央行政策利率决议同步（cb_policy_rate，美/欧/日/英）
+
+    货币流动性批次 2B「央行行为」——全球央行方向共振度。
+    ⚠️ **上游整体停更**：`macro_bank_{usa,euro,japan,english}_interest_rate` 全族
+      最后一条有效「今值」统一停在 2025-07~08（表内更晚的日期行今值为空）。
+      采集器只写入「今值非空」的有效决议行，并在 note 里强制标注，**不改判成功**。
+    params: timeout_sec(90)
+    """
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = CbPolicyRateSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 央行利率 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_usd_index_sync(params: dict) -> int:
+    """美元指数自算 + DINIW 快照标定（global_usd_index_daily）
+
+    货币流动性批次 2B「外部约束」——G1 全球美元总闸门。
+    官方历史源全数不可用（东财 push2his 域名不通、新浪 hq/daily 不支持 UDI/DINIW），
+    故用 `currency_boc_safe` 的 6 个 DXY 成分货币按 ICE 标准公式自算；
+    另用新浪实时快照逐日累积做标定基准（实测偏差 +0.085%）。
+    ⚠️ 该表不能与 `market_current_sync` 下的**实时行情表**混用同一份 TTL；
+      本任务写的是「按日的历史值」，快照缺失时降级为仅有自算列。
+    params: timeout_sec(90) / first_lookback_days(3650 首次回扫 10 年)
+    """
+    p = _task_params(params, {"timeout_sec": 90, "first_lookback_days": 3650})
+    collector = UsdIndexSyncCollector(
+        timeout_sec=float(p.get("timeout_sec", 90)),
+        first_lookback_days=int(p.get("first_lookback_days", 3650)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 美元指数 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -829,6 +905,11 @@ TASKS = {
     "currency_boc_sync": run_currency_boc_sync,
     "fund_new_issue_sync": run_fund_new_issue_sync,
     "stock_repurchase_sync": run_stock_repurchase_sync,
+    # 2026-09-25 货币流动性批次 2（三张新表 + 一个自算派生表）
+    "cn_liquidity_sync": run_cn_liquidity_sync,
+    "cn_cb_balance_sync": run_cn_cb_balance_sync,
+    "cb_policy_rate_sync": run_cb_policy_rate_sync,
+    "usd_index_sync": run_usd_index_sync,
 }
 
 
