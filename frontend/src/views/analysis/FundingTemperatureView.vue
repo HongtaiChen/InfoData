@@ -164,13 +164,15 @@ function clueText(c: Clue): string {
 
     <KpiCards :items="kpis" />
 
-    <!-- ④ 交叉印证：三条线索 -->
-    <NCard id="ft-cross" size="small" class="ft-card"
-           :title="`三条独立资金线索的交叉印证（顺风 ${temperature?.score ?? '--'}/${temperature?.total ?? 3}）`">
+    <!-- ④ 交叉印证：三条线索
+         原标题「三条独立资金线索的交叉印证（顺风 2/3）」把计数写进标题（会随数据漂移），
+         且卡内每条线索本就带自己的顺风标签 ⇒ 标题只问问题，计数下沉为 caption。 -->
+    <NCard id="ft-cross" size="small" class="ft-card" title="三条资金线索是否互相印证？">
       <div class="ft-temp" :class="`ft-temp--${temperature?.tone ?? 'normal'}`">
         <span class="ft-temp-badge">{{ temperature?.level ?? '--' }}</span>
         <span class="ft-temp-text"><RichText :text="temperature?.reading" /></span>
       </div>
+      <div class="card-cap">顺风 {{ temperature?.score ?? '--' }} / {{ temperature?.total ?? 3 }} 条线索</div>
       <div class="ft-clues">
         <div v-for="c in clues" :key="c.key" class="ft-clue" :class="clueCls(c)">
           <div class="ft-clue-head">
@@ -234,7 +236,7 @@ function clueText(c: Clue): string {
         </div>
       </div>
       <div class="ft-foot">
-        ⚠️ 只统计**完整月**（最新月往往只覆盖到月中，不剔除会让近 3 月合计断崖）。
+        ⚠️ 只统计<b>完整月</b>（最新月往往只覆盖到月中，不剔除会让近 3 月合计断崖）。
         权益/固收按基金类型子串归并（债券/固收/货币 → 固收；股票/偏股/灵活/平衡 → 权益；其余入其他）。
       </div>
     </NCard>
@@ -250,7 +252,7 @@ function clueText(c: Clue): string {
       <DualLineTrend v-if="repurchase?.series" :dates="repurchase.series.dates"
                      :series="repSeries" height="240px" />
       <div class="ft-foot">
-        ⚠️ 按**回购起始时间**统计 —— 不能用"最新公告日"：同一计划的公告日会被后续公告覆盖，
+        ⚠️ 按<b>回购起始时间</b>统计 —— 不能用"最新公告日"：同一计划的公告日会被后续公告覆盖，
         历史月份被抽空、近期永远处于最高分位（实测该口径分位恒为 100%，无区分度）。
       </div>
 
@@ -309,6 +311,9 @@ function clueText(c: Clue): string {
 .ft-dim { color: #9CA3AF; }
 .ft-num { font-variant-numeric: tabular-nums; }
 .ft-foot { font-size: 11px; color: #9CA3AF; margin-top: 10px; line-height: 1.65; }
+/* 页脚为**模板内静态文案**（非后端下发），故用 <b> 而非 `**`：`**` 只由 RichText 解析，
+   写在模板里会原样渲染（2026-09-25 全站扫描实测漏点）。 */
+.ft-foot b { color: #1F2937; font-weight: 600; }
 .ft-note { font-size: 11px; color: #9CA3AF; margin-top: 10px; line-height: 1.65; }
 .ft-sub-title { font-size: 12px; color: #6B7280; margin: 14px 0 8px; }
 .ft-two-col { display: grid; grid-template-columns: 1fr 1.1fr; gap: 16px; }

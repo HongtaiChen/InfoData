@@ -174,47 +174,110 @@ def _card_verdict(cn: dict, gap_us, overnight: dict) -> dict:
 # ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询 ----
 # 模块纪律不变：本模块是「对照」型、输出相对关系而非机会判断，三张卡都不用金色
 # （金专供亮点/极值信号），仅传导进极值区（≥90 / ≤10 分位）时转琥珀提醒。
+#
+# 文案四判据 V1~V4 见 registry.py 卡片墙契约 ⑨（回归探针 _scratch/_probe_cardtext.py）。
+# 本模块 2026-09-25 踩过 V2/V3：涨跌卡的判读条原来把 5 个市场的 20 日收益逐个念一遍
+# （实测 66 字），既超出半宽卡一行能容的 28 字、又把同卡 KPI 盒里的读数复述了一遍。
+# 现在改成两条**动态生成**的判断句，数字留在 KPI 区与 detail。
 
 
 def _verdict_overseas(cn: dict, overseas: list) -> dict:
-    """q1 外面在涨还是跌 —— A 股与海外各市场 20 日收益的方向陈述"""
+    """q1 外面在涨还是跌 —— 海外涨跌家数 + A 股方向（动态生成，不写死「普涨/互现」）
+
+    规则：海外全涨 = 普涨 / 全跌 = 普跌 / 其余 = 涨跌互现；A 股与**全体**海外反向时
+    单独点出「独跌/独涨」（那才是真正的独立行情，比笼统的「下跌」有信息量）。
+    """
     c = cn.get("ret_20")
     if c is None:
         return {"headline": "跨市场数据未就绪", "detail": "", "tone": "normal"}
-    head = f"A股 20 日 {c:+.2f}%"
-    names = "、".join(f"{m['name']} {m['ret_20']:+.2f}%" for m in overseas if m.get("ret_20") is not None)
-    if names:
-        head += f"｜{names}"
-    return {"headline": head, "detail": "行情方向陈述：涨跌语义由 KPI 数字的红绿承载，判读条不重复表态",
+    ovs = [m for m in overseas if m.get("ret_20") is not None]
+    n, up = len(ovs), sum(1 for m in ovs if m["ret_20"] > 0)
+    if n == 0:
+        ow = ""
+    elif up == n:
+        ow = "海外普涨"
+    elif up == 0:
+        ow = "海外普跌"
+    else:
+        ow = "海外涨跌互现"
+    if c < 0:
+        local = "A股独跌" if (n and up == n) else "A股下跌"
+    elif c > 0:
+        local = "A股独涨" if (n and up == 0) else "A股上涨"
+    else:
+        local = "A股收平"
+    head = f"{ow}，{local}" if ow else local
+    # detail 只放**未上墙**的两个市场：标普500 / 恒生指数已作为 KPI 盒上墙（card_rank 2/3），
+    # 在这里再写一遍就是把同一读数说两遍（V2 的精神）。
+    # ⚠️ 中国香港恒生指数属「海外」口径 —— 本模块的「海外」是相对 A 股的对照集，非国别划分。
+    shown = {"SPX", "HSI"}
+    rest = [m for m in overseas if m.get("code") not in shown and m.get("ret_20") is not None]
+    return {"headline": head,
+            "detail": "｜".join(f"{m['name']} {m['ret_20']:+.2f}%" for m in rest),
             "tone": "normal"}
 
 
+def _rel_word(gap, target: str) -> str:
+    """A 股对某市场的超额 → **判断语**「对美股明显偏弱 / 小幅偏强 / 基本持平」。
+
+    ⚠️ 用「偏强/偏弱」而非 KPI status 里的「跑赢/落后美股」是刻意的：判读条给判断、
+    status 给方向词。实测照抄会得到「明显落后美股…」，其中「落后美股」与同卡
+    gap_cn_us 的 status 逐字相同（V4 状态回声）。
+    阈值口径：|超额| < 0.5pp 视为噪音（约当一次交易成本量级，方向不足以判断强弱）→ 基本持平；
+             0.5~3pp → 小幅；≥3pp → 明显。
+    """
+    a = abs(gap)
+    if a < 0.5:
+        return f"对{target}基本持平"
+    return f"对{target}{'小幅' if a < 3 else '明显'}{'偏强' if gap >= 0 else '偏弱'}"
+
+
 def _verdict_relative(gap_us, gap_hk) -> dict:
-    """q2 我们相对外面强还是弱 —— A 股对各市场的 20 日超额"""
+    """q2 我们相对外面强还是弱 —— 幅度词由 _rel_word 动态生成（0.5pp 噪音线 / 3pp 显著线）
+
+    ⚠️ 两侧都「基本持平」时必须合并成一句（「对美股、港股均基本持平」）：
+    分开写会得到「对美股基本持平，对港股基本持平」——「基本持平」重复两次，直接违反 V1
+    （同一个子串在一句里出现 ≥2 次），这是实测跑出来的，不是假想。
+    """
     if gap_us is None and gap_hk is None:
         return {"headline": "超额数据未就绪", "detail": "", "tone": "normal"}
-    bits = []
-    if gap_us is not None:
-        bits.append(f"{'跑赢' if gap_us >= 0 else '落后'}美股 {abs(gap_us):.2f}pp")
-    if gap_hk is not None:
-        bits.append(f"{'跑赢' if gap_hk >= 0 else '落后'}恒生 {abs(gap_hk):.2f}pp")
-    return {"headline": "、".join(bits),
+    if (gap_us is not None and gap_hk is not None
+            and abs(gap_us) < 0.5 and abs(gap_hk) < 0.5):
+        head = "对美股、港股均基本持平"
+    else:
+        bits = []
+        if gap_us is not None:
+            bits.append(_rel_word(gap_us, "美股"))
+        if gap_hk is not None:
+            bits.append(_rel_word(gap_hk, "港股"))
+        head = "，".join(bits)
+    return {"headline": head,
             "detail": "超额为正不一定代表「我们强」——普跌里跌得少也是正超额，与方向卡成对阅读",
             "tone": "normal"}
 
 
 def _verdict_conduction(overnight: dict) -> dict:
-    """q3 外面的信息能不能传导进来 —— 隔夜传导同向率及其近一年分位"""
+    """q3 外面的信息能不能传导进来 —— 同向率的分位强弱（数值归 KPI 区，判读条只给判断）"""
     sr, sp = overnight.get("same_rate"), overnight.get("same_rate_pct")
     if sr is None:
         return {"headline": "传导数据未就绪", "detail": "", "tone": "normal"}
-    head = f"隔夜传导 {sr:.0f}%"
-    if sp is not None:
-        head += f"（近一年 {sp:.0f}% 分位）"
+    if sp is None:
+        head = "外部联动强度待定"
+    elif sp <= 10:
+        head = "外部联动明显减弱，外围涨跌参考意义下降"
+    elif sp >= 90:
+        head = "外部联动异常强，外围涨跌高度传导"
+    elif sp <= 30:
+        head = "外部联动偏弱"
+    elif sp >= 70:
+        head = "外部联动偏强"
+    else:
+        head = "外部联动处于常态"
     # 传导异常强（≥90）或几近失效（≤10）= 「外围影响」叙事在走样 → 提醒（与 _card_verdict 同规）
     tone = "caution" if sp is not None and (sp >= 90 or sp <= 10) else "normal"
     return {"headline": head,
-            "detail": f"近 {ROLL_DAYS} 个交易日「隔夜海外涨跌 → 当日 A 股同向跟随」的比例，衡量外部信息向内的传导强度",
+            "detail": f"滚动 {ROLL_DAYS} 日「隔夜海外涨跌 → 当日 A 股同向跟随」的比例："
+                      "50% = 完全无关，持续高于 60% 才算外部信息真在传导",
             "tone": tone}
 
 
@@ -293,7 +356,11 @@ def cross_market(as_of: str | None = None, trend_days: int = 500) -> dict:
     gap_us = next((g["gap_pp"] for g in gaps if g["code"] == "SPX"), None)
     gap_hk = next((g["gap_pp"] for g in gaps if g["code"] == "HSI"), None)
 
-    # KPI（card_rank 1~3 上卡片；半宽卡放 3 个）——三个盒子各答一个正交问题：
+    # KPI（card_rank 在**各自 question 作用域内**排序，序号小者优先上卡片；半宽卡放 3 个）
+    #   ⚠️ 排序是「作用域内」而非全局：q1/q2/q3 各有一套，跨作用域同号互不影响。
+    #   ⚠️ 且一旦某 scope 内有任一 KPI 标了 card_rank，同 scope 未标的会被**整体丢弃**
+    #      （registry 契约 ② 的 pickCardKpis 行为），故同一张卡上要显示的几个论据必须**都标** rank。
+    # 三个盒子各答一个正交问题：
     #   我们在涨还是跌（cn_ret20）/ 相对外面强还是弱（gap_cn_us）/ 外面能不能传导进来（overnight_same）
     # tone：cn_ret20 是**真正的行情涨跌**→ updown（红涨绿跌，A 股铁律）；
     #      gap_cn_us 是**跨市场收益差**→ diff（主色蓝 + 保留正负号，见契约第 ④ 条）；
@@ -323,15 +390,27 @@ def cross_market(as_of: str | None = None, trend_days: int = 500) -> dict:
                  "50% = 完全无关，持续高于 60% 说明外部信息确实在传导；"
                  "⚠️ 它衡量的是“跟不跟”，不衡量幅度（幅度看相关系数）"},
         # 未标 card_rank：详情页完整呈现
-        *[{"key": f"ret20_{m['code']}", "questions": ["q1"], "label": f"{m['name']}（20日）", "value": m["ret_20"],
+        # ⚠️ 例外：标普500 与恒生指数于 2026-09-25 补 card_rank（2 / 3）——
+        #    涨跌卡问的是「**外面**在涨还是跌」，而卡上原来只有 A 股自己一条腿，
+        #    判读条讲「海外涨跌互现」却在卡上无从核对。纳指/道指仍不上卡
+        #    （半宽卡放 3 个盒子已是上限，且标普 + 恒生两条腿已够回答「海外同向还是分化」）。
+        *[{"key": f"ret20_{m['code']}", "questions": ["q1"],
+           "card_rank": {"SPX": 2, "HSI": 3}.get(m["code"]),
+           "label": f"{m['name']}（20日）", "value": m["ret_20"],
            "unit": "%", "tone": "updown",
            "status": f"当日 {m['change_pct']:+.2f}%" if m["change_pct"] is not None else "数据未就绪",
            "pct": m["ret_20_pct"], "scale": None, "highlight": False, "anchor": "cm-trend",
            "hint": f"{m['region']} · {m['name']} 20 个**当地交易日**收益（各市场交易日不同步，"
                    "不构成严格同期对比，故只作侧面参照）"} for m in markets],
-        {"key": "gap_cn_hk", "questions": ["q2"], "label": "A股 − 中国香港恒生（20日超额）", "value": gap_hk,
-         "unit": "pp", "tone": "diff", "status": "与港股比", "pct": None, "scale": None,
+        {"key": "gap_cn_hk", "card_rank": 3, "questions": ["q2"], "label": "A股 − 中国香港恒生（20日超额）", "value": gap_hk,
+         "unit": "pp", "tone": "diff",
+         "status": ("跑赢港股" if (gap_hk or 0) >= 0 else "落后港股") if gap_hk is not None else "数据未就绪",
+         "pct": None, "scale": None,
          "highlight": False, "anchor": "cm-gap",
+         # ⚠️ card_rank=3 于 2026-09-25 补上，与 gap_cn_us 同属 q2 作用域：
+         #    此前只有 gap_cn_us 标了 rank，触发 pickCardKpis 的
+         #    `ranked.length ? ranked : scoped` —— 同卡未标的 gap_cn_hk 被**整体丢弃**，
+         #    结果判读条讲「对美股…、对港股…」两个对象，读数区却只剩一个（判读-读数不对称）。
          "hint": "中证全指 − 恒生指数 20 日收益。恒生与 A股 交易时段部分重叠，"
                  "相关性天然高于美股，超额也更小 —— 这是正常的，不是信号"},
     ]

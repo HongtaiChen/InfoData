@@ -56,7 +56,15 @@ watch(moduleId, async (id) => {
         <div class="am-head-left">
           <NButton size="tiny" quaternary @click="router.push('/analysis')">← 分析研究</NButton>
           <h2 class="am-title">{{ moduleMeta.icon }} {{ moduleMeta.name }}</h2>
-          <NTag size="small" :bordered="false" type="info">{{ moduleMeta.group }}</NTag>
+          <!-- 领域标签：只在「模块 ≠ 所属领域」时渲染，即 track 卡页（如 /analysis/market-wind-position
+               → 显示「市场风向」）。detail 页自身即领域，再打同一张标签只是与标题重复。
+               ⚠️ 改前无条件渲染，且 group 是另一套分类 ⇒ 跨市场对照页顶着「市场风向」（2026-09-25 修）。 -->
+          <NTag
+            v-if="moduleMeta.group && moduleMeta.group !== moduleMeta.name"
+            size="small"
+            :bordered="false"
+            type="info"
+          >{{ moduleMeta.group }}</NTag>
           <NTag size="small" :bordered="false">{{ moduleMeta.kind === 'track' ? '跟踪' : '研究' }}</NTag>
         </div>
         <div class="am-desc">

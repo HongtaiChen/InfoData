@@ -43,3 +43,23 @@ a {
 .up { color: var(--color-up); }
 .down { color: var(--color-down); }
 .flat { color: var(--color-flat); }
+
+/* 卡内 caption（2026-09-25）：详情页卡片标题只写「回答什么问题」，
+   原先塞在标题里的功能清单 / 计数 / 操作提示 / 图例一律下沉到这里。
+   全局类而非各视图 scoped 复制 —— 五张详情页都要用同一款，口径一致才不会各处走形。
+   规范依据：docs/design/分析研究模块交互设计规范.md §1.3 契约③。 */
+.card-cap {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+/* 卡内小标题：一张卡里有多个子块时用它分隔（如「宽度 / 量能 / 趋势」），
+   否则子块之间只有一条虚线，读者不知道换了一段。 */
+.card-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin-bottom: 8px;
+}
+/* 行内用法（如跟在 flex 行首）—— 去掉下边距，否则会把该行的基线撑开 */
+.card-sub.is-inline { margin-bottom: 0; }

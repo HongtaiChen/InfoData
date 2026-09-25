@@ -584,26 +584,64 @@ def _card_verdict(bp, ra, erp_pct, xcheck: dict, div: dict | None = None) -> dic
 # ---- 三卡子判读（2026-09-19 拆卡）：把四合一判读按「回答三件事」拆开，每张卡只答一件事 ----
 # 底数与 _card_verdict 完全相同（bp / erp / xcheck），零额外查询；阈值也与其一致，仅拆分呈现。
 # 金色纪律不变：亮得少才算信号（位置 ≤20 / 估值分位 ≥80 / 背离 ≥90 分位才点亮）。
+#
+# ⚠️ 文案四判据 V1~V4（2026-09-25，见 registry.py 卡片墙契约 ⑨），本模块踩过 V1 与 V2：
+#   V1 拼接重复 —— 原写法 `"、情绪" + _sent_status(...)`，而 _sent_status 的返回值**自带「情绪」
+#      前缀**（"情绪转冷"/"情绪偏暖"），拼出来是「情绪**情绪**转冷」。修法：把前缀与词表拆开，
+#      由本函数统一冠「情绪」，_sent_status 只输出方向词。
+#   V2 数字复述 —— 原判读条把分位再念一遍（「近一年低位（19% 分位）」），而分位已由刻度条
+#      承载（scale.label「近 250 日」+ 刻度文字 19.13%），判读条再念一遍 = 白占一行。
+#      现在判读条只留判断（低位/偏高 + 情绪方向），分位归 KPI 区。
+
+
+def _pos_sent_note(bp, se, se_prev) -> str:
+    """位置 × 情绪的**合成判断**（趋势语）
+
+    ⚠️ 与 `_sent_status`（KPI status）的分工是刻意的：status 给**状态**（情绪转冷），
+    判读条给**趋势**（情绪仍在探底 / 正在修复）。两者同源于 `se - se_prev` 的符号，
+    不是第二份口径；但用词必须不同 —— 实测照抄 status 会得到
+    「位置在低位区，情绪转冷」，其中「情绪转冷」与同卡 sentiment 的 status 逐字相同
+    （V4 状态回声），等于判读条白占一行。
+    """
+    if se is None:
+        return ""
+    if se_prev is None:
+        return "情绪偏暖" if se > 0 else "情绪偏冷"
+    rising = se - se_prev > 0
+    # 位置偏低时谈「修复/探底」（还没热起来），位置不低时谈「升温/转冷」（已在半山腰）
+    if bp is not None and bp <= 40:
+        return "情绪正在修复" if rising else "情绪仍在探底"
+    return "情绪还在升温" if rising else "情绪已经转冷"
 
 
 def _verdict_position(bp, se, se_prev) -> dict:
-    """q1 现在处在什么位置 —— 大势位置分位 + 情绪温度方向"""
+    """q1 现在处在什么位置 —— 大势位置 + 情绪趋势（判断句，不复述分位）"""
     if bp is None:
         return {"headline": "位置数据未就绪", "detail": "", "tone": "normal"}
-    head = f"近一年{_pos_status(bp)}（{bp:.0f}% 分位）"
-    if se is not None:
-        head += f"、情绪{_sent_status(se, se_prev)}"
+    head = f"位置在{_pos_status(bp)}区"
+    note = _pos_sent_note(bp, se, se_prev)
+    if note:
+        head += f"，{note}"
     tone = "opportunity" if bp <= 20 else "caution" if bp >= 80 else "normal"
     return {"headline": head, "detail": "", "tone": tone}
 
 
 def _verdict_valuation(erp_val, erp_pct) -> dict:
-    """q2 估值贵不贵 —— 股债性价比 ERP 及其长窗口分位（近 250 个月末）"""
+    """q2 估值贵不贵 —— 股债性价比 ERP 及其长窗口分位（近 250 个月末）
+
+    ⚠️ 判读条不写分位数字（V2）：分位已由 ERP 刻度条承载。估值是慢变量
+    （实测 71.6 连续 14 个交易日不动），判读条必须把它「不随日频波动」的属性说出来，
+    否则用户会拿它当日频信号读。
+    """
     if erp_pct is None:
         return {"headline": "估值数据未就绪", "detail": "", "tone": "normal"}
-    word = "偏便宜" if erp_pct >= 60 else "偏贵" if erp_pct <= 40 else "中性"
-    head = f"股债性价比{word}（月末序列 {erp_pct:.0f}% 分位）"
-    detail = "" if erp_val is None else f"ERP {erp_val:.2f}pp —— 分位越高 = 股票相对债券越便宜"
+    if erp_pct >= 60:
+        head = "股票相对债券有性价比，但属慢变量"
+    elif erp_pct <= 40:
+        head = "股票相对债券偏贵，且属慢变量"
+    else:
+        head = "股债性价比中性，属慢变量"
+    detail = "分位越高 = 股票相对债券越便宜；月末序列，不随日频波动"
     # 便宜到极值（≥80 分位）才是机会；贵到极值（≤20）才提醒 —— 与 KPI highlight 的 ≥90
     # 略有差异是有意的：估值是慢变量，判读条阈值放宽一档增加可读性
     tone = "opportunity" if erp_pct >= 80 else "caution" if erp_pct <= 20 else "normal"
@@ -611,12 +649,16 @@ def _verdict_valuation(erp_val, erp_pct) -> dict:
 
 
 def _verdict_structure(ra, sc, xcheck: dict, div: dict | None) -> dict:
-    """q3 内部结构有没有背离 —— 风偏方向 + 大小盘 + 交叉印证背离数的历史分位"""
+    """q3 内部结构有没有背离 —— 风偏方向 + 大小盘 + 交叉印证背离数的历史分位
+
+    ⚠️ V1：原写法 `"、大小盘" + "小盘占优"` 拼出「大小盘**小盘**占优」。
+        修法同 _verdict_position：前缀（大小盘）只在拼接处出现一次。
+    """
     if ra is None and sc is None:
         return {"headline": "结构数据未就绪", "detail": "", "tone": "normal"}
     head = "风险偏好" + ("待定" if ra is None else ("偏进攻" if ra >= 0 else "偏防守"))
     if sc is not None:
-        head += f"、大小盘{'小盘占优' if sc >= 0 else '大盘占优'}"
+        head += f"、{'小盘' if sc >= 0 else '大盘'}相对占优"
     tone = "caution" if (div and (div.get("pct") or 0) >= 90) else "normal"
     return {"headline": head, "detail": _diverge_detail(xcheck, div), "tone": tone}
 

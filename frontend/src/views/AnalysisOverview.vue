@@ -5,21 +5,32 @@
  * 模块来源：GET /api/analysis/registry（配置文件版注册表）
  */
 import { computed, onMounted, ref } from 'vue'
-import { NCard, NEmpty, NSkeleton, NSpin, NTag, NTooltip } from 'naive-ui'
+import { NCard, NEmpty, NSkeleton, NSpin, NTooltip } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import KpiHint, { kpiHintTheme } from '../components/analysis/KpiHint.vue'
+import RichText from '../components/analysis/RichText.vue'
 import api from '../api'
 
 interface RegistryItem {
   module_id: string
+  /** 卡片短名（**不含领域前缀**，如「位置」）—— 领域名由组标题承担，见 registry 契约 ⑧ */
   name: string
   group: string
   /** track=卡片墙 / research=研究目录 / detail=详情型元数据（不上墙，2026-09-19 拆卡新增） */
   kind: 'track' | 'research' | 'detail'
   icon?: string
   desc: string
-  /** 'full' = 主卡占满整行（放下更多 KPI）；缺省为半宽卡。由后端声明，前端不硬编码模块名 */
-  card_span?: 'full'
+  /**
+   * 卡片宽度档（2026-09-25 新增，按上墙论据数选）：
+   *   narrow = 1 个论据 / half = 2~3 个 / full = ≥4 个（整行）。
+   * 新档 narrow 之前只有 'full'，缺省为半宽；仍由后端声明，前端不硬编码模块名。
+   */
+  card_span?: 'full' | 'half' | 'narrow'
+  /**
+   * 本卡问的那句话（2026-09-25 新增，registry 契约 ⑧）—— 卡片副标题。
+   * 卡片名只留短名，用户需要「这张卡到底在回答什么」时才看得懂，问句就是这个锚。
+   */
+  question_text?: string
   /**
    * 拆卡字段（2026-09-19，registry 卡片墙契约 ⑦）：本卡回答第几件事 / 取数端点名 /
    * 点击跳转的详情页。三张拆卡共用同一份模块响应（后端 ttl_cache），前端按 URL 去重。
@@ -71,7 +82,17 @@ interface CardVerdict {
   tone?: 'normal' | 'opportunity' | 'caution'
 }
 
-const GROUP_ORDER = ['市场风向', '板块与概念', '个股基本面', '资金与情绪', '跟踪清单']
+/**
+ * 研究目录的分区顺序 = registry 里领域的出现顺序（detail 模块自身即领域，见 registry 契约的 group）。
+ * ⚠️ 改前这里是硬编码的旧「固定五类」（含「个股基本面」「跟踪清单」两个从未落地的分类），
+ * 与卡片墙按 detail 聚成的 5 组**不同源**（2026-09-25 收敛为一套）。
+ * 派生而非硬编码：将来新增研究模块时，新领域自动出现在目录里，无需回来改这一行。
+ */
+const GROUP_ORDER = computed<string[]>(() => {
+  const seen: string[] = []
+  for (const m of modules.value) if (m.group && !seen.includes(m.group)) seen.push(m.group)
+  return seen
+})
 
 const router = useRouter()
 // loading 只表示「注册表本身」的加载——它是最轻的一次请求（实测 ~70ms）。
@@ -83,28 +104,62 @@ const modules = ref<RegistryItem[]>([])
 const cardKpis = ref<Record<string, CardKpi[]>>({})
 const cardVerdicts = ref<Record<string, CardVerdict>>({})
 const kpiLoading = ref<Record<string, boolean>>({})
+/** 各卡的数据截止日（后端响应里的 as_of，MM-DD）—— 右上角那一格本该放它，而不是重复的「跟踪」 */
+const cardAsOf = ref<Record<string, string>>({})
 
 /**
- * 卡片放几个 KPI 由**卡片宽度**决定：半宽卡 3 个、整行卡 6 个。
+ * 卡片放几个 KPI 由**卡片宽度档**决定：窄卡 1 个、半宽卡 3 个、整行卡 6 个。
  * ⚠️ 整行卡的真正意义是「放下了更多 KPI」——只跨列不加内容会显得空。
  * 挑选由后端 card_rank 指定，不再取数组前 3 个：原先的 slice(0, 3) 按声明顺序截断，
  * 市场风向恰好把带分位的「大势位置」「股债性价比 ERP」截掉、只留三个同类的 20 日动量
  * （实测 2026-09-19）。口径属于后端，前端只透传。
+ * ⚠️ 二级挑选的**副作用**（2026-09-25 实测）：只要有任一 KPI 带 card_rank，就整体只从
+ *    ranked 里取，**未标 card_rank 的论据会被整体丢掉**（「板块轮动 · 互证」曾因此丢掉概念中位）。
+ *    修法是让该上墙的论据都标上 card_rank，而不是放宽这里的逻辑。
  * 未标 card_rank 的模块回退为数组前 N 个，保证既有模块不受影响。
  */
-const CARD_KPI_LIMIT: Record<string, number> = { half: 3, full: 6 }
+const CARD_KPI_LIMIT: Record<string, number> = { narrow: 1, half: 3, full: 6 }
 
-function cardSpan(m: RegistryItem): 'full' | 'half' {
-  return m.card_span === 'full' ? 'full' : 'half'
+type CardSpan = 'full' | 'half' | 'narrow'
+
+function cardSpan(m: RegistryItem): CardSpan {
+  if (m.card_span === 'full') return 'full'
+  if (m.card_span === 'narrow') return 'narrow'
+  return 'half'
 }
 
-function pickCardKpis(kpis: CardKpi[], span: 'full' | 'half'): CardKpi[] {
+function pickCardKpis(kpis: CardKpi[], span: CardSpan): CardKpi[] {
   const limit = CARD_KPI_LIMIT[span] ?? 3
   const ranked = kpis
     .filter((k) => k.card_rank != null)
     .sort((a, b) => Number(a.card_rank) - Number(b.card_rank))
   return (ranked.length ? ranked : kpis).slice(0, limit)
 }
+
+/**
+ * 组 = 该卡 `detail` 指向的详情模块（15 张卡本就指向 5 个详情页 ⇒ 天然 5 组 × 3 卡，零新增字段）。
+ * 组标题承担领域名，卡片只留短名 —— 原先卡片名写成「市场风向 · 位置」，而 group 字段
+ * （市场风向/板块与概念/资金与情绪）只用于研究目录、卡片墙根本不渲染 ⇒ 领域名被重复 15 次、
+ * 且与组标题两套分类并存（实测 3 个 group 名 vs 5 个卡片前缀）。
+ */
+interface TrackGroup {
+  key: string
+  title: string
+  icon: string
+  /** 组内卡片 span 之和 = 栅格列数，令每行必定铺满（避免右侧留白） */
+  cols: number
+  items: RegistryItem[]
+}
+
+const detailMeta = computed(() => {
+  const map: Record<string, RegistryItem> = {}
+  for (const m of modules.value) {
+    if (m.kind === 'detail') map[`/analysis/${m.module_id}`] = m
+  }
+  return map
+})
+
+const SPAN_COLS: Record<CardSpan, number> = { narrow: 3, half: 4, full: 12 }
 
 /** 刻度圆点位置：夹在 5~95% 内，避免圆点在两端被轨道裁掉半个（不改变读数，只改绘制） */
 function dotLeft(pct: number): string {
@@ -150,6 +205,10 @@ onMounted(async () => {
               ? kpis.filter((k) => (k.questions ?? []).includes(m.question!))
               : kpis
             cardKpis.value[m.module_id] = pickCardKpis(scoped.length ? scoped : kpis, cardSpan(m))
+            // 数据截止日（as_of）：组内三卡同源、值相同；取不到就不显示（不编造「最新」）
+            const asOf = r?.as_of ? String(r.as_of).slice(5) : ''
+            if (asOf) cardAsOf.value[m.module_id] = asOf
+            else delete cardAsOf.value[m.module_id]
             // 判读条：拆卡优先取自己那件事的子判读；后端未发布 verdicts 时回退模块级 verdict
             const v = (m.question ? r?.verdicts?.[m.question] : null) ?? r?.verdict
             if (v?.headline) cardVerdicts.value[m.module_id] = v
@@ -171,6 +230,24 @@ onMounted(async () => {
 })
 
 const trackModules = computed(() => modules.value.filter((m) => m.kind === 'track'))
+
+/** track 卡按 detail 分组的组名/图标取自该详情模块；detail 缺失时回退公共 group（不静默丢卡） */
+const trackGroups = computed<TrackGroup[]>(() => {
+  const out: TrackGroup[] = []
+  for (const m of trackModules.value) {
+    const key = m.detail ?? `/analysis/${m.module_id}`
+    let g = out.find((x) => x.key === key)
+    if (!g) {
+      const meta = detailMeta.value[key]
+      g = { key, title: meta?.name ?? m.group, icon: meta?.icon ?? m.icon ?? '', cols: 0, items: [] }
+      out.push(g)
+    }
+    g.items.push(m)
+    g.cols += SPAN_COLS[cardSpan(m)]
+  }
+  return out
+})
+
 const researchByGroup = computed(() => {
   const map: Record<string, RegistryItem[]> = {}
   for (const m of modules.value.filter((x) => x.kind === 'research')) {
@@ -178,6 +255,11 @@ const researchByGroup = computed(() => {
   }
   return map
 })
+
+/** 骨架数量与完成态一致（窄 1 / 半宽 3 / 整行 6），否则数据到达时布局会跳 */
+function kpiSkeletonCount(m: RegistryItem): number {
+  return CARD_KPI_LIMIT[cardSpan(m)] ?? 3
+}
 
 function open(m: RegistryItem) {
   // 拆卡跳详情：三张分卡同进一个聚合详情页（registry 契约 ⑦ detail 字段）
@@ -243,113 +325,140 @@ function kpiText(k: CardKpi): string {
         </div>
       </NTooltip>
     </div>
-    <div v-if="trackModules.length" class="ao-cards">
-      <NCard
-        v-for="m in trackModules"
-        :key="m.module_id"
-        size="small"
-        hoverable
-        class="ao-card"
-        :class="`ao-card--${cardSpan(m)}`"
-        @click="open(m)"
-      >
-        <div class="ao-card-head">
-          <span class="ao-card-name">
-            {{ m.icon }} {{ m.name }}
-            <!-- 模块定位说明入口（2026-09-19）：原「回答三件事：…」整行独占卡片高度，
-                 收进标题旁 ⓘ 悬浮说明（与 KPI 口径同一款 KpiHint 白底信息卡），
-                 卡片更整洁、判读条上移成为首屏信息。
-                 ⚠️ 点击必须 .stop —— 卡片本身是 @click=open(m) 的跳转按钮。 -->
-            <KpiHint :label="m.name" :hint="m.desc" footer="模块定位说明由后端统一下发">
-              <template #trigger>
-                <span
-                  class="ao-card-q"
-                  role="button"
-                  tabindex="0"
-                  :aria-label="`「${m.name}」回答哪三件事`"
-                  @click.stop
-                >i</span>
-              </template>
-            </KpiHint>
-          </span>
-          <NTag size="tiny" :bordered="false" type="info">跟踪</NTag>
-        </div>
-
-        <!-- 判读条（2026-09-19）：卡片最前的一句话结论。**文案由后端生成**——
-             口径随响应下发、前端只透传不手抄（见 backend/app/analysis/registry.py 卡片墙契约）。
-             ⚠️ 骨架必须单独占位：它与 KPI 是同一个请求返回，若只给 KPI 占位，
-                判读条插入时会把下面整排盒子顶下去，产生可见的布局跳动。 -->
-        <div v-if="kpiLoading[m.module_id]" class="ao-verdict-skel">
-          <NSkeleton height="54px" :sharp="false" />
-        </div>
-        <div
-          v-else-if="cardVerdicts[m.module_id]"
-          class="ao-verdict"
-          :class="`ao-verdict--${cardVerdicts[m.module_id].tone || 'normal'}`"
-        >
-          <div class="ao-verdict-headline">{{ cardVerdicts[m.module_id].headline }}</div>
-          <div v-if="cardVerdicts[m.module_id].detail" class="ao-verdict-detail">
-            {{ cardVerdicts[m.module_id].detail }}
-          </div>
-        </div>
-
-        <!-- KPI 区独立占位：骨架高度对齐 .ao-kpi（8+10+行高×3+8），避免数据到达时布局跳动 -->
-        <div class="ao-card-kpis" v-if="kpiLoading[m.module_id] || cardKpis[m.module_id]?.length">
-          <!-- 骨架数量与高度按卡片宽度推定（整行=6 个 / 半宽=3 个），
-               使加载态与完成态的盒子数量、高度一致，数据到达时不产生布局跳动 -->
-          <template v-if="kpiLoading[m.module_id]">
-            <NSkeleton
-              v-for="i in (cardSpan(m) === 'full' ? 6 : 3)"
-              :key="i"
-              height="84px"
-              :sharp="false"
-            />
-          </template>
-          <template v-else>
-            <div v-for="k in cardKpis[m.module_id]" :key="k.key || k.label" class="ao-kpi">
-              <!-- 口径入口（2026-09-19）：规范 §1.1 第 4 条「口径透明」在卡片墙落地。
-                   ⚠️ 触发元素必须是 ⓘ 本身而非整卡：卡片是 @click=open(m) 的跳转按钮，
-                      整卡悬浮会与「点击进详情」互相干扰；且点击 ⓘ 必须 .stop，
-                      否则冒泡到卡片 → 想看口径却被跳进详情页。 -->
-              <div class="ao-kpi-label">
-                <span class="ao-kpi-label-txt" :title="k.label">{{ k.label }}</span>
-                <KpiHint v-if="k.hint" :label="k.label" :value="kpiText(k)" :hint="k.hint">
+    <div v-if="trackGroups.length" class="ao-groups">
+      <section v-for="g in trackGroups" :key="g.key" class="ao-track-group">
+        <!-- 组标题承担领域名（registry 契约 ⑧）：卡片名只留短名，领域名全页只出现 5 次 -->
+        <div class="ao-track-group-title">{{ g.icon }} {{ g.title }}</div>
+        <!-- 列数 = 组内各卡 span 之和 ⇒ 每行必定铺满（否则窄卡会留下右侧空档）。
+             用 CSS 变量（而非写死列数）是为了让断点能整组降级：见 <style> 里的 @media -->
+        <div class="ao-cards" :style="{ '--ao-cols': String(g.cols) }">
+          <NCard
+            v-for="m in g.items"
+            :key="m.module_id"
+            size="small"
+            hoverable
+            class="ao-card"
+            :class="`ao-card--${cardSpan(m)}`"
+            @click="open(m)"
+          >
+            <div class="ao-card-head">
+              <span class="ao-card-name">
+                {{ m.name }}
+                <!-- 本卡口径入口（2026-09-19）：原「回答三件事：…」整行独占卡片高度，
+                     收进标题旁 ⓘ 悬浮说明（与 KPI 口径同一款 KpiHint 白底信息卡），
+                     卡片更整洁、判读条上移成为首屏信息。
+                     ⚠️ 点击必须 .stop —— 卡片本身是 @click=open(m) 的跳转按钮。 -->
+                <KpiHint :label="`${g.title} · ${m.name}`" :hint="m.desc" footer="本卡口径由后端统一下发">
                   <template #trigger>
                     <span
-                      class="ao-kpi-q"
+                      class="ao-card-q"
                       role="button"
                       tabindex="0"
-                      :aria-label="`查看「${k.label}」的口径说明`"
+                      :aria-label="`「${g.title} · ${m.name}」的卡片口径说明`"
                       @click.stop
                     >i</span>
                   </template>
                 </KpiHint>
+              </span>
+              <!-- 右上角那一格：数据截止日。原先放的是「跟踪」标签 —— 与分节标题「📊 跟踪」
+                   重复 15 次，而按规范 §2.1 它本该放数据新鲜度（as_of 由后端随响应下发，
+                   取不到就不显示，前端不编造「最新」） -->
+              <span v-if="cardAsOf[m.module_id]" class="ao-card-asof">截至 {{ cardAsOf[m.module_id] }}</span>
+            </div>
+
+            <!-- 本卡问的那句话（registry 契约 ⑧）：短名 + 问句，才读得懂这张卡在答什么 -->
+            <div v-if="m.question_text" class="ao-card-ask">{{ m.question_text }}</div>
+
+            <!-- 判读条（2026-09-19）：卡片最前的一句话结论。**文案由后端生成**——
+                 口径随响应下发、前端只透传不手抄（见 backend/app/analysis/registry.py 卡片墙契约）。
+                 ⚠️ 2026-09-25 修：headline/detail 原先用 `{{ }}` 直出，后端写在文案里的
+                    `**强调**` 会原样渲染（实测「钱贵不贵 · 预期」的 detail 显示成
+                    「…；**倒挂**（3M 低于隔夜）= …」）。凡后端下发的散文类文案一律走 RichText。
+                 ⚠️ 骨架必须单独占位：它与 KPI 是同一个请求返回，若只给 KPI 占位，
+                    判读条插入时会把下面整排盒子顶下去，产生可见的布局跳动。 -->
+            <div v-if="kpiLoading[m.module_id]" class="ao-verdict-skel">
+              <NSkeleton height="54px" :sharp="false" />
+            </div>
+            <div
+              v-else-if="cardVerdicts[m.module_id]"
+              class="ao-verdict"
+              :class="`ao-verdict--${cardVerdicts[m.module_id].tone || 'normal'}`"
+            >
+              <div class="ao-verdict-headline">
+                <RichText :text="cardVerdicts[m.module_id].headline" />
               </div>
-              <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
-              <div class="ao-kpi-status">{{ k.status }}</div>
-              <!-- 分位刻度（2026-09-19）：绝对 pp 跨期不可比，刻度回答「这个数在近一年排第几」。
-                   窗口口径（label）由后端下发，前端不写死「近一年」——ERP 是「近 250 个月末」。
-                   极值（分位 <=10 或 >=90）圆点染金：亮得少才算信号。 -->
-              <div
-                v-if="k.scale"
-                class="ao-kpi-scale"
-                :title="`分位刻度：该值在「${k.scale.label}」区间中的排位（0=区间最低，100=最高）`"
-              >
-                <span class="ao-kpi-track">
-                  <span
-                    class="ao-kpi-dot"
-                    :class="{ 'is-hl': k.highlight }"
-                    :style="{ left: dotLeft(k.scale.pct) }"
-                  />
-                </span>
-                <span class="ao-kpi-scale-text" :class="{ 'is-hl': k.highlight }">
-                  {{ k.scale.label }} {{ k.scale.pct }}%
-                </span>
+              <div v-if="cardVerdicts[m.module_id].detail" class="ao-verdict-detail">
+                <RichText :text="cardVerdicts[m.module_id].detail" />
               </div>
             </div>
-          </template>
+
+            <!-- KPI 区独立占位：骨架高度对齐 .ao-kpi 的**实测高度**，避免数据到达时布局跳动。
+                 实测（1440px、24 个盒子）：84px×7 / 97px×2 / 111px×9 / 126px×6 ——
+                   84  = .ao-kpi 的 min-height（无刻度条且标签不折行）
+                   111 = 有刻度条（众数，占 9/24）
+                   126 = 刻度条文字在窄列里折成 2 行 / 标签折行 2 行
+                 改前固定 84px ⇒ 加载态比完成态矮 0~42px，5 组累计位移 138px；
+                 取众数 111px 后累计位移降到 57px（残留：纯短标签行 -27px、折行标签行 +15px）。
+                 取众数而非最大值：取 126 会让 3 个 84px 的组反向塌缩 42px，总位移更大。 -->
+            <div class="ao-card-kpis" v-if="kpiLoading[m.module_id] || cardKpis[m.module_id]?.length">
+              <!-- 骨架数量按卡片宽度档推定（窄 1 / 半宽 3 / 整行 6），
+                   使加载态与完成态的盒子数量、高度一致，数据到达时不产生布局跳动 -->
+              <template v-if="kpiLoading[m.module_id]">
+                <NSkeleton
+                  v-for="i in kpiSkeletonCount(m)"
+                  :key="i"
+                  height="111px"
+                  :sharp="false"
+                />
+              </template>
+              <template v-else>
+                <div v-for="k in cardKpis[m.module_id]" :key="k.key || k.label" class="ao-kpi">
+                  <!-- 口径入口（2026-09-19）：规范 §1.1 第 4 条「口径透明」在卡片墙落地。
+                       ⚠️ 触发元素必须是 ⓘ 本身而非整卡：卡片是 @click=open(m) 的跳转按钮，
+                          整卡悬浮会与「点击进详情」互相干扰；且点击 ⓘ 必须 .stop，
+                          否则冒泡到卡片 → 想看口径却被跳进详情页。 -->
+                  <div class="ao-kpi-label">
+                    <span class="ao-kpi-label-txt" :title="k.label">{{ k.label }}</span>
+                    <KpiHint v-if="k.hint" :label="k.label" :value="kpiText(k)" :hint="k.hint">
+                      <template #trigger>
+                        <span
+                          class="ao-kpi-q"
+                          role="button"
+                          tabindex="0"
+                          :aria-label="`查看「${k.label}」的口径说明`"
+                          @click.stop
+                        >i</span>
+                      </template>
+                    </KpiHint>
+                  </div>
+                  <div class="ao-kpi-value" :style="kpiCls(k)">{{ kpiText(k) }}</div>
+                  <!-- status 同为后端下发散文（如「偏便宜｜10Y 1.67%」），可能带 `**强调**`，故走 RichText -->
+                  <div class="ao-kpi-status"><RichText :text="k.status" /></div>
+                  <!-- 分位刻度（2026-09-19）：绝对 pp 跨期不可比，刻度回答「这个数在近一年排第几」。
+                       窗口口径（label）由后端下发，前端不写死「近一年」——ERP 是「近 250 个月末」。
+                       极值（分位 <=10 或 >=90）圆点染金：亮得少才算信号。 -->
+                  <div
+                    v-if="k.scale"
+                    class="ao-kpi-scale"
+                    :title="`分位刻度：该值在「${k.scale.label}」区间中的排位（0=区间最低，100=最高）`"
+                  >
+                    <span class="ao-kpi-track">
+                      <span
+                        class="ao-kpi-dot"
+                        :class="{ 'is-hl': k.highlight }"
+                        :style="{ left: dotLeft(k.scale.pct) }"
+                      />
+                    </span>
+                    <span class="ao-kpi-scale-text" :class="{ 'is-hl': k.highlight }">
+                      {{ k.scale.label }} {{ k.scale.pct }}%
+                    </span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </NCard>
         </div>
-      </NCard>
+      </section>
     </div>
     <NEmpty v-else description="暂无跟踪型模块" size="small" />
 
@@ -395,16 +504,38 @@ function kpiText(k: CardKpi): string {
 .ao-lg-sw { flex: none; width: 18px; height: 12px; border-radius: 3px; border-left: 3px solid; margin-top: 2px; }
 .ao-lg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #C9A227; margin-top: 4px; }
 .ao-lg-ft { font-size: 10.5px; color: #9CA3AF; margin-top: 7px; padding-top: 6px; border-top: 1px solid #F1F4F8; }
-/* min(440px,100%)：窗口极窄时轨道不小于容器，避免卡片自身撑破内容区 */
-.ao-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(440px, 100%), 1fr)); gap: 12px; }
+/* 跟踪卡片墙：按 detail 分 5 组，每组一个领域标题（卡片名只留短名，见 registry 契约 ⑧）。
+   ⚠️ 类名刻意不叫 .ao-group —— 那是下方「研究目录」分组在用的类（.ao-group-name/.ao-group-items）。 */
+.ao-groups { display: flex; flex-direction: column; gap: 14px; }
+.ao-track-group-title { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+/* 列数由组内卡片 span 之和决定（由 :style 下发 --ao-cols）⇒ 每行必定铺满，右侧不留空档。
+   minmax(0,1fr) 而非 1fr：1fr 的最小尺寸是 auto，长内容会把列撑破（本项目已踩过溢出坑）。 */
+.ao-cards { display: grid; grid-template-columns: repeat(var(--ao-cols, 12), minmax(0, 1fr)); gap: 12px; }
 .ao-card { cursor: pointer; }
-/* 主卡占满整行（跨所有列）。宽度由后端 card_span 声明，前端不硬编码模块名 */
-.ao-card--full { grid-column: 1 / -1; }
+/* 卡片宽度分档（2026-09-25）：宽度由后端 card_span 声明，前端不硬编码模块名。
+   narrow=3（1 个论据）/ half=4（2~3 个）/ full=12（≥4 个，整行） */
+.ao-card--narrow { grid-column: span 3; }
+.ao-card--half { grid-column: span 4; }
+.ao-card--full { grid-column: span 12; }
+/* 断点整组降级：容器列数覆盖 --ao-cols，卡片 span 一律压到 1 列 ——
+   否则窄卡会被压到放不下一个 KPI 盒（盒子 min-width 110px） */
+@media (max-width: 1200px) {
+  .ao-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ao-card--narrow, .ao-card--half, .ao-card--full { grid-column: span 1; }
+}
+@media (max-width: 760px) {
+  .ao-cards { grid-template-columns: minmax(0, 1fr); }
+}
 .ao-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px;
   /* 「回答三件事」整行收进 ⓘ 后，判读条/KPI 直接跟随标题 —— 原-desc 行的
      8px 下间距移到这里，首行信息不至于贴着标题 */
-  margin-bottom: 10px; }
+  margin-bottom: 2px; }
 .ao-card-name { display: inline-flex; align-items: center; gap: 5px; font-size: 15px; font-weight: 600; color: #1F2937; }
+/* 数据截止日：右上角那一格（原先放的是与分节标题重复的「跟踪」标签）。
+   刻意用灰而非琥珀 —— 它是常态信息，滞后告警由详情页的 .mw-asof b.stale 承担。 */
+.ao-card-asof { flex: none; font-size: 11px; color: #9CA3AF; font-variant-numeric: tabular-nums; }
+/* 本卡问的那句话：短名 + 问句才读得懂这张卡在答什么（registry 契约 ⑧） */
+.ao-card-ask { font-size: 12px; color: #6B7280; margin: 0 0 9px; }
 /* 模块定位说明的 ⓘ：与 .ao-kpi-q 同款描边（#8D97A5，实测更淡的 #B8BEC9 不可见），
    但**常显**——每卡只有 1 个图标（不像 KPI 一卡 6 个），不存在「与数字抢注意力」，
    而它是模块说明的唯一入口，常显才有可发现性。略大于 KPI 版以配标题字号。 */
@@ -440,13 +571,24 @@ function kpiText(k: CardKpi): string {
    （曾因 flex:1 的 min-width:auto 溢出 36px，第三个盒子右侧压到页面底） */
 .ao-card-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
 /* min-height 统一各盒子高度：有/无刻度条时高度差 27px，若任其自然，
-   同一行里带刻度的盒子会把邻居衬托得参差不齐 */
+   同一行里带刻度的盒子会把邻居衬托得参差不齐。
+   实测高度分布（1440px、24 个盒子）：84（= 本条 min-height）/ 97 / 111（众数）/ 126。
+   加载骨架按众数 111px 渲染（见模板注释）—— min-height 只保证下限，骨架另需一次对齐。 */
 .ao-kpi { min-width: 0; min-height: 84px; background: #F5F7FA; border-radius: 6px; padding: 8px 10px; }
 /* 标签行 = 文字 + ⓘ 口径入口。
-   ⚠️ 文字必须 nowrap + ellipsis + min-width:0：CJK 可在任意字符处断行，
-   缺 nowrap 时会被图标挤成「逐/字/竖/排」（本项目已踩过同类坑）。 */
-.ao-kpi-label { display: flex; align-items: center; gap: 3px; font-size: 11px; color: #6B7280; }
-.ao-kpi-label-txt { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+   ⚠️ 文字必须 min-width:0 + 显式宽度约束：CJK 可在任意字符处断行，缺约束时会被图标挤成
+   「逐/字/竖/排」（本项目已踩过同类坑）。
+   2026-09-25：由「nowrap + ellipsis 单行」改为「折行 2 行」——实测装 3 个论据的半宽卡
+   每格仅 ~132px、标签可用宽度 91px（11px CJK ≈ 8.3 字/行），4/24 个 label 被截断
+   （最重 20px：「大小盘剪刀差（20日）」「政策敏感（20日超额）」）。
+   折行而非缩短文案：**口径文案不该为排版让步**（后端下发什么就显示什么）；
+   代价是含长标签的那一行卡片高 ~14px（title 仍保留作兜底）。 */
+.ao-kpi-label { display: flex; align-items: flex-start; gap: 3px; font-size: 11px; line-height: 1.45; color: #6B7280; }
+.ao-kpi-label-txt {
+  flex: 1 1 auto; min-width: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; word-break: break-word;
+}
 /* 描边款 ⓘ（设计原型 v0.1 的推荐形态：信息类通用符号，语义最准、不抢数字）。
    描边取 #8D97A5 —— 实测 #B8BEC9 在 14px 下过淡，缩略图/低分屏几乎不可见。
    刻意不用感叹号：琥珀 #B45309 在项目里已被「数据延迟 / cron 无效」占用，

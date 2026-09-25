@@ -30,6 +30,7 @@
 from __future__ import annotations
 
 import logging
+from statistics import NormalDist
 
 from ..db import query_all
 from ._cache import ttl_cache
@@ -203,9 +204,29 @@ def _card_verdict(compare: dict, industry: dict, concept: dict) -> dict:
 
 
 # ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询 ----
+# 文案四判据 V1~V4 见 registry.py 卡片墙契约 ⑨（回归探针 _scratch/_probe_cardtext.py）。
+# 本模块 2026-09-25 踩过 V2：流向卡的判读条原来把「2.81pp / 14.45pp / 4.09pp」逐字念一遍，
+# 而这些数都在同卡 KPI 区（中位、离散度、首尾差），判读条等于把读数又说一遍、零增量判断。
+# 现在判读条只给判断（普涨/普跌 + 是否跑赢基准；分化集中/全面），数字一律留在 KPI 区。
+
+
+def _expected_range(sigma, n) -> float | None:
+    """n 个同分布正态样本的「预期极差」= 2·Φ⁻¹(1 − 1/(2n))·σ
+
+    用途只有一个：给「首尾差」配一个**自参照**基准 —— 首尾差本身没有可比性
+    （31 个行业与 131 个二级行业天然不同），但它与该分布自身的预期极差之比是可比的结构量。
+    样本越多、极差越大，故 n 必须参与 —— 这就是不能拿一个固定阈值卡「首尾差大不大」的原因。
+    （n=31 → 4.27σ；n=131 → 5.79σ。用正态只是因为行业收益本身是众多个股等权的均值，
+      近似正态；这里是形状描述，不是正态性检验。）
+    """
+    if not sigma or sigma <= 0 or not n or n < 5:
+        return None
+    z = NormalDist().inv_cdf(1 - 1 / (2 * n))
+    return 2 * z * sigma
+
 
 def _verdict_flow(industry: dict, concept: dict) -> dict:
-    """q1 钱在往哪些行业和概念走 —— 行业中位 + 相对基准超额 + 上涨广度。
+    """q1 钱在往哪些行业和概念走 —— 判断句：广度（普涨/普跌）+ 相对基准（跑赢/落后）
 
     tone 保持 normal：资金流向是「观察」而非「异常信号」，颜色纪律见 _card_verdict 注释
     （本模块唯一找背离的地方是口径互证，金色/琥珀不在此处消耗）。
@@ -213,36 +234,60 @@ def _verdict_flow(industry: dict, concept: dict) -> dict:
     im = industry.get("median")
     if im is None:
         return {"headline": "板块数据未就绪", "detail": "", "tone": "normal"}
-    head = f"申万{industry.get('level') or '一级'}中位 {im:+.2f}%（{industry.get('up_ratio')}% 行业上涨"
+    up = industry.get("up_ratio")
+    if up is None:
+        head = "行业涨跌方向待定"
+    elif up >= 60:
+        head = "行业普涨"
+    elif up <= 40:
+        head = "行业普跌"
+    else:
+        head = "行业涨跌互现"
     bench = industry.get("bench_ret_20")
-    if bench is not None:
-        excess = im - bench
-        head += f"、{'超基准' if excess >= 0 else '落后基准'} {abs(excess):.2f}pp"
-    head += "）"
+    if bench is not None and head != "行业涨跌方向待定":
+        head += "，整体跑赢基准" if im - bench >= 0 else "，整体落后基准"
+    # detail 放**两端极值**（方向的两头），而不是概念中位 —— 后者已作为 KPI 盒上墙，
+    # 放这里就是同一信息换个位置再写一遍（V2 的精神）。
     items = industry.get("items") or []
-    detail = ""
-    if items:
+    if len(items) >= 2:
+        detail = (f"最强 {items[0]['name']} {items[0]['ret_20']:+.2f}%"
+                  f"｜最弱 {items[-1]['name']} {items[-1]['ret_20']:+.2f}%")
+    elif items:
         detail = f"最强 {items[0]['name']} {items[0]['ret_20']:+.2f}%"
-        cm = concept.get("median")
-        if cm is not None:
-            detail += f"｜概念中位 {cm:+.2f}%"
+    else:
+        detail = ""
     return {"headline": head, "detail": detail, "tone": "normal"}
 
 
 def _verdict_speed(industry: dict) -> dict:
-    """q2 轮动快不快 —— 离散度 + 首尾差。
+    """q2 轮动快不快 —— 分布**形状**：首尾差相对预期极差有多突出。
 
-    ⚠️ 行业/概念历史 20 日收益未物化、算不出分位，故不设 tone 判断（永远 normal），
-    只做口径陈述 —— 不拿「数值大」硬当「异常」。
+    ⚠️ 这里刻意**不做「异常/正常」判定、不设 tone**（永远 normal），只回答形状问题 ——
+    与模块既有纪律一致：行业/概念历史 20 日收益未物化、算不出分位，
+    **不拿「数值大」硬当「异常」**。本函数给的是结构描述，参照物是该分布自身的预期极差，
+    属「同类横比」而不是「自身纵比」，因此不需要历史序列也成立。
+
+    形状三态（阈值 1.25 / 0.80 是对 4.27σ 这个参照的松紧带，非绝对标准）：
+      首尾差 ≥ 1.25× 预期极差 → 尾部被少数极端行业拉开（分化集中）
+      首尾差 ≤ 0.80× 预期极差 → 涨跌铺得开、没有离群行业（分化较全面）
+      之间 → 居中
     """
     d, s = industry.get("dispersion"), industry.get("spread")
     if d is None:
         return {"headline": "轮动数据未就绪", "detail": "", "tone": "normal"}
-    head = f"行业离散度 {d:.2f}pp"
-    if s is not None:
-        head += f"、首尾差 {s:.2f}pp"
-    detail = ("离散度越大 = 行业间分化越剧烈 = 轮动越快；与首尾差成对读："
-              "大离散 + 小首尾差 = 全面分化，小离散 + 大首尾差 = 个别行业极端")
+    n = industry.get("count")
+    exp = _expected_range(d, n)
+    if s is None or exp is None or exp <= 0:
+        return {"headline": "行业分化形状待定", "detail": "", "tone": "normal"}
+    rho = s / exp
+    if rho >= 1.25:
+        head = "少数行业拉开首尾，多数原地踏步"
+    elif rho <= 0.80:
+        head = "涨跌铺得较开，没有离群行业"
+    else:
+        head = "行业分化未走极端"
+    detail = (f"首尾差 ÷ 同离散度下的预期极差 = {rho:.2f}（正态参照，n={n}）："
+              "≥1.25 = 尾部靠少数行业拉开，≤0.8 = 分化较全面")
     return {"headline": head, "detail": detail, "tone": "normal"}
 
 
@@ -325,11 +370,15 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
                                "两个独立数据集给出矛盾判断（成分与加权方式不同），"
                                "说明当前没有一致的市场叙事，任何单一口径的结论都不该被独立采信。")}
 
-    # card_rank（2026-09-19）：卡片墙只放这 3 个（总览页据此挑，不再取数组前 3 个）。
+    # card_rank（2026-09-19）：卡片墙只放这几个（总览页据此挑，不再取数组前 3 个）。
     # 取向与 market-wind 一致 —— 每个盒子回答一个不同的问题、且不重复判读条已说过的话：
     #   industry_median 答「涨得广不广」／dispersion 答「轮动快不快」／industry_spread 答「分化有多极端」。
-    # ⚠️ concept_median 刻意不上卡片：判读条已用「双口径互证一致/背离」+ 概念中位表述过，
-    #    重复上卡片只会挤掉「轮动速度」这个独立维度。它仍完整出现在详情页。
+    # ⚠️ concept_median 于 2026-09-25 **补上 card_rank=2**（推翻 09-19「刻意不上卡片」的旧决策）。
+    #    旧理由「重复上卡片只会挤掉轮动速度这个独立维度」**已不成立**：卡片墙现在是一级过滤
+    #    `questions ∋ question`、二级才排 card_rank，概念中位只标了 q1/q3，
+    #    根本不会进到 q2 速度卡（实测三卡各自的上墙论据互不挤占）。
+    #    而它缺席的代价是实打实的：「流向」「互证」两卡问的本来就是「行业**和**概念」，
+    #    判读条讲双口径互证、卡上却只有行业一条腿，用户看到结论没法在卡上核对。
     # tone='diff'（2026-09-19）：中位数收益是「一批标的的收益中位」，不是某个资产在涨跌，
     # 与 market-wind 的组间收益差同一类，故用主色蓝 + 保留正负号，不走红涨绿跌。
     # 卡片墙颜色的语义是**异常程度**而非方向 —— 详见 registry.py 卡片墙契约第 ④ 条。
@@ -349,7 +398,7 @@ def sector_rotation(as_of: str | None = None, level: str = DEFAULT_LEVEL) -> dic
          "status": f"{items[0]['name']} {items[0]['ret_20']:+.2f}% / {items[-1]['name']} {items[-1]['ret_20']:+.2f}%",
          "hint": "最强行业 − 最弱行业的 20 日收益差。配合离散度读：离散度大而首尾差小，"
                  "说明分化是全面的而非个别行业极端"},
-        {"key": "concept_median", "questions": ["q1", "q3"], "label": "概念中位（20日）", "value": cm, "unit": "%",
+        {"key": "concept_median", "card_rank": 2, "questions": ["q1", "q3"], "label": "概念中位（20日）", "value": cm, "unit": "%",
          "tone": "diff", "status": f"{concept_out['count']} 个概念 · {concept_out['up_ratio']}% 上涨",
          "hint": "同花顺概念指数 20 日收益的中位数（已剔除 |收益|>60% 的异常样本）；"
                  "与申万行业口径互为正交验证"},

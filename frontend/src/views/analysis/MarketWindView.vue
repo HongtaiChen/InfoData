@@ -201,8 +201,12 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
     <!-- ③ 结论区 -->
     <KpiCards :items="kpis" :adj-note="adjNote" />
 
-    <!-- ④ 主视图 -->
-    <NCard id="mw-heat" size="small" class="mw-card" title="六组等权收益（20 日；副标为 60 日与近一年分位，点行下钻该组）">
+    <!-- ④ 主视图
+         标题写「回答什么问题」（规范 §1.3 契约③），不写功能清单/操作提示/图例 ——
+         原「六组等权收益（20 日；副标为 60 日与近一年分位，点行下钻该组）」把操作提示塞进标题，
+         而副标的含义行内自带标签（「60日 +1.20%」「近一年 45% 分位」），标题里再说一遍是冗余。
+         操作提示下沉为卡内 caption。 -->
+    <NCard id="mw-heat" size="small" class="mw-card" title="六组等权收益：谁在领涨、谁在掉队">
       <GroupHeatBars
         clickable
         @select="onGroupSelect"
@@ -214,12 +218,27 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
           desc: g.ret_20_z == null ? g.group : `${g.group} · z=${g.ret_20_z}`,
         }))"
       />
+      <div class="card-cap">点任一行可下钻到该组指数明细</div>
     </NCard>
 
-    <!-- 市场宽度：补「多少只股票在涨」这一维（原指标全是指数间收益差） -->
-    <NCard id="mw-breadth" size="small" class="mw-card" title="市场宽度与量能（个股涨跌家数 / 均线参与度 / 新高新低 / 成交额）">
+    <!-- 六组 × 时间 热力矩阵：看「哪一组在持续走强」。
+         紧邻上面的六组横条 —— 两张卡用的是**同一份六组收益**：上面是单时点横切（谁强谁弱），
+         这张是时间纵切（强势有没有持续）。原先隔了「宽度/交叉印证/市值风格/轮动」四张卡，
+         同一份数据的两个视角被拆到最远，此处按「同源相邻」归位。 -->
+    <NCard id="mw-matrix" size="small" class="mw-card" title="哪一组的强势在持续？">
+      <HeatMatrix :cols="heatMatrix.cols" :rows="heatMatrix.rows" @select="onMatrixSelect" />
+      <div class="card-cap">时间 × 分组；点任一行可下钻到该组指数明细</div>
+    </NCard>
+
+    <!-- 市场宽度：补「多少只股票在涨」这一维（原指标全是指数间收益差）。
+         标题原来列了 4 项功能清单（个股涨跌家数 / 均线参与度 / 新高新低 / 成交额）——
+         契约③明令禁止。改为一句话问题；三个子块补卡内小标题（宽度 / 量能 / 趋势），
+         否则三块之间只有一条虚线，读者不知道换了一段。 -->
+    <NCard id="mw-breadth" size="small" class="mw-card" title="上涨是否普遍？量能配不配合？">
+      <div class="card-sub">宽度 · 有多少只股票在涨</div>
       <BreadthPanel :data="breadth" />
       <div v-if="volume" class="mw-volume">
+        <span class="card-sub is-inline">量能 · 放量还是缩量</span>
         <span class="mw-volume-k">全市场成交额</span>
         <b class="mw-volume-v">{{ volume.amount == null ? '--' : volume.amount.toLocaleString() }} 亿元</b>
         <span class="mw-volume-k">/ 20日均量</span>
@@ -228,6 +247,7 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
         <span v-if="volume.pct != null" class="mw-volume-p">近一年 {{ volume.pct }}% 分位</span>
       </div>
       <div v-if="breadthTrend.dates.length" class="mw-breadth-trend">
+        <div class="card-sub">趋势 · 宽度与量能的时序</div>
         <!-- 取色纪律：涨跌语义（上涨家数占比）用红；结构性占比用主色蓝；量能用蓝色 ramp 深蓝。
              金色只留给「≤10% 的亮点强调」，不做整条折线色，故此处不用 #C9A227。 -->
         <DualLineTrend
@@ -243,18 +263,23 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
     </NCard>
 
     <!-- 交叉印证（2026-09-15 P1 六项 → 2026-09-19 加「估值印证」为七项）：参照系第 ④ 类。
-         七项里每一项都是「股票市场内的一个维度 × 一个独立外部维度」，用途只有一个——发现背离。 -->
-    <NCard id="mw-cross" size="small" class="mw-card" title="交叉印证（拿股票市场内的维度，去跟外部独立维度比 —— 专门找「背离」）">
+         七项里每一项都是「股票市场内的一个维度 × 一个独立外部维度」，用途只有一个——发现背离。
+         标题原为「交叉印证（拿股票市场内的维度，去跟外部独立维度比 —— 专门找「背离」）」：
+         括号里是一整句解释，读者要先读完才知道这张卡干什么，改为直接问句。 -->
+    <NCard id="mw-cross" size="small" class="mw-card" title="哪些维度之间出现了背离？">
       <CrossCheckPanel :items="crossChecks" :note="crossNote" />
     </NCard>
 
     <div class="mw-two-col">
+      <!-- 这张卡原有标题已是「回答什么问题」的写法（干净），保持不动 -->
       <NCard id="mw-gradient" size="small" class="mw-card" title="市值风格五档（20 日收益）">
         <SizeGradient
           :items="gradient.map((g) => ({ name: g.name, desc: g.desc, value: g.ret_20, change_pct: g.change_pct }))"
         />
       </NCard>
-      <NCard id="mw-trend" size="small" class="mw-card" title="风格轮动时序（剪刀差 & 风偏分数；底色带 = 大小盘占优区间）">
+      <!-- 原标题「风格轮动时序（剪刀差 & 风偏分数；底色带 = 大小盘占优区间）」把图例塞进标题。
+           两条线的名字与颜色由 DualLineTrend 自身图例承载，底色带的含义下沉为 caption。 -->
+      <NCard id="mw-trend" size="small" class="mw-card" title="风格在往哪边摆？">
         <DualLineTrend
           :dates="trend.dates"
           :bands="trend.bands"
@@ -264,22 +289,24 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
           ]"
           height="240px"
         />
+        <div class="card-cap">底色带 = 小盘 / 大盘占优区间（按剪刀差正负切分）</div>
       </NCard>
     </div>
 
-    <!-- 六组 × 时间 热力矩阵：看「哪一组在持续走强」，单时点横条做不到 -->
-    <NCard id="mw-matrix" size="small" class="mw-card" title="六组风格热力矩阵（时间 × 分组；点行下钻该组）">
-      <HeatMatrix :cols="heatMatrix.cols" :rows="heatMatrix.rows" @select="onMatrixSelect" />
-    </NCard>
-
-    <!-- ⑤ 明细下钻区 -->
-    <NCard id="mw-detail" size="small" class="mw-card" :title="`指数明细（${detailFiltered.length} 只${detailFilter === '全部' ? '' : ' · ' + detailFilter}）`">
+    <!-- ⑤ 明细下钻区
+         标题原为「指数明细（N 只 · 分组）」—— 计数进标题也是契约③明令禁止的写法（会随数据漂移）。
+         张数信息下沉到表头上方的一行 caption，组过滤由下面的 tab 承担。 -->
+    <NCard id="mw-detail" size="small" class="mw-card" title="指数明细">
       <template #header-extra>
         <DrillLink :items="[{ label: '行情看板看K线', to: '/market' }]" />
       </template>
       <NTabs v-model:value="detailFilter" type="segment" size="small">
         <NTabPane v-for="grp in detailTabs" :key="grp" :name="grp" :tab="grp" />
       </NTabs>
+      <div class="card-cap">
+        共 {{ detail.length }} 只 · 当前 {{ detailFiltered.length }} 只
+        <template v-if="detailFilter !== '全部'">（已过滤到「{{ detailFilter }}」）</template>
+      </div>
       <div class="mw-detail-table">
         <RankTable :columns="detailColumns" :rows="detailFiltered" :max-height="'360px'" />
       </div>
@@ -299,6 +326,8 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
 .mw-params-right { display: flex; gap: 8px; align-items: center; }
 /* scroll-margin-top：KPI 卡点击滚到锚点时留出顶栏高度，避免卡片标题被顶栏遮住 */
 .mw-card { margin-bottom: 12px; scroll-margin-top: 12px; }
+/* 卡内小标题 / caption 用全局的 .card-sub / .card-cap（src/style.css）——
+   五张详情页共用同一款，避免各视图各写一份而走形 */
 .mw-breadth-trend { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #EDEFF2; }
 .mw-volume {
   display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;

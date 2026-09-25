@@ -184,7 +184,7 @@ function gapOf(code: string): number | null {
       </table>
       <div class="cm-foot">
         超额列 = 该市场 20 日收益 − A股 20 日收益（故 A股 行显示"—"）。
-        「近一年分位」是该市场 20 日收益在**自身**近 250 个 20 日收益观测中的排位（重叠窗口，与市场风向同口径）。
+        「近一年分位」是该市场 20 日收益在<b>自身</b>近 250 个 20 日收益观测中的排位（重叠窗口，与市场风向同口径）。
       </div>
     </NCard>
 
@@ -216,8 +216,8 @@ function gapOf(code: string): number | null {
       </div>
     </NCard>
 
-    <!-- 明细 -->
-    <NCard id="cm-detail" size="small" class="cm-card" title="各市场明细（20 日 / 60 日 / 当日）">
+    <!-- 明细：标题不再列举三个窗口（那是功能清单，表头已自带列名） -->
+    <NCard id="cm-detail" size="small" class="cm-card" title="各市场明细">
       <table class="cm-table">
         <thead>
           <tr><th>市场</th><th>最新收盘</th><th>日期</th><th>当日</th><th>20 日</th><th>60 日</th><th>样本起点</th></tr>
@@ -244,7 +244,7 @@ function gapOf(code: string): number | null {
         </tbody>
       </table>
       <div class="cm-foot">
-        「当日」是各市场**自己当地交易日**的涨跌，不是同一个自然日 —— 各市场时区不同，
+        「当日」是各市场<b>自己当地交易日</b>的涨跌，不是同一个自然日 —— 各市场时区不同，
         这里不做对齐，只作侧面参照。
       </div>
       <div class="cm-note"><RichText :text="note" /></div>
@@ -284,6 +284,9 @@ function gapOf(code: string): number | null {
 .cm-legend-item { display: inline-flex; align-items: center; gap: 5px; }
 .cm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .cm-foot { font-size: 11px; color: #9CA3AF; margin-top: 10px; line-height: 1.65; }
+/* 页脚为**模板内静态文案**（非后端下发），故用 <b> 而非 `**`：`**` 只由 RichText 解析，
+   写在模板里会原样渲染（2026-09-25 全站扫描实测漏点）。 */
+.cm-foot b { color: #1F2937; font-weight: 600; }
 .cm-cross {
   display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 6px;
   border: 1px solid #EDEFF2; border-left: 3px solid #185FA5; margin-top: 10px;

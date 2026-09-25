@@ -11,6 +11,15 @@
   ③ 产业资本（公司端）→ `stock_repurchase`（上市公司回购，公告口径）
 三条同向 = 资金温度成立；两条以上背离 = 「谁在托底、谁在观望」这种更具体的判断。
 
+🔒 **领域边界（2026-09-25 定稿，与 `money_cost.py` 配对的「因/果」划分）**：
+本模块管**果** —— 钱**去哪了、多不多**（资金行为的结果）；
+「货币流动性」管**因** —— 钱**的价格与数量**（利率与期限结构、政策利率、
+美债曲线 / 中美 10Y 利差 / 美元指数这组外部价格约束）。
+⚠️ 按数据源划会打架：美元指数与人民币汇率同为汇率类指标，但前者是全球美元的**总闸门**
+（外生给定 → 因，在 `money_cost._external_state`），后者是内外资金博弈的**结果**
+（内生 → 果，在本模块 `_fx`）。判据一句话：**这个读数是「给定条件」还是「行为结果」。**
+两边的模块 `note` 与 registry `desc` 互相点名，避免读者以为是重复建设。
+
 **为什么需要把三张表合成一个模块**：三张表此前都**只进不出**（各有采集器与 DQ 规则，
 无任何视图消费）。而单看任何一条都容易被误读 ——
 "人民币升值"是好事还是坏事取决于外资流向；"基金发不动"可能只是因为行情不好，
@@ -71,6 +80,9 @@ FUNDING_TEMPERATURE_NOTE = (
     "**三条同向才算信号，背离本身就是最有价值的读数。** "
     "⚠️ 三条线频率不同（日/月/事件），分位窗口因此不同（近一年 / 近 36 个月），"
     "窗口口径随每个 KPI 的刻度条一并下发，不要跨指标比数字大小。"
+    "**领域边界**：本模块管的是**钱去哪了、多不多（果）** —— 三条线索都是「资金行为的结果」；"
+    "至于「钱的价格与数量」（利率与期限结构、政策利率、美债 / 中美利差 / 美元指数），"
+    "那是**因**，归「货币流动性」，不在本模块重复。"
 )
 
 
@@ -326,20 +338,34 @@ def _card_verdict(fx: dict, fund: dict, rep: dict, temp: dict) -> dict:
 
 # ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询。
 # 单线索卡不用金色 —— 模块的金色只留给「整体偏暖」(temperature tone)，单线不点亮，
-# 否则三张卡常年有金、「亮」就失去筛选意义。单线不顺风（supportive=False）→ 琥珀提醒。 ----
+# 否则三张卡常年有金、「亮」就失去筛选意义。单线不顺风（supportive=False）→ 琥珀提醒。
+#
+# 文案四判据 V1~V4 见 registry.py 卡片墙契约 ⑨（回归探针 _scratch/_probe_cardtext.py）。
+# 本模块 2026-09-25 踩过 V2：三条判读条原来都在念分位（「近一年 1.6% 分位」「近 36 个月
+# 81.8% 分位」）与绝对值（「月均 535.8 亿份」「318 个计划」），而这些同卡 KPI 的值、
+# 刻度条与 status 里全都有 —— 判读条退化成了读数回声。现在只给判断与影响。
 
 def _verdict_fx(fx: dict) -> dict:
-    """q1 外部资金环境松不松 —— 人民币汇率（分位低 = 人民币强 = 顺风）"""
+    """q1 外面的钱在进还是在出 —— 人民币汇率分位（分位低 = 人民币强 = 顺风）
+
+    ⚠️ 2026-09-25 边界订正：原措辞「外部资金环境松不松」与「货币流动性 · 外部约束」
+       撞名（那边才是钱的价格约束）。本卡读的是**跨境资金意愿的结果**，故改为「在进还是在出」。
+    """
     if fx.get("mid") is None:
         return {"headline": "汇率数据未就绪", "detail": "", "tone": "normal"}
     pct = fx.get("pct")
-    head = _fx_word(pct)
-    if pct is not None:
-        head += f"（近一年 {pct}% 分位）"
-    if fx.get("chg20") is not None:
-        head += f"，20 日 {'升值' if fx['chg20'] < 0 else '贬值'} {abs(fx['chg20'])}%"
+    if pct is None:
+        head = "跨境资金方向待定"
+    elif pct <= 40:
+        head = "汇率偏强，跨境资金在进不构成压制"
+    elif pct >= 60:
+        head = "汇率偏弱，跨境资金流入受压制"
+    else:
+        head = "汇率中性，跨境资金进出不明"
     tone = "normal" if (pct is None or pct <= 40) else "caution"
-    return {"headline": head, "detail": "汇率分位低 = 美元便宜 = 人民币强，对外资流入是顺风（资金面口径）",
+    return {"headline": head,
+            "detail": "口径：分位越低 = 美元越便宜 = 人民币越强；这里只记资金面顺风，"
+                      "对出口链反而是逆风",
             "tone": tone}
 
 
@@ -348,15 +374,19 @@ def _verdict_fund(fund: dict) -> dict:
     if fund.get("avg3") is None:
         return {"headline": "新发基金数据未就绪", "detail": "", "tone": "normal"}
     pct = fund.get("pct")
-    head = f"新发基金月均 {fund['avg3']} 亿份"
-    if pct is not None:
-        head += f"（近 {DEFAULT_MONTHS} 个月 {pct}% 分位）"
-    detail = ""
-    if fund.get("last3"):
-        detail = f"近 3 完整月合计 {fund['last3']['shares']:.0f} 亿份、权益占 {fund['last3']['eq_pct']}%——钱少而权益占比高 = 偏好进攻"
+    if pct is None:
+        head = "增量资金方向待定"
+    elif pct <= 30:
+        head = "增量资金不足，发行仍在冷区"
+    elif pct >= 70:
+        head = "增量资金充沛，发行处于热区"
+    else:
+        head = "增量资金中性，发行不温不火"
     # 发行遇冷是过去赚钱效应差的结果，不是未来下跌的原因 —— 提醒而非看空
     tone = "normal" if (pct is None or pct >= 50) else "caution"
-    return {"headline": head, "detail": detail, "tone": tone}
+    return {"headline": head,
+            "detail": "⚠️ 新发滞后于行情：发行冷是过去赚钱效应差的结果，不是未来下跌的原因",
+            "tone": tone}
 
 
 def _verdict_rep(rep: dict) -> dict:
@@ -364,13 +394,18 @@ def _verdict_rep(rep: dict) -> dict:
     if rep.get("last90") is None:
         return {"headline": "回购数据未就绪", "detail": "", "tone": "normal"}
     pct = rep.get("pct")
-    word = "升温" if (pct or 0) >= 70 else "降温" if (pct or 0) <= 30 else "平稳"
-    head = f"回购{word}：近 90 天新启动 {rep['last90']} 个计划"
-    if pct is not None:
-        head += f"（近 {DEFAULT_MONTHS} 个月 {pct}% 分位）"
+    if pct is None:
+        head = "产业资本动向待定"
+    elif pct >= 70:
+        head = "产业资本加大回购，托底力量增强"
+    elif pct <= 30:
+        head = "产业资本回购降温，托底力量减弱"
+    else:
+        head = "产业资本回购平稳，托底力量中性"
     tone = "normal" if (pct is None or pct >= 50) else "caution"
     return {"headline": head,
-            "detail": "回购是产业资本的真金白银，但也是「股价跌到公司自己受不了」的产物——只作托底证据，不单独当看涨信号",
+            "detail": "回购是产业资本的真金白银，但也是「股价跌到公司自己受不了」的产物 —— "
+                      "只作托底证据，不单独当看涨信号",
             "tone": tone}
 
 

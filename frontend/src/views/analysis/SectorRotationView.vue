@@ -157,9 +157,12 @@ const conColumns: DataTableColumns<ConceptRow> = [
     <!-- ③ 结论区 -->
     <KpiCards :items="kpis" />
 
-    <!-- ④ 主视图：行业排行（同等权 + 相对基准超额） -->
+    <!-- ④ 主视图：行业排行（同等权 + 相对基准超额）
+         标题按规范 §1.3 契约③只写「回答什么问题」——原先写作
+         「申万一级行业 20 日收益排行（31 个行业 · 成分股 5216 只等权）」，把计数与口径塞进标题。
+         计数随数据漂移，口径属卡内 caption。 -->
     <NCard id="sr-industry" size="small" class="sr-card"
-           :title="`申万${industry?.level ?? '一级'}行业 20 日收益排行（${industry?.count ?? 0} 个行业 · 成分股 ${industry?.stock_count ?? 0} 只等权）`">
+           :title="`申万${industry?.level ?? '一级'}行业收益排行：谁在领涨`">
       <template #header-extra>
         <DrillLink :items="[{ label: '行情看板看大盘', to: '/market' }]" />
       </template>
@@ -170,11 +173,13 @@ const conColumns: DataTableColumns<ConceptRow> = [
         <span class="sr-hintline">同类横比 + 基准超额：普跌日里跑赢基准的行业才是真强</span>
       </div>
       <GroupHeatBars :rows="industryRows" />
+      <div class="card-cap">
+        口径：{{ industry?.count ?? 0 }} 个行业 · 成分股 {{ industry?.stock_count ?? 0 }} 只等权
+      </div>
     </NCard>
 
     <!-- 概念口径：与行业口径正交的第二套数据集 -->
-    <NCard id="sr-concept" size="small" class="sr-card"
-           :title="`同花顺概念 20 日收益（${concept?.count ?? 0} 个概念${concept?.outliers ? ' · 已剔除 ' + concept.outliers + ' 个异常样本' : ''}）`">
+    <NCard id="sr-concept" size="small" class="sr-card" title="概念收益排行：谁在领涨、谁在掉队">
       <template #header-extra>
         <DrillLink :items="[{ label: '概念中心看K线', to: '/concept' }]" />
       </template>
@@ -188,24 +193,32 @@ const conColumns: DataTableColumns<ConceptRow> = [
         <NTabPane name="领跌" tab="领跌 12" />
       </NTabs>
       <GroupHeatBars :rows="toRows(conceptVisible)" />
+      <div class="card-cap">
+        口径：{{ concept?.count ?? 0 }} 个概念{{ concept?.outliers ? ` · 已剔除 ${concept.outliers} 个异常样本（|20 日收益| &gt; 60%）` : '' }}
+      </div>
     </NCard>
 
-    <!-- ④ 交叉印证：两个独立数据集是否互证 -->
-    <NCard id="sr-compare" size="small" class="sr-card" title="双侧口径互证（申万行业 vs 同花顺概念 —— 两个独立数据集是否给出同一结论）">
+    <!-- ④ 交叉印证：两个独立数据集是否互证
+         原标题「双侧口径互证（申万行业 vs 同花顺概念 —— 两个独立数据集是否给出同一结论）」
+         括号里是一整句解释，读者要先读完才知道这张卡干什么。 -->
+    <NCard id="sr-compare" size="small" class="sr-card" title="两个口径是否互证？">
       <div class="sr-compare" :class="compareCardClass">
         <span class="sr-compare-badge">{{ compare?.verdict ?? '--' }}</span>
         <span class="sr-compare-text"><RichText :text="compare?.reading" /></span>
       </div>
       <div class="sr-note"><RichText :text="note" /></div>
+      <div class="card-cap">互证对象：申万行业口径 ↔ 同花顺概念口径（两个独立数据集）</div>
     </NCard>
 
-    <!-- ⑤ 明细区 -->
+    <!-- ⑤ 明细区（标题不再带计数 —— 计数随数据漂移，下沉为卡内 caption） -->
     <div class="sr-two-col">
-      <NCard id="sr-ind-detail" size="small" class="sr-card" :title="`行业明细（${industry?.count ?? 0} 个）`">
+      <NCard id="sr-ind-detail" size="small" class="sr-card" title="行业明细">
         <RankTable :columns="indColumns" :rows="industry?.items ?? []" :max-height="'380px'" />
+        <div class="card-cap">共 {{ industry?.count ?? 0 }} 个行业</div>
       </NCard>
-      <NCard id="sr-con-detail" size="small" class="sr-card" :title="`概念明细（${concept?.count ?? 0} 个）`">
+      <NCard id="sr-con-detail" size="small" class="sr-card" title="概念明细">
         <RankTable :columns="conColumns" :rows="concept?.items ?? []" :max-height="'380px'" />
+        <div class="card-cap">共 {{ concept?.count ?? 0 }} 个概念</div>
       </NCard>
     </div>
   </NSpin>
