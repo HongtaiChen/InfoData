@@ -117,9 +117,86 @@
 """
 from __future__ import annotations
 
-MODULE_GROUPS: list[str] = ["市场风向", "板块与概念", "个股基本面", "资金与情绪", "跟踪清单"]
+# ⚠️ 2026-09-25 删除 `MODULE_GROUPS = ["市场风向","板块与概念","个股基本面","资金与情绪","跟踪清单"]`：
+#    那是上一轮收敛前的**旧第二套分类**（全仓库零引用，已 Grep 确认），列出的 5 类里有 2 类
+#    从未落地（个股基本面 / 跟踪清单），留着会让后来者误以为「领域 = 这五类」。
+#    现行口径见上方 group 字段说明：**领域 = 卡片墙组标题 = detail 模块 name**；
+#    领域顺序的**唯一来源** = 下方 REGISTRY 的条目顺序（卡片墙组顺序与研究目录分区顺序同源派生）。
 
 REGISTRY: list[dict] = [
+    # ⚠️ 2026-09-25 顺序调整：本领域提到卡片墙**最首位**（用户要求）。
+    #    卡片墙组顺序 = 组内首个 track 卡在 REGISTRY 里的**出现顺序**（前端 trackGroups 按首次出现建组），
+    #    研究目录分区顺序（GROUP_ORDER）同源派生 ⇒ 调整展示优先级**只改本文件顺序**，
+    #    前端不需要任何硬编码，也不该在前端另立第二套顺序（那是 registry 契约 ⑧ 禁止的口径分叉）。
+    # ---------- Batch C（2026-09-19）：三张"只进不出"的表接上消费端 ----------
+    # 背景：`interbank_rate_daily` / `overseas_index_daily` / `currency_boc_daily`
+    # + `fund_new_issue` + `stock_repurchase` 五张表此前各有采集器与 DQ 规则，
+    # 但**没有任何视图消费**（《未落地优化项盘点_2026-09-19》第三节）。
+    # 采集任务排期的注释里本来就叫「蓝图A 钱贵不贵」「蓝图E 发行冰点/人民币中间价」
+    # 「蓝图D 产业资本回购」—— 本轮就是把蓝图补齐。
+    # ================= 货币流动性三卡（data=money-cost） =================
+    # 2026-09-25 领域更名：「钱贵不贵」→「货币流动性」。原名取自蓝图A 代号，只覆盖「价格」一维，
+    # 而本领域要回答的是「钱贵不贵（价格）· 央行在做什么（政策）· 钱多不多（数量）」。
+    # ⚠️ collectors/scripts/seed_*.py 里的「蓝图A 钱贵不贵」**保留原名** —— 那是历史代号，
+    #    改了会丢失与旧报告/旧文档的对应关系（同「蓝图D/E」的处理）。
+    {
+        "module_id": "money-cost-level",
+        "name": "价格",
+        "group": "货币流动性",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "Shibor 3M 水平（近一年分位）与 20 日变化",
+        "question_text": "钱现在贵不贵",
+        "data": "money-cost",
+        "question": "q1",
+        "card_span": "narrow",
+        "detail": "/analysis/money-cost",
+    },
+    {
+        "module_id": "money-cost-expectation",
+        "name": "预期",
+        "group": "货币流动性",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "期限利差（3M − 隔夜）的陡平与倒挂",
+        "question_text": "资金预期是松是紧",
+        "data": "money-cost",
+        "question": "q2",
+        "card_span": "narrow",
+        "detail": "/analysis/money-cost",
+    },
+    {
+        "module_id": "money-cost-policy",
+        "name": "政策",
+        "group": "货币流动性",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "LPR 1Y 报价与连续未动月数",
+        "question_text": "政策利率动没动",
+        "data": "money-cost",
+        "question": "q3",
+        "card_span": "narrow",
+        "detail": "/analysis/money-cost",
+    },
+    {
+        "module_id": "money-cost",
+        "name": "货币流动性",
+        "group": "货币流动性",
+        "kind": "detail",
+        "icon": "💧",
+        "desc": "回答**钱的价格与数量**（因）：**价格、预期、政策、外部约束**——总览页三张分卡各答一件，本页聚合完整曲线与外部硬约束（美债曲线 / 中美利差 / 美元指数）",
+        "as_of_source": "interbank_rate_daily.MAX(trade_date)",
+        "updated_cron": "35 19 * * 0-4",
+        "schedule_text": "每工作日 19:35（银行间市场收盘后）",
+        "params": [
+            {"key": "trend_days", "type": "select", "label": "时序窗口",
+             "options": [250, 500, 1000], "default": 500},
+        ],
+        "drilldown": [
+            {"label": "跨市场对照看外部环境", "target": "/analysis/cross-market"},
+            {"label": "市场风向看股债性价比", "target": "/analysis/market-wind"},
+        ],
+    },
     # ================= 市场风向 · 三卡（data=market-wind，共用一份 TTL 缓存响应） =================
     {
         "module_id": "market-wind-position",
@@ -237,75 +314,6 @@ REGISTRY: list[dict] = [
         "drilldown": [
             {"label": "概念中心看概念K线", "target": "/concept"},
             {"label": "行情看板看大盘", "target": "/market"},
-        ],
-    },
-    # ---------- Batch C（2026-09-19）：三张"只进不出"的表接上消费端 ----------
-    # 背景：`interbank_rate_daily` / `overseas_index_daily` / `currency_boc_daily`
-    # + `fund_new_issue` + `stock_repurchase` 五张表此前各有采集器与 DQ 规则，
-    # 但**没有任何视图消费**（《未落地优化项盘点_2026-09-19》第三节）。
-    # 采集任务排期的注释里本来就叫「蓝图A 钱贵不贵」「蓝图E 发行冰点/人民币中间价」
-    # 「蓝图D 产业资本回购」—— 本轮就是把蓝图补齐。
-    # ================= 货币流动性三卡（data=money-cost） =================
-    # 2026-09-25 领域更名：「钱贵不贵」→「货币流动性」。原名取自蓝图A 代号，只覆盖「价格」一维，
-    # 而本领域要回答的是「钱贵不贵（价格）· 央行在做什么（政策）· 钱多不多（数量）」。
-    # ⚠️ collectors/scripts/seed_*.py 里的「蓝图A 钱贵不贵」**保留原名** —— 那是历史代号，
-    #    改了会丢失与旧报告/旧文档的对应关系（同「蓝图D/E」的处理）。
-    {
-        "module_id": "money-cost-level",
-        "name": "价格",
-        "group": "货币流动性",
-        "kind": "track",
-        "icon": "💧",
-        "desc": "Shibor 3M 水平（近一年分位）与 20 日变化",
-        "question_text": "钱现在贵不贵",
-        "data": "money-cost",
-        "question": "q1",
-        "card_span": "narrow",
-        "detail": "/analysis/money-cost",
-    },
-    {
-        "module_id": "money-cost-expectation",
-        "name": "预期",
-        "group": "货币流动性",
-        "kind": "track",
-        "icon": "💧",
-        "desc": "期限利差（3M − 隔夜）的陡平与倒挂",
-        "question_text": "资金预期是松是紧",
-        "data": "money-cost",
-        "question": "q2",
-        "card_span": "narrow",
-        "detail": "/analysis/money-cost",
-    },
-    {
-        "module_id": "money-cost-policy",
-        "name": "政策",
-        "group": "货币流动性",
-        "kind": "track",
-        "icon": "💧",
-        "desc": "LPR 1Y 报价与连续未动月数",
-        "question_text": "政策利率动没动",
-        "data": "money-cost",
-        "question": "q3",
-        "card_span": "narrow",
-        "detail": "/analysis/money-cost",
-    },
-    {
-        "module_id": "money-cost",
-        "name": "货币流动性",
-        "group": "货币流动性",
-        "kind": "detail",
-        "icon": "💧",
-        "desc": "回答**钱的价格与数量**（因）：**价格、预期、政策、外部约束**——总览页三张分卡各答一件，本页聚合完整曲线与外部硬约束（美债曲线 / 中美利差 / 美元指数）",
-        "as_of_source": "interbank_rate_daily.MAX(trade_date)",
-        "updated_cron": "35 19 * * 0-4",
-        "schedule_text": "每工作日 19:35（银行间市场收盘后）",
-        "params": [
-            {"key": "trend_days", "type": "select", "label": "时序窗口",
-             "options": [250, 500, 1000], "default": 500},
-        ],
-        "drilldown": [
-            {"label": "跨市场对照看外部环境", "target": "/analysis/cross-market"},
-            {"label": "市场风向看股债性价比", "target": "/analysis/market-wind"},
         ],
     },
     # ================= 市场风向 · 跨市场对照三卡（data=cross-market） =================
