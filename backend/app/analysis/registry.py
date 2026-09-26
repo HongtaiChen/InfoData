@@ -81,13 +81,13 @@
        - `question` —— 本卡回答第几件事（q1/q2/q3）。KPI 在模块响应里标 `questions` 数组
                       （一个 KPI 可服务多件事，如「行业中位」既是流向读数也是互证一腿），
                       卡片墙按 `kpi.questions ∋ card.question` 过滤后再套 card_rank；
-       - `detail`   —— 点击卡片跳转的详情页路由（三卡同进一个聚合详情页，详情页不变）；
+       - `detail`   —— 点击卡片跳转的详情页路由（同一领域各卡同进一个聚合详情页，详情页不变）；
        - 响应新增 `verdicts = {q1, q2, q3}` 子判读，卡片取 `verdicts[question]`；
        原 `verdict`（四合一）保留给详情页/兼容。原模块注册为 `kind: 'detail'` 条目，
        承载 params / schedule / as_of_source，不上卡片墙。
   ⑧ `name` = 卡片短名（**不含领域前缀**）、`question_text` = 本卡问的那句话、
      `card_span` = 宽度档（`narrow`/`half`/`full`，按上墙论据数选：1 个→narrow / 2~3 个→half / ≥4 个→full）。
-     领域名由**组标题**承担 —— 前端按 `detail` 字段把 15 张卡聚成 5 组，组标题取该 `detail`
+     领域名由**组标题**承担 —— 前端按 `detail` 字段把 16 张卡聚成 5 组，组标题取该 `detail`
      模块的 `name`（如「市场风向」「板块轮动」）。故 `name` 写「位置」而不是「市场风向 · 位置」：
      后者让领域名在页面上重复 15 次，且与组标题打架（历史上有 3 个 group 名 vs 5 个卡片前缀
      两套分类并存，用户得额外记住哪张卡属于哪一类）。
@@ -134,47 +134,70 @@ REGISTRY: list[dict] = [
     # 但**没有任何视图消费**（《未落地优化项盘点_2026-09-19》第三节）。
     # 采集任务排期的注释里本来就叫「蓝图A 钱贵不贵」「蓝图E 发行冰点/人民币中间价」
     # 「蓝图D 产业资本回购」—— 本轮就是把蓝图补齐。
-    # ================= 货币流动性三卡（data=money-cost） =================
+    # ================= 货币流动性四卡（data=money-cost） =================
     # 2026-09-25 领域更名：「钱贵不贵」→「货币流动性」。原名取自蓝图A 代号，只覆盖「价格」一维，
     # 而本领域要回答的是「钱贵不贵（价格）· 央行在做什么（政策）· 钱多不多（数量）」。
+    # 2026-09-26 由三卡扩为四卡：按**因果位置**（契约⑩）对齐四环，见下方逐卡注释。
     # ⚠️ collectors/scripts/seed_*.py 里的「蓝图A 钱贵不贵」**保留原名** —— 那是历史代号，
     #    改了会丢失与旧报告/旧文档的对应关系（同「蓝图D/E」的处理）。
-    {
-        "module_id": "money-cost-level",
-        "name": "价格",
-        "group": "货币流动性",
-        "kind": "track",
-        "icon": "💧",
-        "desc": "Shibor 3M 水平（近一年分位）与 20 日变化",
-        "question_text": "钱现在贵不贵",
-        "data": "money-cost",
-        "question": "q1",
-        "card_span": "narrow",
-        "detail": "/analysis/money-cost",
-    },
-    {
-        "module_id": "money-cost-expectation",
-        "name": "预期",
-        "group": "货币流动性",
-        "kind": "track",
-        "icon": "💧",
-        "desc": "期限利差（3M − 隔夜）的陡平与倒挂",
-        "question_text": "资金预期是松是紧",
-        "data": "money-cost",
-        "question": "q2",
-        "card_span": "narrow",
-        "detail": "/analysis/money-cost",
-    },
+    # ---- 四卡：一卡一环（D6=(a) · 2026-09-26）----
+    # 四环 = ① 央行操作 → ② 银行间定价 → ③ 信用派生 → ④ 对外与资产（与详情页同构）。
+    # 变更：3 卡 → 4 卡。「预期」卡删除 —— 期限结构与 Shibor **同源同表**
+    # （`interbank_rate_daily`，且期限结构本就是②这一环的内部构成），并入「价格」卡；
+    # 其读数 `term_spread` 的 questions 已同步由 q2 改为 q1（见 money_cost.py）。
+    # 新增「数量」（q4）与「外部约束」（q5）—— 这两个切面的读数原先在总览页**零曝光**。
+    # ⚠️ 4 张一律 narrow ⇒ 组 cols = 4 × 3 = 12，卡宽实测 333px（开发落地方案 §4.3 量化）。
+    # 🔴 每张卡的 `question` 必须能在 `verdicts` 里取到对应子判读（q1/q3/q4/q5 已全部下发），
+    #    否则判读条会 `?? r?.verdict` **静默回退到模块级** ⇒ 卡问 A、判读条答 B（不报错）。
     {
         "module_id": "money-cost-policy",
         "name": "政策",
         "group": "货币流动性",
         "kind": "track",
         "icon": "💧",
-        "desc": "LPR 1Y 报价与连续未动月数",
-        "question_text": "政策利率动没动",
+        "desc": "LPR 1Y 报价｜美联储总资产｜美元净流动性 A5",
+        "question_text": "央行在放还是在收",
         "data": "money-cost",
         "question": "q3",
+        "card_span": "narrow",
+        "detail": "/analysis/money-cost",
+    },
+    {
+        "module_id": "money-cost-level",
+        "name": "价格",
+        "group": "货币流动性",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "Shibor 3M 水平与期限利差（3M − 隔夜）",
+        "question_text": "银行间资金贵不贵",
+        "data": "money-cost",
+        "question": "q1",
+        "card_span": "narrow",
+        "detail": "/analysis/money-cost",
+    },
+    {
+        "module_id": "money-cost-quantity",
+        "name": "数量",
+        "group": "货币流动性",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "美 / 欧 / 中 M2·M3 横向对比（万亿美元）",
+        "question_text": "钱有没有派生到实体",
+        "data": "money-cost",
+        "question": "q4",
+        "card_span": "narrow",
+        "detail": "/analysis/money-cost",
+    },
+    {
+        "module_id": "money-cost-external",
+        "name": "外部约束",
+        "group": "货币流动性",
+        "kind": "track",
+        "icon": "💧",
+        "desc": "中美 10Y 利差｜美债 10Y｜美元指数",
+        "question_text": "外部在抽水还是送水",
+        "data": "money-cost",
+        "question": "q5",
         "card_span": "narrow",
         "detail": "/analysis/money-cost",
     },
@@ -184,7 +207,11 @@ REGISTRY: list[dict] = [
         "group": "货币流动性",
         "kind": "detail",
         "icon": "💧",
-        "desc": "回答**钱的价格与数量**（因）：**价格、预期、政策、外部约束**——总览页三张分卡各答一件，本页聚合完整曲线与外部硬约束（美债曲线 / 中美利差 / 美元指数）",
+        # desc 瘦身（P1 · 2026-09-26）：原为一段 ~150 字的功能清单（5 切面 + 6 子项逐项列出），
+        # 读起来像说明书而不是「这页回答什么」。按卡片墙契约 ③「desc 回答『这页回答什么』」，
+        # 收成一句判断句 + 四环；**完整口径未删除**，移到详情页的「口径与更新」折叠区
+        # （见 MoneyCostView.vue 的 mc-scope），并与本字段一并维护。
+        "desc": "回答**现在钱松还是紧**，并按四环逐环下钻",
         "as_of_source": "interbank_rate_daily.MAX(trade_date)",
         "updated_cron": "35 19 * * 0-4",
         "schedule_text": "每工作日 19:35（银行间市场收盘后）",
@@ -221,7 +248,10 @@ REGISTRY: list[dict] = [
         "question_text": "估值贵不贵",
         "data": "market-wind",
         "question": "q2",
-        "card_span": "narrow",
+        # 2026-09-26：narrow → half。本组原为 位置(half)/估值(narrow)/结构(half) ⇒ cols=11，
+        # 换算成像素是「同排两张 519px 宽卡夹一张 386px 窄卡」，同一行卡宽不等 ⇒ 视觉不齐。
+        # 改 half 后 cols=12（= 3×4），与「板块与概念」组同构，三卡等宽。
+        "card_span": "half",
         "detail": "/analysis/market-wind",
     },
     {
@@ -353,7 +383,8 @@ REGISTRY: list[dict] = [
         "question_text": "外面的信息能不能传导进来",
         "data": "cross-market",
         "question": "q3",
-        "card_span": "narrow",
+        # 2026-09-26：narrow → half，同 market-wind-valuation 的理由（同行卡宽不等 → 改 cols=12 三卡等宽）。
+        "card_span": "half",
         "detail": "/analysis/cross-market",
     },
     {

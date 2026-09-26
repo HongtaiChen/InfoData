@@ -44,6 +44,10 @@ interface Kpi {
   scale?: { pct: number; label: string } | null
   highlight?: boolean
   anchor?: string
+  /** 固定小数位（可选）：存量类读数（如「14.75 万亿美元」）需要尾零补齐，
+   *  否则 `5.8` 与 `14.75` 并排会显得精度不一致。
+   *  ⚠️ 这只是**格式化**，不做任何换算 —— 单位归一永远在后端完成（后端给 value + unit）。 */
+  fmt_digits?: number
   // 风险调整值（σ 倍数）：仅风偏分数与大小盘剪刀差有，其余为 undefined
   adj?: number | null
 }
@@ -60,7 +64,9 @@ function fmt(k: Kpi): string {
   if (k.value == null) return '--'
   // diff 保留正负号（方向是它的信息），neutral 不带号（分位/占比没有方向）
   const sign = k.tone !== 'neutral' && k.value > 0 ? '+' : ''
-  return `${sign}${k.value}${k.unit ?? ''}`
+  // fmt_digits：固定小数位（存量类「14.75 万亿美元」需要尾零，否则 5.8 与 14.75 精度不一致）
+  const num = k.fmt_digits != null ? Number(k.value).toFixed(k.fmt_digits) : String(k.value)
+  return `${sign}${num}${k.unit ?? ''}`
 }
 /** 刻度圆点位置：夹在 5~95% 内，避免圆点在两端被轨道裁掉半个（不改变读数，只改绘制） */
 function dotLeft(pct: number): string {

@@ -31,7 +31,7 @@
  *    ⚠️ 旧文案「美元指数是自算值、不是 ICE 官方 DXY」已被实测推翻，勿回退。
  */
 import { computed, onMounted, ref } from 'vue'
-import { NCard, NDatePicker, NSelect, NSpin } from 'naive-ui'
+import { NCard, NCollapse, NCollapseItem, NDatePicker, NSelect, NSpin } from 'naive-ui'
 import KpiCards from '../../components/analysis/KpiCards.vue'
 import DualLineTrend from '../../components/analysis/DualLineTrend.vue'
 import DrillLink from '../../components/analysis/DrillLink.vue'
@@ -45,6 +45,8 @@ interface Kpi {
   card_rank?: number | null
   scale?: { pct: number; label: string } | null
   pct?: number | null; highlight?: boolean; anchor?: string
+  /** 固定小数位（只格式化、不换算）—— 货币总量区用，让「5.80」与「14.75」精度一致 */
+  fmt_digits?: number
 }
 interface CurveRow {
   term: string; cur: number | null; prev_year: number | null
@@ -90,6 +92,104 @@ interface ExternalBlock {
   note: string
 }
 
+/* ---------------- 货币总量（数量维度，2026-09-26 步骤 1）---------------- */
+/** 全部金额已由后端**归一到万亿美元**（D5=A）；前端只格式化，不做任何换算。 */
+interface QtyLeg { total: string[]; loans: string[]; bonds: string[] }
+interface QtyGlobal {
+  period: string | null; total_tn: number | null; total_yoy: number | null
+  total_yoy_chg: number | null; loans_tn: number | null; loans_yoy: number | null
+  bonds_tn: number | null; bonds_yoy: number | null; bond_share: number | null
+  xcheck_pct: number | null; trend: { period: string; total_tn: number | null }[]
+  legs?: QtyLeg
+}
+interface QtyFed {
+  as_of: string | null; tn: number | null
+  chg_4w_pct: number | null; chg_13w_pct: number | null; chg_52w_pct: number | null
+}
+interface QtyNet {
+  as_of: string | null; tn: number | null; fed_tn: number | null
+  tga_tn: number | null; onrrp_tn: number | null
+  tga_yi: number | null; onrrp_yi: number | null
+  chg_13_pct: number | null; n_days: number
+}
+interface QtyUsMoney {
+  as_of: string | null; m2_tn: number | null; m2_bn: number | null; m2_yoy: number | null
+  m2_yoy_d3: number | null; m1_tn: number | null; m1_bn: number | null
+  m1_yoy: number | null; base_tn: number | null
+}
+interface QtyEu {
+  as_of: string | null; m3_tn: number | null; m3_yoy: number | null; m3_yoy_d3: number | null
+  m2_tn: number | null; m1_tn: number | null; eur_usd: number | null
+}
+interface QtyStructRow {
+  key: string; label: string; last_month: string | null
+  value: number | null; as_of: string | null; stale: boolean
+}
+interface QtyCnMoney {
+  as_of: string | null; m2_tn: number | null; m2_yi: number | null; m2_yoy: number | null
+  m2_yoy_d3: number | null; m1_tn: number | null; m1_yi: number | null
+  m1_yoy: number | null; m0_yi: number | null
+  gap: number | null; gap_d3: number | null; gap_word: string | null
+  usd_cny: number | null; struct: QtyStructRow[]
+}
+interface QtyReserve {
+  as_of: string | null; fx_tn: number | null; fx_usd_yi: number | null
+  fx_yoy: number | null; gold_oz: number | null; gold_chg: number | null
+  gold_streak: number | null
+}
+interface QtyOmo {
+  section: string; label: string; as_of: string; days: number; amount_sum_yi: number | null
+  rows: { date: string; op_type: string; tenor_days: number | null
+    rate: number | null; amount_yi: number | null }[]
+}
+interface QtyReading {
+  headline: string; detail: string; tone: 'loose' | 'tight' | 'mixed'
+  expand_n: number; tight_n: number; known_n: number
+  layers: { name: string; metric: string; dir: number; delta: number | null
+    unit: string; level: number | null }[]
+}
+interface QuantityBlock {
+  items: QtyKpi[]
+  global: QtyGlobal
+  us: { fed: QtyFed; net_liquidity: QtyNet; money: QtyUsMoney }
+  eu: QtyEu
+  cn: { money: QtyCnMoney
+    reserve: QtyReserve
+    cb_balance: { as_of: string | null; fx_yi: number | null; gold_yi: number | null
+      foreign_yi: number | null; reserve_money_yi: number | null; total_yi: number | null }
+    omo: QtyOmo[] }
+  fx: { usd_cny: number | null; eur_usd: number | null; as_of: string | null; source: string }
+  reading: QtyReading
+  as_of_bis: string | null; as_of_fed: string | null; as_of_net_liq: string | null
+  as_of_us_money: string | null; as_of_eu: string | null; as_of_cn_money: string | null
+  as_of_cn_reserve: string | null; as_of_cn_cb: string | null; as_of_omo: string | null
+  unit_target: string
+  note: string
+}
+/** 数量类 KPI：value 已是「万亿美元」，unit 由后端给 → 前端只需补两位小数 */
+type QtyKpi = Kpi
+
+/** 模块级结论（后端 `verdict`）—— 2026-09-26 P1 起渲染到页头。
+ *  ⚠️ 接口早已下发该字段（money_cost.py 返回段），但详情页此前 `grep verdict` 零命中、从未渲染 ⇒
+ *     「结论得滚到第 5.2 屏才看到」。本视图只是把它搬到页头，**零后端改动**。
+ *  tone 与卡片墙判读条同源：normal=蓝 / opportunity=金 / caution=琥珀 / mixed=分化（P2 起有专属蓝）。 */
+interface ModuleVerdict {
+  headline: string
+  detail?: string
+  tone?: 'normal' | 'opportunity' | 'caution' | 'mixed'
+}
+
+/** 页内锚点（P1 · F2）：四环 + 交叉印证。
+ *  🔴 每个 id 必须真实存在于本模板 —— `getElementById(...)?.` 在 id 缺失时**静默无反应、零报错**，
+ *     故新增/改名后必须重跑 `_scratch/_verify_anchors_dom.js`（P0 自检）。 */
+const SECTIONS: { id: string; label: string }[] = [
+  { id: 'mc-lpr', label: '① 央行操作' },
+  { id: 'mc-curve', label: '② 银行间定价' },
+  { id: 'mc-quantity', label: '③ 信用派生' },
+  { id: 'mc-external', label: '④ 对外与资产' },
+  { id: 'mc-cross', label: '交叉印证' },
+]
+
 const loading = ref(false)
 const asOf = ref('')
 const baseDate1y = ref('')
@@ -110,6 +210,10 @@ const median1y = ref<number | null>(null)
 const note = ref('')
 const externalKpis = ref<ExtKpi[]>([])
 const external = ref<ExternalBlock | null>(null)
+const quantityKpis = ref<QtyKpi[]>([])
+const quantity = ref<QuantityBlock | null>(null)
+/** 模块级结论（页头结论条，P1 · 2026-09-26）—— 后端早已下发 `verdict`，此前详情页未渲染 */
+const verdict = ref<ModuleVerdict | null>(null)
 
 const replayTs = ref<number | null>(null)
 const trendDays = ref(500)
@@ -141,6 +245,12 @@ async function load() {
     equityCross.value = resp.equity_cross ?? null
     externalKpis.value = resp.external_kpis ?? []
     external.value = resp.external ?? null
+    // 数量维度（步骤 1）：金额已在后端归一为「万亿美元」，此处只补两位小数（fmt_digits）
+    quantityKpis.value = (resp.quantity_kpis ?? []).map((k: Kpi) => ({
+      ...k, tone: k.tone ?? 'neutral', fmt_digits: 2,
+    }))
+    quantity.value = resp.quantity ?? null
+    verdict.value = resp.verdict ?? null
   } catch (e) {
     console.error('[money-cost]', e)
   } finally {
@@ -221,10 +331,121 @@ const dxyChgText = computed(() => {
   const v = external.value?.dxy?.chg20
   return v == null ? '--' : `${v >= 0 ? '+' : ''}${v}`
 })
+
+/* ---------------- 货币总量（数量维度）辅助 ----------------
+ * 🔴 本区所有金额**已经在后端归一到「万亿美元」**（D5=A 定稿：跨区统一折美元）。
+ *    前端的职责只有两件：**格式化**（补小数位 / 加千分位）与**透传口径文字**，
+ *    **绝不做任何换算** —— 在这里再乘一次汇率，就会出现「后端折了、前端又折」的双重折算。
+ */
+
+/** 万亿美元读数：统一两位小数（后端给的是 number，「5.8」要显示成「5.80」） */
+function fmtTn(v: number | null | undefined): string {
+  return v == null ? '--' : Number(v).toFixed(2)
+}
+/** 带符号百分比（同比 / 方向变化） */
+function pct(v: number | null | undefined): string {
+  return v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`
+}
+/** 带符号 pp（同比的方向变化） */
+function pp(v: number | null | undefined): string {
+  return v == null ? '--' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}pp`
+}
+/** 千分位数字（原生单位读数，如「23,342.8 十亿美元」「7,673 万盎司」） */
+function num(v: number | null | undefined, d = 2): string {
+  if (v == null) return '--'
+  return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d })
+}
+/** BIS 官维组合串：由后端 `legs` 下发，前端只拼展示文本（**不猜维度取值**） */
+function legText(k: 'total' | 'loans' | 'bonds'): string {
+  const l = quantity.value?.global?.legs?.[k]
+  return l ? `3P × N × ${l[0]} × I × ${l[1]} × USD` : '--'
+}
+/** 子项占比（只在同口径内部算，不跨口径） */
+function shareOf(v: number | null | undefined, tot: number | null | undefined): string {
+  if (v == null || tot == null || !tot) return '--'
+  return `${((v / tot) * 100).toFixed(1)}%`
+}
+
+/** 判读条配色：同向扩张 → 金（机会侧）；同向收缩 → 琥珀；背离 → 蓝（中性） */
+const qtyToneClass = computed(() => {
+  const t = quantity.value?.reading?.tone
+  return t === 'loose' ? 'mc-cross--gold' : t === 'tight' ? 'mc-cross--warn' : ''
+})
+
+/** 央行 OMO 操作类型中文（源是英文枚举） */
+const OP_LABEL: Record<string, string> = {
+  reverse_repo: '逆回购',
+  cbb: '央行票据',
+  outright_reverse_repo: '买断式逆回购',
+  other: '其它工具',
+}
+function opLabel(t: string): string {
+  return OP_LABEL[t] ?? t
+}
+
+/** 数量维度各组的实际截至日（四个源不同轴 —— 口径必须随数字一起显示） */
+const qtyAsOfText = computed(() => {
+  const q = quantity.value
+  if (!q) return ''
+  const bits: string[] = []
+  if (q.as_of_bis) bits.push(`BIS ${q.as_of_bis}`)
+  if (q.as_of_fed) bits.push(`美联储 ${q.as_of_fed}`)
+  if (q.as_of_net_liq) bits.push(`A5 ${q.as_of_net_liq}`)
+  if (q.as_of_us_money) bits.push(`美国 M2 ${q.as_of_us_money}`)
+  if (q.as_of_eu) bits.push(`欧元区 ${q.as_of_eu}`)
+  if (q.as_of_cn_money) bits.push(`中国 M2 ${q.as_of_cn_money}`)
+  if (q.as_of_cn_reserve) bits.push(`外储 ${q.as_of_cn_reserve}`)
+  if (q.as_of_omo) bits.push(`OMO ${q.as_of_omo}`)
+  return bits.join(' · ')
+})
+
+/* ---------------- P1（2026-09-26）：页头结论条 + 页内锚点 ---------------- */
+
+/** 结论条配色：蓝骨金魂纪律 —— 金只给「机会侧」、琥珀给提醒、蓝为常态；
+ *  ⚠️ 刻意不出现红绿（红涨绿跌只属于行情数字与 K 线）。mixed（四层方向分化）走蓝，
+ *     与卡片墙 `.ao-verdict--mixed`（P2 新增）同义。 */
+const headToneClass = computed(() => {
+  const t = verdict.value?.tone
+  return t === 'opportunity' ? 'mc-headline--gold'
+    : t === 'caution' ? 'mc-headline--warn'
+      : 'mc-headline--blue'
+})
+
+/** 页内跳转：✅ 用 `scrollIntoView`。
+ *  2026-09-26 实测：点击前目标 `top=3632` → 点击后 `top=0`，滚动宿主
+ *  `.n-layout-scroll-container` 的 `scrollTop` 0→3632 ⇒ **完全有效**，且 `.mc-card` 上的
+ *  `scroll-margin-top:12px` 顶栏补偿一并生效。
+ *  🔴 反面警示：早期工程附录写「`scrollIntoView()` 对它无效、必须自己算 `scrollTop`」是
+ *     **被实测推翻的错结论**（已在该文档就地加勘误）—— 照做会丢掉顶栏补偿、标题被顶栏遮住。 */
+function goSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 </script>
 
 <template>
   <NSpin :show="loading">
+    <!-- 结论条（P1 · 2026-09-26）：把接口**早已下发、却从未被本页渲染**的 `verdict` 搬到页头。
+         「结论先行」不是设计偏好 —— 晨会速览场景只有 30 秒（使用场景 S1），
+         而它原来埋在 y≈5830（第 5.2 屏）⇒ 30 秒全花在滚动上。
+         ⚠️ 不得与底部 `mc-cross` 重复全文：`mc-cross` 只做「交叉印证」，此处只放模块级结论。
+         🔴 零后端改动 —— 数据一直在接口里（money_cost.py 返回段的 `verdict`）。 -->
+    <div v-if="verdict" id="mc-headline" class="mc-headline" :class="headToneClass">
+      <span class="mc-headline-badge">结论</span>
+      <span class="mc-headline-text">
+        <b class="mc-headline-title">{{ verdict.headline }}</b>
+        <span v-if="verdict.detail" class="mc-headline-detail"><RichText :text="verdict.detail" /></span>
+      </span>
+    </div>
+
+    <!-- 页内锚点导航（P1 · F2）：5.5 屏的页面必须能直达某一环（使用场景 S2「按环节定位」）。
+         ⚠️ 每个 id 都必须真实存在 —— `getElementById(...)?.scrollIntoView(...)` 在 id 缺失时
+            静默无反应、零报错，故改动后必须重跑 `_scratch/_verify_anchors_dom.js`（P0 自检）。 -->
+    <nav class="mc-nav">
+      <span class="mc-nav-label">直达</span>
+      <button v-for="s in SECTIONS" :key="s.id" type="button" class="mc-nav-item"
+              @click="goSection(s.id)">{{ s.label }}</button>
+    </nav>
+
     <!-- ② 参数区 -->
     <div class="mc-params">
       <span class="mc-asof">
@@ -244,6 +465,38 @@ const dxyChgText = computed(() => {
     <!-- ③ 结论区 -->
     <KpiCards :items="kpis" />
 
+    <!-- 口径与更新（P1 · 2026-09-26）：页头 `desc` 从 ~150 字功能清单瘦身为一句判断句后，
+         完整口径**移到这里而非删除** —— 金融需求 R7 的硬要求是「瘦身但可查性不得丢失」，
+         使用场景 S3（月度策略，10 分钟）需要能复核口径与数据源。 -->
+    <NCollapse class="mc-scope">
+      <NCollapseItem title="口径与更新（四环 / 五个切面 / 数据源 / 单位）" name="scope">
+        <div class="mc-scope-body">
+          <p>
+            <b>这页回答什么</b>：<b>现在钱松还是紧</b>（模块级结论见页头），并能沿
+            <b>① 央行操作 → ② 银行间定价 → ③ 信用派生 → ④ 对外与资产</b> 逐环下钻，
+            定位「哪个环节出问题」；底部「交叉印证」回答「政策与市场、钱与权益是否互相印证」。
+          </p>
+          <p>
+            <b>五个切面与数据源</b>：<b>价格</b>（Shibor 期限结构 / <code>interbank_rate_daily</code>）、
+            <b>预期</b>（同表的期限利差形状，已并入价格卡）、<b>政策</b>（LPR / <code>lpr</code>）、
+            <b>外部约束</b>（美债曲线 · 中美 10Y 利差 · 美元指数 / <code>bond_profit_daily</code>
+            · <code>global_usd_index_daily</code>）、<b>数量</b>（BIS 境外美元信贷 / 美联储总资产与
+            美元净流动性 A5 / 美国 M2 / 欧元区 M3 / 中国 M2、外储与黄金 / 央行 OMO 操作量）。
+          </p>
+          <p>
+            <b>单位与口径</b>：跨国金额<b>已由后端统一折美元（万亿美元）</b>，前端只做格式化、不做任何换算；
+            <b>红涨绿跌只属于行情数字</b>，本页管理 UI 不用红绿；存量水位类指标<b>不做近一年分位</b>
+            （单调上行 ⇒ 伪信号），改用同比与同比的方向。
+          </p>
+          <p>
+            <b>更新</b>：每工作日 19:35（银行间市场收盘后）。⚠️ 外部约束与数量维度<b>各自不同轴</b>
+            （美债滞后 1~2 个交易日、美元指数滞后 1 日、BIS 为季度 T+1 季、M2 家族为月度）
+            ⇒ 各区块自带截至日，<b>绝不套用页头「数据截至」</b>。
+          </p>
+        </div>
+      </NCollapseItem>
+    </NCollapse>
+
     <!-- ① + ⑤ 期限结构：同类横比 + 结构分解 -->
     <NCard id="mc-curve" size="small" class="mc-card"
            title="银行间资金价格期限结构（ON → 1W → 1M → 3M，相对隔夜利差）">
@@ -254,6 +507,8 @@ const dxyChgText = computed(() => {
         同样一个 3M 利率，曲线形状不同含义完全不同：陡说明短端资金充裕、机构愿意拉久期；
         极平说明市场预期资金持续宽松、短端没有溢价要求；倒挂（3M 比隔夜还便宜）是流动性紧张的信号。
       </div>
+      <details class="mc-fold">
+        <summary>期限结构明细表 · ON / 1W / 1M / 3M 的当前值 · 一年前 · 近一年区间 · 相对隔夜利差</summary>
       <table class="mc-table">
         <thead>
           <tr>
@@ -280,6 +535,7 @@ const dxyChgText = computed(() => {
           </tr>
         </tbody>
       </table>
+      </details>
       <div class="mc-foot">
         「相对隔夜」以 ON 为锚。⚠️ ON 自身的利差恒为 0，作锚位；期限越靠后利差越能说明资金的长短偏好。
       </div>
@@ -312,6 +568,8 @@ const dxyChgText = computed(() => {
             v-if="lpr.prev.lpr_5y != null && lpr.lpr_5y != null">｜5Y {{ lpr.prev.lpr_5y }}% → {{ lpr.lpr_5y }}%</template>
         </span>
       </div>
+      <details class="mc-fold">
+        <summary>LPR 历次变动明细 · 生效日 / 1Y / 5Y / 相对上一次（共 {{ lprEventsDesc.length }} 次）</summary>
       <table class="mc-table mc-table--events">
         <thead>
           <tr><th>生效日</th><th>LPR 1Y（%）</th><th>LPR 5Y（%）</th><th>相对上一次</th></tr>
@@ -329,18 +587,20 @@ const dxyChgText = computed(() => {
           </tr>
         </tbody>
       </table>
+      </details>
       <div class="mc-foot">
         ⚠️ LPR 与 Shibor 报价机制不同（政策报价 vs 市场成交），故不画在同一张图里，也不参与期限利差计算。
       </div>
     </NCard>
 
-    <!-- ④ 外部约束（批次 1，2026-09-25）
-         为什么这些数属于「货币流动性」而不属于「资金温度」（D6 因果位置划法）：
+    <!-- ④ 外部约束（批次 1，2026-09-25；P3 · 2026-09-26 上卡）
+         为什么这些数属于「货币流动性」而不属于「资金温度」（因果位置划法）：
            本区放的都是**钱的价格**（因）—— 美债收益率是全球贴现率、中美利差决定跨境资金方向、
            美元指数是全球美元总闸门；而「钱有没有真的进到市场里」（汇率背后的外资流向、
            基金发行、产业资本回购）归「资金温度」，那是**果**。
-         ⚠️ 遵守上一轮已拍板的「不拆大卡」原则：本区是**大卡内的分区**，卡片墙仍是 3 张 track 卡
-           （《货币流动性观测体系设计》§6 批次 3），故这几个 KPI **不标 card_rank**。 -->
+         ⚠️ **变更说明**（原「不拆大卡 · 不标 card_rank」的做法已由决策 D6=(a) 取代）：
+           本区三个代表读数**已上卡片墙**（新增「外部约束」卡 q5 =
+           cn_us_10y / us_10y / dxy ⇒ 利差吸引力 + 全球贴现率 + 美元总闸门）。 -->
     <NCard id="mc-external" size="small" class="mc-card"
            title="外部约束：美元和美债，在收紧还是在放松？">
       <template #header-extra>
@@ -354,9 +614,14 @@ const dxyChgText = computed(() => {
 
       <KpiCards v-if="externalKpis.length" :items="externalKpis" />
 
-      <!-- 美债曲线：四腿 + 各自在近一年区间里的位置 -->
+      <!-- 美债曲线：四腿 + 各自在近一年区间里的位置
+           D7=(b′)（2026-09-26）：F4 原文指定的「美债曲线全表」默认折叠。
+           折叠的只是**逐列明细数据**，本块的子标题 + KPI 读数（美债 10Y / 中美 10Y 利差）
+           + 下方口径说明仍然可见 ⇒ 锚点 `mc-ext-curve` 跳过来不是空白（红线 8）。 -->
       <div id="mc-ext-curve" class="mc-ext-block">
         <div class="card-sub">美债曲线 · 四个期限（长端是全市场的贴现基准）</div>
+        <details class="mc-fold">
+          <summary>美债曲线全表 · 四期限 × 7 列（当前 / 一年前 / 20 日变化 / 近一年区间 / 区间位置 / 相对 2Y）</summary>
         <table class="mc-table">
           <thead>
             <tr>
@@ -386,6 +651,7 @@ const dxyChgText = computed(() => {
             </tr>
           </tbody>
         </table>
+        </details>
         <div class="card-cap">
           四条腿一起被抬到近一年高位、而 10Y−2Y 却在近一年最平 —— 「收益率高位 + 曲线走平」，
           是紧缩中后段的典型形态。⚠️ 「在区间的位置」是当前值在近一年高低区间里的相对位置，
@@ -400,6 +666,8 @@ const dxyChgText = computed(() => {
           <span v-if="external?.dxy?.source === 'sina_official'">主口径 = 新浪官方日线（ICE 口径）</span>
           <span v-else>主口径 = 自算回落（官方日线未就绪）</span>
         </div>
+        <details class="mc-fold">
+          <summary>三口径对账明细 · 官方日线 / 自算交叉汇率 / 实时快照（数值 · 截至日 · 一年前 · 偏差）</summary>
         <table class="mc-table">
           <thead>
             <tr><th>口径</th><th>数值</th><th>截至日</th><th>一年前</th><th>20 日变化 / 偏差</th></tr>
@@ -438,6 +706,11 @@ const dxyChgText = computed(() => {
             </tr>
           </tbody>
         </table>
+        </details>
+        <!-- P4：三条口径的来源与互比结论属「证据层」，默认折叠。
+             D7=(b′)：三口径对账**表**本身也已并入折叠（原「表格仍可见」的写法已改）。 -->
+        <details class="mc-fold">
+          <summary>三条口径的来源与互比结论（自算 / 实时快照 / 官方日线）</summary>
         <div class="card-cap">
           主口径已从「自算」切到 <b>官方日线</b>：新浪 `NewForexService.getDayKLine` 返回 ICE 口径日线，
           1985-11-08 起 10,573 行（实测与官方实时快照偏差 <b>−0.004%</b>）。
@@ -447,9 +720,14 @@ const dxyChgText = computed(() => {
           而单位错是「全体平移」型的 3%+ 偏离 —— 两条口径互比正是为把后者抓出来。
           偏差标签按 |偏差| 分档：≤0.3% 蓝、≤1.5% 琥珀、&gt;1.5% 警示。
         </div>
+        </details>
       </div>
 
-      <!-- 全球央行方向：⚠️ 上游停更，只能读历史方向 -->
+      <!-- 全球央行方向：⚠️ 上游停更，只能读历史方向。
+           P4（2026-09-26）：本块（6 行决议表 + 停更说明）属「证据层」，且**不是任何 anchor
+           目标**（没有 KPI 指向它）⇒ 默认折叠最安全。 -->
+      <details class="mc-fold">
+        <summary>全球央行方向 · 最新有效决议（6 家央行，含上游停更提示）</summary>
       <div class="mc-ext-block">
         <div class="card-sub">全球央行方向 · 最新有效决议</div>
         <table class="mc-table">
@@ -477,6 +755,7 @@ const dxyChgText = computed(() => {
         </table>
         <div v-if="external?.cb_note" class="mc-warn"><RichText :text="external.cb_note" /></div>
       </div>
+      </details>
 
       <!-- 内外组合：这才是本区的结论（四项读数 + 与国内松紧的组合判定） -->
       <div v-if="external?.reading" class="mc-cross"
@@ -493,7 +772,475 @@ const dxyChgText = computed(() => {
         数据截至：{{ extAsOfText || '--' }}。⚠️ 美债/中债走 `bond_profit_daily`，
         比 A 股日线滞后 1~2 个交易日 —— 故本区单独标注截至日，不套用页头的「数据截至」。
       </div>
+      <details class="mc-fold">
+        <summary>为什么外部约束算「货币流动性」· 单位与口径备注（原文）</summary>
       <div class="mc-note"><RichText :text="external?.note ?? ''" /></div>
+      </details>
+    </NCard>
+
+    <!-- ⑤ 货币总量（数量维度，2026-09-26 步骤 1；P3 / P4 · 2026-09-26 结构调整）
+         为什么单独成为一区：上面四个切面答的是「钱**贵不贵**」（价格 / 预期 / 政策 / 外部约束），
+         本区答「钱**多不多**」（水位与存量）—— 价格是边际、数量是水位，两者是同一枚硬币的两面。
+         ⚠️ **变更说明**（原「不拆大卡 · KPI 不标 card_rank」的做法已由决策 D6=(a) 取代）：
+           本区三个代表读数**已上卡片墙** —— 新增的「数量」卡（q4）取
+           us_m2 / eu_m3 / cn_m2（三经济体横向对比，服务目标 T3）；其余低频明细仍只在详情页。
+           各分组子标题已按四环**打标**（① 央行操作 / ③ 信用派生 / ④ 对外与资产）。
+         🔴 单位纪律（D5=A）：本区所有金额**已由后端统一折美元（万亿美元）**，
+           前端只格式化、**不做任何换算**；不可比的量（黄金实物量 / 人民币表内外汇 / OMO 操作量）
+           由后端留原生单位下发。 -->
+    <NCard id="mc-quantity" size="small" class="mc-card"
+           title="货币总量：钱在变多，还是在变少？">
+      <template #header-extra>
+        <DrillLink :items="[{ label: '跨市场对照看海外', to: '/analysis/cross-market' }]" />
+      </template>
+      <div class="mc-hint">
+        上面四个切面答的是「钱<b>贵不贵</b>」（价格 / 预期 / 政策 / 外部约束），本区答「钱<b>多不多</b>」。
+        <b>价格是边际、数量是水位</b>：只看价格会把「没人借钱」误读成「钱变多了」，
+        只看数量会把「存量高企但边际收紧」误读成「还在放水」—— 两者必须配着看。
+        ⚠️ 本区是<b>低频存量读数</b>（BIS 季度、美联储周度、其余月度），<b>天然不该天天看</b>。
+        跨区金额已<b>统一折美元</b>（换算集中在后端一处），前端只做格式化。
+      </div>
+
+      <KpiCards v-if="quantityKpis.length" :items="quantityKpis" />
+
+      <!-- 判读条：口径在后端生成，前端只透传（设计 §四「判读条给判断、KPI 给读数」） -->
+      <div v-if="quantity?.reading" class="mc-cross" :class="qtyToneClass">
+        <span class="mc-cross-badge">数量维度 · 四层同向？</span>
+        <span class="mc-cross-text">
+          <b>{{ quantity.reading.headline }}</b>
+          <br /><RichText :text="quantity.reading.detail" />
+        </span>
+      </div>
+
+      <!-- ③ 信用派生 · 三经济体横向对比（P4 · 2026-09-26 ── 四环重排的新增块）
+           为什么单独一块：中国 M2 52.87 万亿的专业价值**不在它自己**，而在
+           「52.87 vs 23.34 vs 20.00」这个**分化叙事**。原先三地读数分散在三个按数据源分的
+           分组里、中国块独大 1273px ⇒ 是三个孤立读数，读不出信息。
+           🔴 折算汇率与各自 as_of 必须明示：跨国比较**随汇率漂移而失真**，
+              不标日期的折算率不可审计（目标 T3，也是上一轮已踩实的口径纪律）。 -->
+      <div id="mc-qty-cross" class="mc-ext-block">
+        <div class="card-sub">
+          ③ 信用派生 · 美 / 欧 / 中 货币总量横向对比
+          <span class="mc-dim">
+            折算 USD/CNY {{ quantity?.fx?.usd_cny ?? '--' }} · EUR/USD {{ quantity?.fx?.eur_usd ?? '--' }}
+            <template v-if="quantity?.fx?.as_of">（{{ quantity.fx.as_of }}）</template>
+            ｜单位：万亿美元
+          </span>
+        </div>
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>经济体</th><th>口径</th><th>规模（万亿美元）</th><th>同比</th><th>原生单位</th><th>截至</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term"><b>美国</b></td>
+              <td class="mc-dim">M2</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.us?.money?.m2_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.us?.money?.m2_yoy) }}</td>
+              <td class="mc-num mc-dim">{{ num(quantity?.us?.money?.m2_bn, 1) }} 十亿美元</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_us_money ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term"><b>欧元区</b></td>
+              <td class="mc-dim">M3</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.eu?.m3_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.eu?.m3_yoy) }}</td>
+              <td class="mc-dim">百万欧元（原币）</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_eu ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term"><b>中国</b></td>
+              <td class="mc-dim">M2</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.cn?.money?.m2_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.cn?.money?.m2_yoy) }}</td>
+              <td class="mc-num mc-dim">{{ num(quantity?.cn?.money?.m2_yi, 1) }} 亿元</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_cn_money ?? '--' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="mc-foot">
+          ⚠️ <b>三个原生单位全不同</b>（美国「十亿美元」/ 欧元区「百万欧元」/ 中国「亿元」），
+          本表已由后端统一折美元。🔴 <b>不折美元直接比大小会得到相反结论</b>：
+          实测中国 M2 原生 3,568,083.6 亿元 vs 美国 23,342.8 十亿美元（数字差 150 倍、方向也相反），
+          折美元后是 <b>52.87 vs 23.34 vs 20.00</b>（中国约为美国的 2.3 倍）。
+          🔴 <b>折算率随汇率漂移</b>：上方的 USD/CNY 与 EUR/USD 各带 <code>as_of</code>，
+          汇率变动时本表的跨期比较会失真 —— 这也是「单位归一只在后端做一次」的原因。
+          ⚠️ <b>三地 M2/M3 的定义本身不同</b>（美国 M2 含零售货币基金、欧元区 M3 含回购、
+          中国 M2 含单位定期存款）⇒ 只读<b>方向与规模量级</b>，不做精确倍率比较。
+        </div>
+      </div>
+
+      <!-- 分组 1｜全球层：境外美元信贷（BIS 官方口径，季度） -->
+      <div id="mc-qty-global" class="mc-ext-block">
+        <div class="card-sub">
+          <span class="mc-qty-ring">④ 对外与资产</span>
+          全球层 · 境外美元信贷（BIS 官方口径 · 季度）
+          <span class="mc-dim">截至 {{ quantity?.global?.period ?? '--' }}</span>
+        </div>
+        <details class="mc-fold">
+          <summary>BIS 分腿明细 · 总量 / 银行贷款 / 国际债券 IDS（含官维组合与占比）</summary>
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>口径</th><th>BIS 官维组合</th><th>金额（万亿美元）</th><th>同比</th><th>占比</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term"><b>境外美元信贷（总量）</b></td>
+              <td class="mc-dim">{{ legText('total') }}</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.global?.total_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.global?.total_yoy) }}</td>
+              <td class="mc-num mc-dim">100%</td>
+            </tr>
+            <tr>
+              <td class="mc-term">├ 银行贷款（子项）</td>
+              <td class="mc-dim">{{ legText('loans') }}</td>
+              <td class="mc-num">{{ fmtTn(quantity?.global?.loans_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.global?.loans_yoy) }}</td>
+              <td class="mc-num mc-dim">
+                {{ shareOf(quantity?.global?.loans_tn, quantity?.global?.total_tn) }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">└ 国际债券 IDS（子项）</td>
+              <td class="mc-dim">{{ legText('bonds') }}</td>
+              <td class="mc-num">{{ fmtTn(quantity?.global?.bonds_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.global?.bonds_yoy) }}</td>
+              <td class="mc-num mc-dim">
+                {{ shareOf(quantity?.global?.bonds_tn, quantity?.global?.total_tn) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        </details>
+        <div class="mc-foot">
+          🔴 <b>三者不可相加</b>：总量（<code>l_instr=B</code>）<b>已包含</b>银行贷款（<code>G</code>）
+          与国际债券（<code>D</code>）—— 相加即三重重复，实测错写法会把 14.75 万亿放大到 45.95 万亿
+          （真值的 <b>3.12 倍</b>）。官维组合由后端下发，前端不猜维度取值。
+          口径自证：贷款 + 债券 − 总量 = <b>{{ quantity?.global?.xcheck_pct }}%</b>（逐位吻合）。
+          ⚠️ 中文口径是「<b>境外美元信贷</b>」（跨境 + 借款人本地外币），不要简化成「跨境美元信贷」；
+          本表<b>只含美元计价</b>，不含欧元 / 日元等其它币种。
+          ⚠️ <b>季度、T+1 季发布</b> ⇒ 不可当「当前」读数。
+        </div>
+      </div>
+
+      <!-- 分组 2｜美国层：美联储总资产（anchor）+ 美元净流动性 A5（派生亮点） + M2/M1 -->
+      <div id="mc-qty-us" class="mc-ext-block">
+        <div class="card-sub"><span class="mc-qty-ring">① 央行操作</span>美国层 · 美联储 = 全球美元总闸门</div>
+        <details class="mc-fold">
+          <summary>美联储总资产与美元净流动性 A5 合成明细 · 4/13/52 周变化 · 三腿逐项（含单位与「三腿同日」校验）</summary>
+        <table class="mc-table">
+          <thead>
+            <tr>
+              <th>读数</th><th>金额（万亿美元）</th><th>4 周</th><th>13 周</th><th>52 周</th><th>截至</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term"><b>美联储总资产</b>（扩表=放水）</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.us?.fed?.tn) }}</td>
+              <td class="mc-num mc-dim">{{ pct(quantity?.us?.fed?.chg_4w_pct) }}</td>
+              <td class="mc-num">{{ pct(quantity?.us?.fed?.chg_13w_pct) }}</td>
+              <td class="mc-num mc-dim">{{ pct(quantity?.us?.fed?.chg_52w_pct) }}</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_fed ?? '--' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <!-- A5 的构成必须显式列出：它是「合成口径、非官方」，且三腿须同日 -->
+        <table class="mc-table" style="margin-top: 8px">
+          <thead>
+            <tr><th>A5 合成（= 总资产 − TGA − ON RRP）</th><th>金额</th><th>单位</th><th>截至</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term">美联储总资产</td>
+              <td class="mc-num">{{ num(quantity?.us?.net_liquidity?.fed_tn, 2) }}</td>
+              <td class="mc-dim">万亿美元</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_net_liq ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">− 财政部 TGA 余额</td>
+              <td class="mc-num">{{ num(quantity?.us?.net_liquidity?.tga_yi, 0) }}</td>
+              <td class="mc-dim">亿美元</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_net_liq ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">− 隔夜逆回购 ON RRP</td>
+              <td class="mc-num">{{ num(quantity?.us?.net_liquidity?.onrrp_yi, 2) }}</td>
+              <td class="mc-dim">亿美元</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_net_liq ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term"><b>= 美元净流动性（合成 A5）</b></td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.us?.net_liquidity?.tn) }}</td>
+              <td class="mc-dim">万亿美元</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_net_liq ?? '--' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        </details>
+        <div class="mc-foot">
+          🔴 <b>合成口径、非官方</b>：A5 是市场最常用的「美元真实流动性」口径，由本项目自合成
+          ⇒ KPI 用金色强调是因为它是<b>派生亮点</b>，<b>不代表官方背书</b>。
+          ⚠️ 三腿<b>必须取同一日期</b>：美联储总资产是周度（全为周三）、ON RRP 只有 249 天有值、
+          TGA 1,248 天 ⇒ 实测全史仅 <b>52 个「三腿同日」</b>（当前取到
+          {{ quantity?.us?.net_liquidity?.n_days ?? '--' }} 个可用同日期）。若退化成「各自最近值」，
+          等于拿三个不同日期相减（TGA 日波动可达 ±10 万百万美元，足以改变结论）。
+          ⚠️ TGA / ON RRP 量级可低到「亿美元」级 ⇒ 折成万亿只剩 0.000x，故这两项按<b>亿美元</b>列示。
+          <br />「13 周 / 52 周」为周度行数直接取值（该表全部是周三数据，无需按自然日折算）。
+        </div>
+
+        <details class="mc-fold">
+          <summary>美国货币供应明细 · M2 / M1 / 基础货币（原生值 · 折美元 · 同比 · 截至）</summary>
+        <table class="mc-table" style="margin-top: 10px">
+          <thead>
+            <tr><th>美国货币供应（月度 H6）</th><th>原生</th><th>折美元</th><th>同比</th><th>截至</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term">M2</td>
+              <td class="mc-num mc-dim">{{ num(quantity?.us?.money?.m2_bn, 1) }} 十亿美元</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.us?.money?.m2_tn) }} 万亿美元</td>
+              <td class="mc-num">{{ pct(quantity?.us?.money?.m2_yoy) }}</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_us_money ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">M1</td>
+              <td class="mc-num mc-dim">{{ num(quantity?.us?.money?.m1_bn, 1) }} 十亿美元</td>
+              <td class="mc-num">{{ fmtTn(quantity?.us?.money?.m1_tn) }} 万亿美元</td>
+              <td class="mc-num">{{ pct(quantity?.us?.money?.m1_yoy) }}</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_us_money ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">基础货币</td>
+              <td class="mc-num mc-dim">--</td>
+              <td class="mc-num">{{ fmtTn(quantity?.us?.money?.base_tn) }} 万亿美元</td>
+              <td class="mc-num mc-dim">--</td>
+              <td class="mc-num mc-dim">{{ quantity?.as_of_us_money ?? '--' }}</td>
+            </tr>
+          </tbody>
+        </table>
+        </details>
+        <div class="mc-foot">
+          ⚠️ 美国 M2 原生单位是 <b>十亿美元</b>（23,342.8 bn），与欧元区 M3（<b>百万欧元</b>）、
+          中国 M2（<b>亿元</b>）<b>单位全不同</b> ⇒ 本表同时给出原生值与折美元值。
+          <b>拿原值直接比大小会得到相反结论</b>：中美 M2 原值差 150 倍，折美元后是 2.3 倍。
+        </div>
+      </div>
+
+      <!-- 分组 3｜欧元区：第二大货币区（单卡看 M3 同比） -->
+      <div id="mc-qty-eu" class="mc-ext-block">
+        <div class="card-sub">
+          <span class="mc-qty-ring">③ 信用派生</span>
+          欧元区 · 第二大货币区
+          <span class="mc-dim">截至 {{ quantity?.as_of_eu ?? '--' }}</span>
+        </div>
+        <details class="mc-fold">
+          <summary>欧元区货币总量明细 · M3 / M2 / M1（折美元 · 同比 · 汇率口径）</summary>
+        <table class="mc-table">
+          <thead>
+            <tr><th>口径</th><th>折美元（万亿美元）</th><th>同比</th><th>汇率口径</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term"><b>M3</b></td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.eu?.m3_tn) }}</td>
+              <td class="mc-num">{{ pct(quantity?.eu?.m3_yoy) }}</td>
+              <td class="mc-num mc-dim">EUR/USD {{ quantity?.eu?.eur_usd ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">M2</td>
+              <td class="mc-num">{{ fmtTn(quantity?.eu?.m2_tn) }}</td>
+              <td class="mc-num mc-dim">--</td>
+              <td class="mc-num mc-dim">同上</td>
+            </tr>
+            <tr>
+              <td class="mc-term">M1</td>
+              <td class="mc-num">{{ fmtTn(quantity?.eu?.m1_tn) }}</td>
+              <td class="mc-num mc-dim">--</td>
+              <td class="mc-num mc-dim">同上</td>
+            </tr>
+          </tbody>
+        </table>
+        </details>
+        <div class="mc-warn">
+          ⚠️ <b>唯一通道，失效即告警</b>：欧元区数据只有 DBnomics 一条通道（ECB 直连三域全断），
+          它失效则本组断供 —— DQ freshness 是唯一防线。
+          原生单位是 <b>百万欧元</b>（不是美元！），折美元走人民币中间价交叉汇率
+          （EUR/CNY ÷ USD/CNY），已由后端完成。
+        </div>
+      </div>
+
+      <!-- 分组 4｜中国层：M2 结构 + 短端流量 + 官方储备（三套口径分列） -->
+      <div id="mc-qty-cn" class="mc-ext-block">
+        <div class="card-sub">
+          <span class="mc-qty-ring">③ 信用派生 · 跨 ①④</span>
+          中国层 · M2 结构 + 央行操作 + 官方储备
+          <span class="mc-dim">截至 {{ quantity?.as_of_cn_money ?? '--' }}</span>
+        </div>
+        <details class="mc-fold">
+          <summary>中国 M2 / M1 与 M1−M2 剪刀差明细 · 原生值 · 折美元 · 同比 · 近 3 月变化</summary>
+        <table class="mc-table">
+          <thead>
+            <tr><th>口径</th><th>原生</th><th>折美元</th><th>同比</th><th>说明</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term"><b>M2</b></td>
+              <td class="mc-num mc-dim">{{ num(quantity?.cn?.money?.m2_yi, 1) }} 亿元</td>
+              <td class="mc-num-strong">{{ fmtTn(quantity?.cn?.money?.m2_tn) }} 万亿美元</td>
+              <td class="mc-num">{{ pct(quantity?.cn?.money?.m2_yoy) }}</td>
+              <td class="mc-num mc-dim">USD/CNY {{ quantity?.cn?.money?.usd_cny ?? '--' }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">M1</td>
+              <td class="mc-num mc-dim">{{ num(quantity?.cn?.money?.m1_yi, 1) }} 亿元</td>
+              <td class="mc-num">{{ fmtTn(quantity?.cn?.money?.m1_tn) }} 万亿美元</td>
+              <td class="mc-num">{{ pct(quantity?.cn?.money?.m1_yoy) }}</td>
+              <td class="mc-num mc-dim">同上</td>
+            </tr>
+            <tr>
+              <td class="mc-term">M1 − M2 剪刀差</td>
+              <td class="mc-num mc-dim">--</td>
+              <td class="mc-num">{{ pct(quantity?.cn?.money?.gap) }}</td>
+              <td class="mc-num">
+                <span class="mc-tag"
+                      :class="(quantity?.cn?.money?.gap_d3 ?? 0) >= 0 ? 'mc-tag--ok' : 'mc-tag--warn'">
+                  {{ quantity?.cn?.money?.gap_word ?? '--' }}
+                </span>
+              </td>
+              <td class="mc-num mc-dim">近 3 月 {{ pp(quantity?.cn?.money?.gap_d3) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        </details>
+        <div class="mc-foot">
+          ⚠️ 折美元需 USD/CNY 中间价 —— <b>不折美元就与美国 M2 比大小是错的</b>。
+          M1 − M2 剪刀差衡量<b>资金活化度</b>（活钱 vs 死钱）：上升 = 活化度回升，
+          回落 = 钱在往定期/储蓄里沉。
+        </div>
+
+        <!-- M2 结构：⚠️ 源侧停更时点不齐，必须标注而不是当缺数。
+             P4（2026-09-26）：默认**折叠**（F4「明细折叠」）—— 逐列明细属证据层，
+             使用场景 S1（30 秒速览）用不到；S3（月度策略，10 分钟）需要时一键展开，
+             **内容零删减**（折叠 ≠ 删除，这是 R5 的硬要求）。
+             ⚠️ 用原生 `<details>` 而非 NCollapse：无需 JS 状态，且 anchor 目标在它**外部**，
+                不会出现「点了锚点跳进一个收起的容器」（红线 8）。 -->
+        <details class="mc-fold">
+          <summary>M2 结构明细（活期 / 定期 / 储蓄 / 准货币 / 其他存款）</summary>
+        <table class="mc-table" style="margin-top: 10px">
+          <thead>
+            <tr><th>M2 结构</th><th>数值（亿元）</th><th>数据截至</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in quantity?.cn?.money?.struct ?? []" :key="s.key">
+              <td class="mc-term">{{ s.label }}</td>
+              <td class="mc-num">{{ s.value == null ? '--' : num(s.value, 2) }}</td>
+              <td class="mc-num mc-dim">{{ s.as_of ?? '--' }}</td>
+              <td>
+                <span v-if="s.stale" class="mc-tag mc-tag--warn">源口径调整 · 已停更</span>
+                <span v-else class="mc-tag mc-tag--ok">正常更新</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="mc-foot">
+          ⚠️ 结构列<b>停更时点不齐</b>（实测：活期/定期停 2025-05、储蓄停 2024-12，
+          而准货币 / 其他存款仍更新到 {{ quantity?.as_of_cn_money ?? '--' }}）
+          ⇒ 属<b>源侧口径调整</b>，<b>不是采集失败</b>，不得当缺数处理。
+        </div>
+        </details>
+
+        <!-- 中国「外储」三套口径：🔴 单位不同、折算率非市场汇率 ⇒ 严禁相加 -->
+        <details class="mc-fold">
+          <summary>「外储」三套口径明细 · 官方外汇储备 / 黄金实物量 / 人民币表内外汇（含各自来源与同比）</summary>
+        <table class="mc-table" style="margin-top: 10px">
+          <thead>
+            <tr><th>「外储」口径（⚠️ 三套，不可相加）</th><th>数值</th><th>单位</th><th>来源 / 口径</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mc-term"><b>① 官方外汇储备</b>（国际可比）</td>
+              <td class="mc-num-strong">{{ num(quantity?.cn?.reserve?.fx_usd_yi, 2) }}</td>
+              <td class="mc-dim">亿美元</td>
+              <td class="mc-num mc-dim">
+                cn_reserve_monthly｜同比 {{ pct(quantity?.cn?.reserve?.fx_yoy) }}</td>
+            </tr>
+            <tr>
+              <td class="mc-term">② 黄金储备（<b>实物量</b>）</td>
+              <td class="mc-num">{{ num(quantity?.cn?.reserve?.gold_oz, 0) }}</td>
+              <td class="mc-dim">万盎司</td>
+              <td class="mc-num mc-dim">
+                月度环比 +{{ num(quantity?.cn?.reserve?.gold_chg, 0) }} 万盎司 ·
+                <b>连续增持 {{ quantity?.cn?.reserve?.gold_streak ?? '--' }} 个月</b></td>
+            </tr>
+            <tr>
+              <td class="mc-term">③ 表内外汇（<b>人民币口径</b>）</td>
+              <td class="mc-num">{{ num(quantity?.cn?.cb_balance?.fx_yi, 2) }}</td>
+              <td class="mc-dim">亿元</td>
+              <td class="mc-num mc-dim">
+                cn_cb_balance_monthly｜货币黄金 {{ num(quantity?.cn?.cb_balance?.gold_yi, 2) }} 亿元</td>
+            </tr>
+          </tbody>
+        </table>
+        </details>
+        <div class="mc-warn">
+          🔴 <b>三套口径严禁相加、严禁用市场汇率互校</b>：它们的单位互不相同，且人民币表内口径 ÷
+          美元官方口径的<b>隐含折算率不是市场汇率</b>（实测 24 期由 <b>6.886 单调降至 6.318</b>，
+          同期市场汇率约 7.0~7.3）—— 用市场汇率做校验会<b>稳定误报</b>。
+          ⇒ 本表只分列并各标口径。⚠️ 黄金是<b>实物量（万盎司）不是金额</b>，故不折美元。
+        </div>
+
+        <!-- 央行 OMO：只给「操作量事实」，不做净投放（D4=B 主动决策）。
+             P4：逐笔明细默认**折叠**（F4 指定项之一）—— 操作量逐笔属证据层，展开后与原来完全一致。 -->
+        <details class="mc-fold">
+          <summary>央行公开市场操作逐笔（按栏目分列，含操作量合计）</summary>
+        <div v-for="o in quantity?.cn?.omo ?? []" :key="o.section" class="mc-qty-omo">
+          <div class="card-sub">
+            央行公开市场操作 · {{ o.label }}
+            <span class="mc-dim">最近 {{ o.days }} 个操作日（截至 {{ o.as_of }}）</span>
+          </div>
+          <table class="mc-table">
+            <thead>
+              <tr><th>操作日</th><th>工具</th><th>期限</th><th>中标利率</th><th>操作量（亿元）</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, i) in o.rows" :key="o.section + i">
+                <td class="mc-num mc-dim">{{ r.date }}</td>
+                <td class="mc-term">{{ opLabel(r.op_type) }}</td>
+                <td class="mc-num mc-dim">{{ r.tenor_days == null ? '--' : r.tenor_days + ' 天' }}</td>
+                <td class="mc-num">{{ r.rate == null ? '--' : r.rate + '%' }}</td>
+                <td class="mc-num">{{ num(r.amount_yi, 0) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="mc-foot">
+            栏目内合计 {{ num(o.amount_sum_yi, 0) }} 亿元（<b>仅本栏目</b>，不含其它栏目）。
+          </div>
+        </div>
+        <div class="mc-foot">
+          🔴 <b>两个栏目不可混加</b>：<code>omo_trade</code>（逆回购 / 央票）与
+          <code>outright_repo</code>（买断式逆回购）各自独立编号、量级差一个数量级 ——
+          直接求和会把「7 天期逆回购 515 亿」与「买断式 5,000 亿」混成一个数。
+          🔴 <b>本期不做「净投放」派生</b>（主动决策、非遗漏）：净投放须按期限滚动推算到期日
+          （7 天期遇节假日顺延）、买断式期限不固定、人行另有国债买卖 / 国库现金定存等工具 ⇒ 会系统性低估。
+          ⚠️ <b>零操作日也是有效数据</b>（操作量 0）；买断式是招标预告，一律按<b>正文操作日</b>列示。
+        </div>
+        </details>
+      </div>
+
+      <div class="card-cap">
+        数据截至：{{ qtyAsOfText || '--' }}。
+        ⚠️ 本区四条源<b>不同轴</b>（BIS 季度 / 美联储周度 / 其余月度 / OMO 日度），
+        故各组各自标注截至日，<b>不套用页头的「数据截至」</b>。
+        汇率口径：{{ quantity?.fx?.source ?? '--' }}（USD/CNY {{ quantity?.fx?.usd_cny ?? '--' }} ·
+        EUR/USD {{ quantity?.fx?.eur_usd ?? '--' }}）。
+      </div>
+      <details class="mc-fold">
+        <summary>为什么「价格」与「数量」必须一起看 · 单位与口径备注（原文）</summary>
+      <div class="mc-note"><RichText :text="quantity?.note ?? ''" /></div>
+      </details>
     </NCard>
 
     <!-- ④ 交叉印证 ×2
@@ -520,7 +1267,10 @@ const dxyChgText = computed(() => {
         </span>
       </div>
       <div class="card-cap">对照的两组：政策利率 ↔ 市场资金价格 · 资金价格 ↔ 权益位置</div>
+      <details class="mc-fold">
+        <summary>交叉印证的数据来源与口径备注（原文）</summary>
       <div class="mc-note"><RichText :text="note" /></div>
+      </details>
     </NCard>
   </NSpin>
 </template>
@@ -536,6 +1286,64 @@ const dxyChgText = computed(() => {
 }
 .mc-params-right { display: flex; gap: 8px; align-items: center; }
 .mc-card { margin-bottom: 12px; scroll-margin-top: 12px; }
+
+/* ---------------- P1（2026-09-26）：页头结论条 + 页内锚点 + 口径折叠 ---------------- */
+/* 结论条三态：蓝=常态 / 金=机会侧 / 琥珀=提醒（蓝骨金魂；**刻意不出现红绿** —— 红涨绿跌只属于行情数字） */
+.mc-headline {
+  display: flex; gap: 10px; align-items: flex-start;
+  border-left: 3px solid #185FA5; background: #EAF2FB;
+  border-radius: 0 6px 6px 0; padding: 10px 12px; margin-bottom: 10px;
+}
+.mc-headline--gold { border-left-color: #C9A227; background: #FAF3DF; }
+.mc-headline--warn { border-left-color: #B45309; background: #FAEEDA; }
+.mc-headline-badge {
+  flex: 0 0 auto; font-size: 11px; color: #185FA5; background: #FFFFFF;
+  border: 1px solid #C7DDF2; border-radius: 3px; padding: 1px 6px; margin-top: 1px;
+}
+.mc-headline--gold .mc-headline-badge { color: #7A5E12; border-color: #E7D9A8; }
+.mc-headline--warn .mc-headline-badge { color: #B45309; border-color: #F0D6B8; }
+.mc-headline-title { font-size: 15px; color: #1F2937; line-height: 1.5; }
+.mc-headline--gold .mc-headline-title { color: #7A5E12; }
+.mc-headline--warn .mc-headline-title { color: #7C2D12; }
+.mc-headline-detail { display: block; font-size: 12px; color: #6B7280; margin-top: 3px; line-height: 1.6; }
+/* 锚点导航：一行 5 个（窄屏自动换行） */
+.mc-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.mc-nav-label { font-size: 11px; color: #9CA3AF; }
+.mc-nav-item {
+  font-size: 12px; color: #185FA5; background: #F3F4F5; border: 1px solid #E5E7EB;
+  border-radius: 12px; padding: 2px 10px; cursor: pointer; font-family: inherit;
+}
+.mc-nav-item:hover { background: #EAF2FB; border-color: #C7DDF2; }
+/* 「口径与更新」折叠区：承接被瘦身的页头 desc（不删除，只换位置） */
+.mc-scope { margin-bottom: 12px; }
+.mc-scope-body { font-size: 12px; color: #6B7280; line-height: 1.8; }
+.mc-scope-body p { margin: 0 0 8px; }
+.mc-scope-body p:last-child { margin-bottom: 0; }
+.mc-scope-body b { color: #1F2937; }
+.mc-scope-body code {
+  background: #F3F4F5; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #185FA5;
+}
+/* 四环标记（P4 · 2026-09-26）：给每个分组标出它服务四环的哪一环 ——
+   把「按数据源分的块」重新锚到「按因果位置分的环」上（registry 契约⑩ 的页内应用）。
+   ⚠️ 这只是**打标**，不搬区块（D2 = 保守方案 B），故风险远低于物理重排。 */
+.mc-qty-ring {
+  display: inline-block; font-size: 11px; color: #185FA5; background: #EAF2FB;
+  border: 1px solid #C7DDF2; border-radius: 3px; padding: 0 5px; margin-right: 6px;
+}
+/* 明细折叠（P4 · 2026-09-26）：默认收起「证据层」—— S1（30 秒速览）不被它挤，
+   S3（月度策略，10 分钟）一键展开且**内容零删减**。
+   🔴 用原生 `<details>` 而非 NCollapse，两个原因：① 无需 JS 状态；
+      ② 所有 anchor 目标（mc-qty-* / mc-ext-*）都在它**外部**，故不会出现
+         「点了锚点跳进一个收起的容器」（契约红线 8）。 */
+.mc-fold { margin-top: 10px; }
+.mc-fold > summary {
+  font-size: 12px; color: #185FA5; cursor: pointer; padding: 3px 0;
+  list-style: none; user-select: none;
+}
+.mc-fold > summary::-webkit-details-marker { display: none; }
+.mc-fold > summary::before { content: '▸ '; color: #9CA3AF; }
+.mc-fold[open] > summary::before { content: '▾ '; }
+.mc-fold > summary:hover { color: #1E6FFF; }
 .mc-hint { font-size: 12px; color: #6B7280; line-height: 1.7; margin-bottom: 10px; }
 .mc-hint :deep(strong) { color: #1F2937; }
 .mc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -596,6 +1404,16 @@ const dxyChgText = computed(() => {
 .mc-ext-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #EDEFF2; }
 .mc-ext-block .mc-table { margin-top: 2px; }
 .mc-ext-block .card-cap b { color: #1F2937; font-weight: 600; }
+/* 货币总量分区（2026-09-26 步骤 1）：OMO 按栏目分列，各栏目再套一层浅底分隔，
+   让「逆回购」与「买断式」在视觉上就是两块、不会被误读成同一张表的两段。 */
+.mc-qty-omo {
+  margin-top: 10px; padding: 8px 10px; border-radius: 6px;
+  background: #FAFBFC; border: 1px solid #EDEFF2;
+}
+.mc-qty-omo .mc-table { margin-top: 4px; }
+.mc-ext-block code {
+  font-size: 11px; background: #F5F7FA; color: #185FA5; border-radius: 3px; padding: 0 4px;
+}
 /* 预警块（上游停更 / 口径风险）：琥珀系，与 .mc-tag--warn 同族；
    ⚠️ 不用亮红 —— 项目配色铁律：失败用深红棕、警告用琥珀（见颜色体系规范）。 */
 .mc-warn {

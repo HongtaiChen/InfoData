@@ -79,7 +79,10 @@ interface CardKpi {
 interface CardVerdict {
   headline: string
   detail?: string
-  tone?: 'normal' | 'opportunity' | 'caution'
+  /** 判读条 tone（**与 KPI 的 tone 是两个独立枚举**，勿混用）。
+   *  `mixed` = 方向分化（蓝，P2 起有专属类 `.ao-verdict--mixed`）；
+   *  接口侧一律经 `_to_card_tone()` 收口，保证不会产出这里没有类的值。 */
+  tone?: 'normal' | 'opportunity' | 'caution' | 'mixed'
 }
 
 /**
@@ -118,7 +121,19 @@ const cardAsOf = ref<Record<string, string>>({})
  *    修法是让该上墙的论据都标上 card_rank，而不是放宽这里的逻辑。
  * 未标 card_rank 的模块回退为数组前 N 个，保证既有模块不受影响。
  */
-const CARD_KPI_LIMIT: Record<string, number> = { narrow: 1, half: 3, full: 6 }
+/* 卡内论据上限：窄 2 / 半宽 3 / 整行 6（2026-09-26 卡片墙 v2：窄卡由 1 → 2）
+   —— 一卡一环的窄卡若只放 1 个读数，则「这个环在往哪动」缺一半证据：
+      实测每环本就备了 3 个候选（价格环 4 个），卡上只显示 card_rank=1 的那个，
+      而 rank2 恰是环内最该补的一项（政策→美联储总资产 / 价格→期限利差 /
+      数量→欧元区 M3 / 外部→美债 10Y）。
+   ⚠️ 提高到 2 只影响货币流动性 4 卡：其余 5 张 narrow 卡（market-wind-valuation /
+      cross-market-conduction / funding-temperature-fx·fund·rep）候选只有 1 个，
+      `slice(0, 2)` 仍返回 1 个 ⇒ 零连带影响（改前已按候选数逐卡核查，非假设）。
+   代价实测：该组行高 262 → 284px（+8.4%），KPI 盒 62 → 84~111px、宽 319 → 156px；
+      仍走「竖排式」而非紧凑两行网格 —— 后者只 +6px，但标签会被值挤到 ~71px 而断成
+      两行（如「Shibor 3M（资金价 格）」），而括号里常是**口径警示**
+      （「美元净流动性（合成 A5）」「境外美元信贷（离岸美元）」），断行会削掉它。 */
+const CARD_KPI_LIMIT: Record<string, number> = { narrow: 2, half: 3, full: 6 }
 
 type CardSpan = 'full' | 'half' | 'narrow'
 
@@ -137,7 +152,9 @@ function pickCardKpis(kpis: CardKpi[], span: CardSpan): CardKpi[] {
 }
 
 /**
- * 组 = 该卡 `detail` 指向的详情模块（15 张卡本就指向 5 个详情页 ⇒ 天然 5 组 × 3 卡，零新增字段）。
+ * 组 = 该卡 `detail` 指向的详情模块（16 张卡指向 5 个详情页 ⇒ 天然 5 组，零新增字段）。
+ * ⚠️ 组内卡数**不必相等**：货币流动性组 4 卡（2026-09-26 按四环扩卡），其余 3 卡。
+ *    `--ao-cols` = 组内 span 之和 ⇒ 每行必定铺满，卡数只改变**每张卡的宽度**（见 cardSpan/pickCardKpis）。
  * 组标题承担领域名，卡片只留短名 —— 原先卡片名写成「市场风向 · 位置」，而 group 字段
  * （市场风向/板块与概念/资金与情绪）只用于研究目录、卡片墙根本不渲染 ⇒ 领域名被重复 15 次、
  * 且与组标题两套分类并存（实测 3 个 group 名 vs 5 个卡片前缀）。
@@ -198,14 +215,17 @@ onMounted(async () => {
         }
         for (const m of cards) {
           try {
-            const kpis: CardKpi[] = r?.kpis ?? []
+            // 卡片墙取 `card_kpis`（后端下发的三组并集，P2 · 2026-09-26）——
+            // 原先只读 `kpis`，而 `external_kpis` / `quantity_kpis` 是**独立数组、根本不读**
+            // ⇒ 新增的「数量」「外部约束」卡会是空的。`?? r?.kpis` 是对其余 4 个模块的回退兼容。
+            const kpis: CardKpi[] = r?.card_kpis ?? r?.kpis ?? []
             // 本卡只看自己那件事的 KPI（过滤口径在后端 questions，前端只透传）；
             // 过滤后为空 = 后端尚未发布 questions 字段 → 回退全量 pick，优雅降级
             const scoped = m.question
               ? kpis.filter((k) => (k.questions ?? []).includes(m.question!))
               : kpis
             cardKpis.value[m.module_id] = pickCardKpis(scoped.length ? scoped : kpis, cardSpan(m))
-            // 数据截止日（as_of）：组内三卡同源、值相同；取不到就不显示（不编造「最新」）
+            // 数据截止日（as_of）：组内各卡同源、值相同；取不到就不显示（不编造「最新」）
             const asOf = r?.as_of ? String(r.as_of).slice(5) : ''
             if (asOf) cardAsOf.value[m.module_id] = asOf
             else delete cardAsOf.value[m.module_id]
@@ -256,13 +276,13 @@ const researchByGroup = computed(() => {
   return map
 })
 
-/** 骨架数量与完成态一致（窄 1 / 半宽 3 / 整行 6），否则数据到达时布局会跳 */
+/** 骨架数量与完成态一致（窄 2 / 半宽 3 / 整行 6），否则数据到达时布局会跳 */
 function kpiSkeletonCount(m: RegistryItem): number {
   return CARD_KPI_LIMIT[cardSpan(m)] ?? 3
 }
 
 function open(m: RegistryItem) {
-  // 拆卡跳详情：三张分卡同进一个聚合详情页（registry 契约 ⑦ detail 字段）
+  // 拆卡跳详情：同一领域的各张分卡同进一个聚合详情页（registry 契约 ⑦ detail 字段）
   router.push(m.detail ?? `/analysis/${m.module_id}`)
 }
 // 与 KpiCards 一致：只有 tone='updown' 才是行情涨跌语义（红涨绿跌）。
@@ -278,6 +298,15 @@ function kpiText(k: CardKpi): string {
   if (k.value == null) return '--'
   const sign = k.tone !== 'neutral' && k.value > 0 ? '+' : ''
   return `${sign}${k.value}${k.unit ?? ''}`
+}
+/**
+ * 判读条 `title` 悬浮提示用的纯文本：剥掉后端文案里的 `**强调**` 标记
+ * （原生 title 不渲染任何标记，留着会露出星号）。
+ * 判读条默认只显示前几行（见 <style> 的 line-clamp），全文靠它兜底 ——
+ * 卡片墙是摘要视图，详情页才有完整版，二者内容同源不产生第二份口径。
+ */
+function plain(t?: string | null): string {
+  return String(t ?? '').replace(/\*\*/g, '')
 }
 </script>
 
@@ -384,10 +413,18 @@ function kpiText(k: CardKpi): string {
               class="ao-verdict"
               :class="`ao-verdict--${cardVerdicts[m.module_id].tone || 'normal'}`"
             >
-              <div class="ao-verdict-headline">
+              <!-- title = 全文兜底：判读条默认只显示前 3 / 2 行（见 <style> 的 line-clamp），
+                   悬停即读全文。卡片墙是摘要视图，长文案不该把整行卡片顶高 ——
+                   实测「数量」卡 128 字 headline + 298 字 detail 曾把该行撑到 453px，
+                   而同组其它卡内容只有 199px（56% 空白）。 -->
+              <div class="ao-verdict-headline" :title="plain(cardVerdicts[m.module_id].headline)">
                 <RichText :text="cardVerdicts[m.module_id].headline" />
               </div>
-              <div v-if="cardVerdicts[m.module_id].detail" class="ao-verdict-detail">
+              <div
+                v-if="cardVerdicts[m.module_id].detail"
+                class="ao-verdict-detail"
+                :title="plain(cardVerdicts[m.module_id].detail)"
+              >
                 <RichText :text="cardVerdicts[m.module_id].detail" />
               </div>
             </div>
@@ -511,7 +548,13 @@ function kpiText(k: CardKpi): string {
 /* 列数由组内卡片 span 之和决定（由 :style 下发 --ao-cols）⇒ 每行必定铺满，右侧不留空档。
    minmax(0,1fr) 而非 1fr：1fr 的最小尺寸是 auto，长内容会把列撑破（本项目已踩过溢出坑）。 */
 .ao-cards { display: grid; grid-template-columns: repeat(var(--ao-cols, 12), minmax(0, 1fr)); gap: 12px; }
-.ao-card { cursor: pointer; }
+/* 卡片内容区改纵向 flex：让 KPI 区能被 margin-top:auto 推到底边（见 .ao-card-kpis）。
+   display 与栅格的 grid-column 放置互不干扰，改 flex 不影响档宽。
+   ⚠️ Naive UI 的内容区类名是 `.n-card-content`（**不是** `.n-card__content`）——
+      写错不会报错，只是选择器永不命中、margin-top:auto 静默失效
+      （实测留空仍有 30~73px，但断言此前只量了盒高、看不出）。组件内部元素须 :deep() 穿透。 */
+.ao-card { cursor: pointer; display: flex; flex-direction: column; }
+.ao-card :deep(.n-card-content) { display: flex; flex-direction: column; min-height: 0; }
 /* 卡片宽度分档（2026-09-25）：宽度由后端 card_span 声明，前端不硬编码模块名。
    narrow=3（1 个论据）/ half=4（2~3 个）/ full=12（≥4 个，整行） */
 .ao-card--narrow { grid-column: span 3; }
@@ -556,8 +599,16 @@ function kpiText(k: CardKpi): string {
    赭橙仅用于判读条三态语义（ao-verdict / ft-temp），勿混用。 */
 .ao-verdict { border-left: 3px solid #8A919C; background: #F3F4F5;
   border-radius: 0 6px 6px 0; padding: 8px 10px; margin-bottom: 10px; }
-.ao-verdict-headline { font-size: 13px; font-weight: 600; color: #4B5563; line-height: 1.45; }
-.ao-verdict-detail { font-size: 11px; color: #6B7280; margin-top: 4px; line-height: 1.5; }
+/* 行数收口（2026-09-26 版面优化）：判读条默认只显示 headline ≤3 行 / detail ≤2 行，
+   全文走 `title` 悬浮（见模板）。**不截内容、只截显示行数** ——
+   卡片墙是「扫一眼」的摘要视图，若放任文案长度决定卡高，一张长文案卡会把整行顶高：
+   实测「数量」卡（128 字 headline + 298 字 detail）判读条 279px ⇒ 该行 453px，
+   而同组「政策」卡内容只有 199px（56% 空白）。收口后该行 453→255px。
+   RichText 只产出 inline 内容（文本 + <strong>），故 -webkit-line-clamp 可正常工作。 */
+.ao-verdict-headline { font-size: 13px; font-weight: 600; color: #4B5563; line-height: 1.45;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.ao-verdict-detail { font-size: 11px; color: #6B7280; margin-top: 4px; line-height: 1.5;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ao-verdict--opportunity { border-left-color: #C9A227; background: #FAF3DF; }
 .ao-verdict--opportunity .ao-verdict-headline { color: #7A5E12; }
 .ao-verdict--opportunity .ao-verdict-headline::before { content: '✦ '; }
@@ -566,15 +617,43 @@ function kpiText(k: CardKpi): string {
 .ao-verdict--caution .ao-verdict-headline { color: #7C2D12; }
 .ao-verdict--caution .ao-verdict-headline::before { content: '▲ '; }
 .ao-verdict--caution .ao-verdict-detail { color: #9A3412; }
+/* 分化（mixed）= 蓝（P2 · 2026-09-26 新增，决策 D5=(b)）：「四个货币区方向背离」是本页
+   数量维度的核心叙事，值得一个专属色。⚠️ 新增前接口会下发 `mixed` 却**没有这个类** ⇒
+   判读条静默降级为灰、语义被吃掉且不报错；接口侧已同步加 `_to_card_tone()` 收口兜底。 */
+.ao-verdict--mixed { border-left-color: #185FA5; background: #EAF2FB; }
+.ao-verdict--mixed .ao-verdict-headline { color: #185FA5; }
+.ao-verdict--mixed .ao-verdict-headline::before { content: '◆ '; }
+.ao-verdict--mixed .ao-verdict-detail { color: #4A7BA7; }
 .ao-verdict-skel { margin-bottom: 10px; }
 /* auto-fit + 确定最小轨宽：KPI 等宽、自适应个数，且数学上不可能撑破卡片
    （曾因 flex:1 的 min-width:auto 溢出 36px，第三个盒子右侧压到页面底） */
-.ao-card-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.ao-card-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px;
+  /* 吸附底边（2026-09-26 版面优化）：同组卡片被栅格强制等高，内容少的卡会把空白全堆在
+     底部，像「内容没写完」。推到底后留白集中到中部，整行卡片的 KPI 区底边齐平。 */
+  margin-top: auto; }
+/* 单盒横向化（2026-09-26 版面优化）：
+   窄卡的论据上限是 1（CARD_KPI_LIMIT.narrow = 1），而 auto-fit 会把唯一一盒拉到 97% 卡宽
+   —— 319px 的板子里只放「标签 / 大数 / 状态」，实测 84~111px 高却极空旷。
+   单盒时改两行网格：上行「标签 ←→ 大数」、下行「状态 ←→ 刻度」，高度 111→约 62px，
+   同时把横向空档用起来（无刻度条时右列 auto 宽为 0，状态自动占满整行）。
+   ⚠️ 只在 :only-child 时生效，多盒布局完全不变；:has() 需 Chrome 105+（本项目跑 152）。 */
+.ao-card-kpis:has(> .ao-kpi:only-child) .ao-kpi {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'label value' 'status scale';
+  align-items: center; column-gap: 12px; row-gap: 1px;
+  min-height: 0; padding: 9px 12px;
+}
+.ao-card-kpis:has(> .ao-kpi:only-child) .ao-kpi-label { grid-area: label; min-width: 0; }
+.ao-card-kpis:has(> .ao-kpi:only-child) .ao-kpi-value {
+  grid-area: value; font-size: 22px; line-height: 1.15; text-align: right;
+}
+.ao-card-kpis:has(> .ao-kpi:only-child) .ao-kpi-status { grid-area: status; min-width: 0; }
+.ao-card-kpis:has(> .ao-kpi:only-child) .ao-kpi-scale { grid-area: scale; margin-top: 0; width: 150px; }
 /* min-height 统一各盒子高度：有/无刻度条时高度差 27px，若任其自然，
    同一行里带刻度的盒子会把邻居衬托得参差不齐。
    实测高度分布（1440px、24 个盒子）：84（= 本条 min-height）/ 97 / 111（众数）/ 126。
    加载骨架按众数 111px 渲染（见模板注释）—— min-height 只保证下限，骨架另需一次对齐。 */
-.ao-kpi { min-width: 0; min-height: 84px; background: #F5F7FA; border-radius: 6px; padding: 8px 10px; }
+.ao-kpi { min-width: 0; min-height: 84px; background: #F5F7FA; border-radius: 6px; padding: 8px; }
 /* 标签行 = 文字 + ⓘ 口径入口。
    ⚠️ 文字必须 min-width:0 + 显式宽度约束：CJK 可在任意字符处断行，缺约束时会被图标挤成
    「逐/字/竖/排」（本项目已踩过同类坑）。
@@ -606,7 +685,19 @@ function kpiText(k: CardKpi): string {
 .ao-card:hover .ao-kpi-q, .ao-card:focus-within .ao-kpi-q { opacity: 1; }
 .ao-kpi-q:hover, .ao-kpi-q:focus-visible { border-color: #185FA5; color: #185FA5; background: #E6F1FB; outline: none; }
 @media (hover: none) { .ao-kpi-q { opacity: 1; } }
-.ao-kpi-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 值：**绝不截断、也绝不压出盒外**（金融数字截断 = 误读风险）。
+   原为 `white-space: nowrap` —— 窄卡 2 盒时（实测 1440 视口・货币流动性卡 293px・盒仅 126px）
+   「6.75 万亿美元」需 125px 而盒内只有 106px ⇒ 值直接压出盒子、盖到相邻盒上。
+   改为 `overflow-wrap: break-word`：盒够宽时不换行；不够宽时**优先断在空格**，
+   单位词保持完整（「23.34」/「万亿美元」）。
+   ⚠️ 不能用 `anywhere` —— 它允许在任意字符处断行，实测 1680 下把「23.34 万亿美元」
+      断成「23.34 万亿美 / 元」（单行只差约 2px），切断单位词是不可接受的；
+   ⚠️ 同时把 `.ao-kpi` 的横向 padding 由 10px 收到 8px（内容宽 136 → 140px），
+      让「23.34 万亿美元」在 1680 的 156px 盒里**一行放得下**（实测该值约 138px）。
+      这是「2 盒并排」的直接代价，只影响 KPI 盒内部留白，不影响卡宽与栅格。
+   注意与 `.ao-kpi-status` 的区别：status 带 `text-overflow: ellipsis`，是**刻意的截断**，
+   溢出量属预期；值不允许截断。 */
+.ao-kpi-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
 .ao-kpi-status { font-size: 11px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 分位刻度条：轨道 + 圆点 + 窗口文字，竖排。
    竖排而非横排 —— ERP 的窗口文字「近 250 个月末」很长，横排会把轨道压到只剩几像素，

@@ -9,14 +9,17 @@
 并在末尾做一次 ④ **交叉印证**（政策利率按兵不动 ↔ 市场利率是否在动；
 资金价格 ↔ 权益位置；**国内松紧 ↔ 外部约束**）。
 
-**四个切面（2026-09-25 批次 1 补齐第四面）**：
+**五个切面（2026-09-25 批次 1 补齐第四面；2026-09-26 补第五面「数量」）**：
   ① 价格   —— Shibor 3M/隔夜（近一年分位）
   ② 预期   —— 期限结构（ON→1W→1M→3M 的陡平与倒挂）
   ③ 政策   —— LPR 1Y 报价与连续未动月数
   ④ 外部约束 —— 美债曲线 / 中美 10Y 利差 / 美元指数（`_external_state`）
+  ⑤ 数量   —— 货币总量：BIS 境外美元信贷 / 美联储总资产 + A5 / 美国 M2 / 欧元区 M3 /
+              中国 M2、外储与黄金 / 央行 OMO 操作量（`_quantity_state`）
 开放经济下国内流动性受外部硬约束：利差决定跨境资金方向、美元指数决定全球美元松紧、
 美债曲线是全球风险资产的贴现率。缺了这一面，只看 Shibor 会把「外部在收、国内在放」
-误读成纯宽松。
+误读成纯宽松。而**只补了价格、没补数量**，则会把「钱变贵了」当成「钱变少了」——
+价格是边际、数量是水位，两者回答的是不同的问题（见 `_quantity_state` 的模块头纪律）。
 
 🔒 **领域边界（2026-09-25 定稿，与 `funding_temperature.py` 配对的「因/果」划分）**：
 本模块管**因** —— 钱**的价格与数量**（四切面全是「给定条件」）；
@@ -93,14 +96,21 @@ US_TERMS: list[tuple[str, str]] = [
 ]
 
 MONEY_COST_NOTE = (
-    "本模块回答「货币流动性松紧」，四个切面：**价格**（Shibor 3M 在近一年什么位置）、"
+    "本模块回答「货币流动性松紧」，**价格与数量两面**："
+    "**价格**（Shibor 3M 在近一年什么位置）、"
     "**预期**（期限结构是陡还是平 —— 平坦说明短端没有溢价要求、市场预期资金持续宽松；"
     "倒挂则是流动性紧张的信号）、**政策**（LPR 报价与连续未动月数）、"
-    "**外部约束**（美债曲线、中美 10Y 利差、美元指数 —— 开放经济下国内流动性的硬约束）。"
-    "⚠️ 利率的绝对值跨期不可比，所有判断一律走「近一年分位」，不看绝对值本身。"
-    "**领域边界**：本模块管的是**钱的价格与数量（因）** —— 资金贵不贵、政策给不给、外部让不让；"
-    "至于「钱有没有真的进到市场里」（人民币汇率体现的跨境资金意愿、新发基金、产业资本回购），"
-    "那是**果**，归「资金温度」，不在本模块重复。"
+    "**外部约束**（美债曲线、中美 10Y 利差、美元指数 —— 开放经济下国内流动性的硬约束）；"
+    "**数量**（货币总量：BIS 境外美元信贷 / 美联储总资产与美元净流动性 / 美国 M2 / 欧元区 M3 / "
+    "中国 M2、外储与黄金 —— 见 `quantity` 块）。"
+    "⚠️ 价格是**边际**、数量是**水位**：只看价格会把「没人借钱」读成「钱变多了」，"
+    "只看数量会把「存量高企但边际收紧」读成「还在放水」——两者必须配着看。"
+    "⚠️ 利率的绝对值跨期不可比，所有价格类判断一律走「近一年分位」；"
+    "而**存量水平不做分位**（单调上行序列的分位恒贴近 100，是伪信号），改看同比与同比的方向。"
+    "**领域边界**：本模块管的是**钱的价格与数量（因）** —— 资金贵不贵、政策给不给、"
+    "外部让不让、总量多不多；至于「钱有没有真的进到市场里」"
+    "（人民币汇率体现的跨境资金意愿、新发基金、产业资本回购），那是**果**，归「资金温度」，"
+    "不在本模块重复。"
 )
 
 EXTERNAL_NOTE = (
@@ -426,6 +436,10 @@ def _external_reading(items: list[dict], dxy_item: dict | None, tight: dict,
 def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                     dom_pct: float | None, as_of: str | None) -> dict:
     """外部约束块：三项利率读数 + 美元指数 + 美债曲线 + 全球央行方向 + 内外组合判读"""
+    # 卡片墙（P3 · 2026-09-26）：外部卡（q5 = 四环之④「对外与资产」）择优取三个代表读数 ——
+    # 中美 10Y 利差（利差吸引力）/ 美债 10Y（全球贴现率）/ 美元指数（美元总闸门，见 dxy_item）。
+    # ⚠️ 不标 `questions` 的读数**上不了卡**，还会触发卡片墙的静默回退 ⇒ 本组四项一律标 q5。
+    _EXT_CARD_RANK = {"cn_us_10y": 1, "us_10y": 2}
     specs = [
         {"key": "cn_us_10y", "label": "中美 10Y 利差", "unit": "pp", "tone": "diff",
          "anchor": "mc-ext-curve",
@@ -451,7 +465,8 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                           "tone": sp["tone"], "status": "数据未就绪", "pct": None, "scale": None,
                           "highlight": False, "anchor": sp["anchor"], "hint": sp["hint"],
                           "as_of": None, "prev_year": None, "min_1y": None, "max_1y": None,
-                          "chg20": None, "tight": None})
+                          "chg20": None, "tight": None,
+                          "questions": ["q5"], "card_rank": _EXT_CARD_RANK.get(k)})
             tight[k] = None
             continue
         a0, cur = pairs[0]
@@ -479,7 +494,8 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                       "as_of": str(a0), "prev_year": r(prev, 2) if prev is not None else None,
                       "min_1y": r(min(win), 2) if win else None,
                       "max_1y": r(max(win), 2) if win else None,
-                      "chg20": chg20, "tight": tg})
+                      "chg20": chg20, "tight": tg,
+                      "questions": ["q5"], "card_rank": _EXT_CARD_RANK.get(k)})
 
     # ---- 美元指数（★主口径 = 新浪官方日线；自算与实时快照作交叉校验）----
     dpairs = _ext_pairs(dxy, "dxy")
@@ -520,6 +536,8 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                                            and f(primary_row.get("dxy_sina")) is not None)
                        else "calc_fallback"),
             "tight": _is_tight(p, True),
+            # 卡片墙（P3）：美元指数是外部卡的卡内第 3 格（利差 → 美债 → 美元）
+            "questions": ["q5"], "card_rank": 3,
         }
         tight["dxy"] = dxy_item["tight"]
 
@@ -533,6 +551,741 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
         "as_of_us": items[1]["as_of"] if len(items) > 1 else None,
         "as_of_dxy": dxy_item["as_of"] if dxy_item else None,
         "note": EXTERNAL_NOTE,
+    }
+
+
+# ---------------- 货币总量（数量维度，2026-09-26）----------------
+# 「钱多不多」—— 与上面四个「钱的价格」切面正交。低频存量读数（季/周/月），
+# 落在同一详情页的独立分区（`quantity` 块），**不拆卡片墙的 track 卡**（D1=A，对齐「不拆大卡」）。
+#
+# 数据源（全部只读，采集由各自 sync 负责；本模块不采集、不写库）：
+#   global_liquidity_bis     BIS 境外美元信贷（季度，2000-03 起 6,720 行）
+#   us_fed_balance_weekly    美联储总资产（周度 H41，2002-12 起 1,241 行）
+#   us_money_supply_monthly  美国 M2/M1（月度 H6，1959-01 起 812 行）
+#   us_money_market_daily    ON RRP / TGA 余额（日度）→ A5 的两个减项
+#   eu_money_supply_monthly  欧元区 M3/M2/M1（月度 DBnomics/ECB）
+#   cn_liquidity_monthly     中国 M2/M1 + M2 结构（月度）
+#   cn_reserve_monthly       中国官方外储 / 黄金（月度，批次 C2）
+#   cn_cb_balance_monthly    中国央行表内外汇（人民币口径，月度）
+#   cn_omo_daily             央行公开市场操作量事实（日度）
+#
+# 🔴 八条已实测的取数纪律（勿回退）：
+# 1. **BIS 只有 6 条件一条路**：`3P×N×A×I×B×USD` = 境外美元信贷总量。实测错写法
+#    （`borrowers_cty<>'US'` 全量 SUM）= 45,951,383 百万 = **真值 3.12 倍** —— 三重重复：
+#    `B` 已含 `D`/`G`、聚合码 `3P` 与各国明细**并存**、`unit_measure='771'` 是**同比 %** 不是金额。
+# 2. **D 腿在 `lenders_sector='A'`、G 腿在 `lenders_sector='B'`**（2026-09-26 实测，两者不是同一值）
+#    ⇒ 靠 `_BIS_LEGS` 显式声明，不靠猜。自证：D+G = 8,064,648.187+6,683,005.559
+#    = 14,747,653.746 **逐位等于** B（本函数把它做成运行时软断言 `xcheck`）。
+# 3. **`unit_measure='771'` 直接可用**：BIS 官方算好的同比（%），免自算季度同比、避开季节性。
+# 4. **A5 必须取「同一日期的三值」**：美联储总资产是周度（全为周三）、ON RRP 只有 249 天有值、
+#    TGA 1,248 天 ⇒ 实测全史仅 **52 个「三腿同日」**（最近 2026-09-23）。**不能退化成"各自最近值"**，
+#    否则等于拿三个不同日期相减（TGA 日波动可达 ±10 万百万美元，足以改变结论）。
+# 5. **ON RRP / TGA / 美联储总资产同为「百万美元」**（`us_money_market_sync` 已显式 `/1e6` 归一）
+#    ⇒ A5 三腿直减，无需换算。⚠️ 本项目在汇率单位上有前科，单位一律以采集器注释为准。
+# 6. **中国层「外储」是三套口径**（美元官方 / 黄金实物量 / 人民币表内），单位互不相同，
+#    折算率**不是市场汇率**（实测 24 期隐含折算率由 6.886 单调降至 6.318）
+#    ⇒ **严禁相加、严禁按市价互校**；本函数只分列并各标口径，**不做任何跨口径换算**。
+# 7. **OMO 两个栏目不可混加**（`omo_trade` 逆回购/央票 vs `outright_repo` 买断式，
+#    量级差一个数量级、各自独立编号）⇒ 分列；且**不做「净投放」派生**（D4=B 主动决策，非遗漏）。
+# 8. **存量水平的"近一年分位"无意义**（M2 单调上行 ⇒ 分位永远贴近 100）
+#    ⇒ 本区一律用**同比 yoy + 同比的 3 期变化（方向）**当比较锚，
+#    **不下发 `scale` 分位刻度条**（`_kpi.scale` 的前提是序列有均值回复）。
+#
+# 单位归一（D5=A 定稿）：跨区金额**统一折美元**，目标展示单位 **万亿美元**；
+# 换算只在 `_to_usd_tn` 一处完成，输出 `value + unit`（+ `native` 原生口径供 tooltip），
+# **前端不经手任何换算**。不可比的量（黄金实物量、人民币表内外汇、OMO 操作量）**留原生单位**。
+
+_Q_UNIT_TN = {
+    "bn_usd": 1e-3,   # 十亿美元 → 万亿
+    "mn_usd": 1e-6,   # 百万美元 → 万亿
+    "yi_usd": 1e-4,   # 亿美元   → 万亿
+}
+# BIS 三条腿的官维取值（键 → (lenders_sector, l_instr)）—— 见纪律 2
+_BIS_LEGS = {
+    "total": ("A", "B"),   # 贷款 + 债券**合计**（headline）
+    "bonds": ("A", "D"),   # 国际债券（IDS，子项）
+    "loans": ("B", "G"),   # 银行信贷（子项）
+}
+_Q_BIS_XCHECK_MAX = 0.5    # B 与 D+G 的允许偏差（%）—— 实测逐位吻合，>0.5% 即口径读错
+
+QUANTITY_NOTE = (
+    "「数量」与「价格」是同一枚硬币的两面：上面四区答**钱贵不贵**（利率、利差、汇率），"
+    "本区答**钱多不多**（水位与存量）。为什么必须两者一起看：价格是边际，数量是水位 —— "
+    "价格下行可能只是「没人借钱」，数量扩张才说明「钱真的在变多」。"
+    "⚠️ 本区是**低频存量读数**（BIS 季度、美联储周度、其余月度），"
+    "**天然不该当「每日必看」**，故不占卡片墙，只作详情页分区。"
+    "⚠️ 跨区金额一律**统一折美元**（万亿美元），换算集中在本模块一处、前端只格式化；"
+    "但**不可比的量留原生单位**（黄金实物量/人民币表内外汇/OMO 操作量），"
+    "中国层的三套「外储」口径**严禁相加、严禁按市价互校**（折算率非市场汇率）。"
+    "⚠️ 存量水平不做「近一年分位」（单调上行序列的分位恒贴近 100，是伪信号），"
+    "一律用**同比 + 同比的方向**做比较锚。"
+)
+
+
+def _to_usd_tn(v, native: str, fx: float | None = None) -> float | None:
+    """各源原生金额 → **万亿美元**（D5=A）。换算只在这里做一次，前端不做任何换算。
+
+    native 语义与换算：
+      bn_usd  十亿美元   ÷ 1e3
+      mn_usd  百万美元   ÷ 1e6
+      yi_usd  亿美元     ÷ 1e4（**本就美元，不需要汇率**）
+      mn_eur  百万欧元   ÷ 1e6 × EUR/USD
+      yi_cny  亿元       ÷ 1e4 ÷ USD/CNY
+    ⚠️ `fx` 语义随 native 变：`mn_eur` 传 EUR/USD（1 欧元 = ? 美元）；
+       `yi_cny` 传 USD/CNY（1 美元 = ? 人民币）。任一缺失 → None（**宁可"数据未就绪"**）。
+    """
+    x = f(v)
+    if x is None:
+        return None
+    if native in _Q_UNIT_TN:
+        return x * _Q_UNIT_TN[native]
+    if native == "mn_eur":
+        return (x / 1e6) * fx if fx else None
+    if native == "yi_cny":
+        return (x / 1e4) / fx if fx else None
+    return None
+
+
+def _fetch_fx(as_of: str | None) -> tuple[float | None, float | None]:
+    """取 (USD/CNY, EUR/USD)（人民币中间价交叉）
+
+    口径：`currency_boc_daily` 的 `mid_price` / `ref_price` 都是**人民币中间价**形态
+    （1 外币 = X 人民币；实测 2026-09-26：USD 6.7489、EUR 7.6631）
+    ⇒ EUR/USD = eur_cny ÷ usd_cny = 7.6631 ÷ 6.7489 = 1.1355。
+    ⚠️ 两列交替为空（`mid_price` 常为 NULL 而 `ref_price` 有值）⇒ 一律 COALESCE。
+    ⚠️ 不用 `global_usd_index_daily`：那是 **ICE 口径的指数**，换不出 EUR/USD。
+    ⚠️ 任一腿缺失 → 该折算为 None：**不拿旧汇率凑**（汇率错是「全体平移」形态，
+       比缺数更难发现 —— 本项目在瑞典克朗标价法上已栽过一次）。
+    """
+    out: dict[str, float | None] = {}
+    for code in ("USD", "EUR"):
+        cond = " AND trade_date <= %s" if as_of else ""
+        args: list = [code] + ([as_of] if as_of else [])
+        row = query_one(
+            "SELECT trade_date, COALESCE(mid_price, ref_price) AS px "
+            "FROM currency_boc_daily "
+            f"WHERE currency=%s AND COALESCE(mid_price, ref_price) IS NOT NULL{cond} "
+            "ORDER BY trade_date DESC", args)
+        out[code] = f(row["px"]) if row else None
+        if row:
+            logger.info("货币总量·汇率 %s = %s（%s）", code, row["px"], row["trade_date"])
+    usd_cny, eur_cny = out.get("USD"), out.get("EUR")
+    eur_usd = (eur_cny / usd_cny) if (usd_cny and eur_cny) else None
+    return usd_cny, eur_usd
+
+
+def _bis_offshore(as_of: str | None) -> dict:
+    """全球层 anchor：BIS 境外美元信贷总量（季度）—— 官方 6 条件口径
+
+    ⚠️ 中文表述用「**境外美元信贷**」（官方维度名 *Cross-border & Local in FCY*
+       = 跨境 **+ 借款人本地外币**），**不要**简化成「跨境美元信贷」。
+    ⚠️ 本表**只含美元计价**（采集器只拉 `Q.USD`），表名 `global_liquidity_bis` 有误导性 ⇒ UI 须明示。
+    ⚠️ 季度、T+1 季发布（2026-Q1 约 2026-07 才出）⇒ **不可当"当前"读数**。
+    """
+    cond = " AND time_period <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT time_period, lenders_sector, l_instr, unit_measure, obs_value "
+        "FROM global_liquidity_bis "
+        "WHERE borrowers_cty='3P' AND borrowers_sector='N' AND l_pos_type='I' "
+        "AND unit_measure IN ('USD','771')" + cond + " ORDER BY time_period DESC", args)
+    if not rows:
+        return {"period": None, "total_tn": None, "total_yoy": None, "total_yoy_chg": None,
+                "loans_tn": None, "loans_yoy": None, "bonds_tn": None, "bonds_yoy": None,
+                "bond_share": None, "xcheck_pct": None, "trend": []}
+    latest = rows[0]["time_period"]
+    cur = {(x["lenders_sector"], x["l_instr"], x["unit_measure"]): f(x["obs_value"])
+           for x in rows if x["time_period"] == latest}
+    total = cur.get((*_BIS_LEGS["total"], "USD"))
+    loans = cur.get((*_BIS_LEGS["loans"], "USD"))
+    bonds = cur.get((*_BIS_LEGS["bonds"], "USD"))
+    total_yoy = cur.get((*_BIS_LEGS["total"], "771"))
+    # 自证：B 必须等于 D + G（官方公布值逐位吻合）；偏差 > 0.5% 即维度/口径读错
+    xcheck = None
+    if total and loans is not None and bonds is not None:
+        xcheck = abs(loans + bonds - total) / total * 100
+        if xcheck > _Q_BIS_XCHECK_MAX:
+            logger.warning(
+                "BIS 口径自证失败：D+G=%.3f vs B=%.3f（偏差 %.2f%%）—— 复核 lenders_sector 取值",
+                loans + bonds, total, xcheck)
+    # 同比的**方向**（最新季同比 − 上季同比，pp）—— 见纪律 8：判"在加速还是在减速"
+    total_yoy_chg = None
+    periods = sorted({x["time_period"] for x in rows}, reverse=True)
+    if len(periods) > 1:
+        prev_yoy = next((f(x["obs_value"]) for x in rows
+                         if x["time_period"] == periods[1]
+                         and x["lenders_sector"] == _BIS_LEGS["total"][0]
+                         and x["l_instr"] == _BIS_LEGS["total"][1]
+                         and x["unit_measure"] == "771"), None)
+        if total_yoy is not None and prev_yoy is not None:
+            total_yoy_chg = r(total_yoy - prev_yoy, 2)
+    # 季度序列（近 12 季）供小图
+    tseries: list[dict] = []
+    for p in periods[:12]:
+        v = next((f(x["obs_value"]) for x in rows if x["time_period"] == p
+                  and x["lenders_sector"] == _BIS_LEGS["total"][0]
+                  and x["l_instr"] == _BIS_LEGS["total"][1]
+                  and x["unit_measure"] == "USD"), None)
+        tseries.append({"period": str(p), "total_tn": r(_to_usd_tn(v, "mn_usd"), 3)})
+    tseries.reverse()
+    return {
+        "period": str(latest),
+        "total_tn": r(_to_usd_tn(total, "mn_usd") if total else None, 2),
+        "total_yoy": r(total_yoy, 2), "total_yoy_chg": total_yoy_chg,
+        "loans_tn": r(_to_usd_tn(loans, "mn_usd"), 2),
+        "loans_yoy": r(cur.get((*_BIS_LEGS["loans"], "771")), 2),
+        "bonds_tn": r(_to_usd_tn(bonds, "mn_usd"), 2),
+        "bonds_yoy": r(cur.get((*_BIS_LEGS["bonds"], "771")), 2),
+        "bond_share": r(bonds / total * 100, 1) if (bonds is not None and total) else None,
+        "xcheck_pct": r(xcheck, 3),
+        "trend": tseries,
+        "legs": {"total": _BIS_LEGS["total"], "loans": _BIS_LEGS["loans"],
+                 "bonds": _BIS_LEGS["bonds"]},
+    }
+
+
+def _fed_assets(as_of: str | None) -> dict:
+    """美国层 anchor：美联储总资产（周度 H41，百万美元）。扩表 = 放水、缩表 = 收水。
+
+    ⚠️ 全部是**周三**数据 ⇒ 「13 周变化」就是第 13 行，不需要按自然日折算。
+    """
+    cond = " AND trade_date <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT trade_date, total_assets FROM us_fed_balance_weekly "
+        "WHERE total_assets IS NOT NULL" + cond + " ORDER BY trade_date DESC LIMIT 60", args)
+    if not rows:
+        return {"as_of": None, "tn": None, "chg_4w_pct": None, "chg_13w_pct": None,
+                "chg_52w_pct": None, "trend": []}
+
+    def _chg(n: int) -> float | None:
+        if len(rows) <= n:
+            return None
+        a, b = f(rows[n]["total_assets"]), f(rows[0]["total_assets"])
+        return r((b / a - 1) * 100, 2) if a else None
+
+    return {
+        "as_of": str(rows[0]["trade_date"]),
+        "tn": r(_to_usd_tn(rows[0]["total_assets"], "mn_usd"), 2),
+        "chg_4w_pct": _chg(4), "chg_13w_pct": _chg(13), "chg_52w_pct": _chg(52),
+        "trend": [{"date": str(x["trade_date"]),
+                   "tn": r(_to_usd_tn(x["total_assets"], "mn_usd"), 3)}
+                  for x in reversed(rows[:52])],
+    }
+
+
+def _us_net_liquidity(as_of: str | None) -> dict:
+    """美元净流动性（合成 A5）= 美联储总资产 − TGA − ON RRP（百万美元，同单位直减）
+
+    🔴 **必须同一日期的三值**（纪律 4）：三张源表日历不同（H41 周度 / NY Fed 日度 /
+       Treasury 日度），实测全史仅 **52 个「三腿同日」**（最近 2026-09-23）
+       ⇒ 用 SQL JOIN 在**日期相等**上取，**不做"各自最近值"**（那等于拿三个日期相减）。
+    ⚠️ **合成口径、非官方**（市场常用、本项目自合成）⇒ UI 必须显式标注，「金色强调」也正因为它
+       是派生亮点而非官方读数。
+    """
+    cond = " AND m.trade_date <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT m.trade_date, m.on_rrp_amt, m.tga, f.total_assets "
+        "FROM us_money_market_daily m "
+        "JOIN us_fed_balance_weekly f ON f.trade_date = m.trade_date "
+        "WHERE m.on_rrp_amt IS NOT NULL AND m.tga IS NOT NULL "
+        "AND f.total_assets IS NOT NULL" + cond
+        + " ORDER BY m.trade_date DESC LIMIT 13", args)
+    if not rows:
+        return {"as_of": None, "tn": None, "fed_tn": None, "tga_tn": None, "onrrp_tn": None,
+                "tga_yi": None, "onrrp_yi": None, "chg_13_pct": None, "n_days": 0, "trend": []}
+
+    def _net(x: dict) -> float | None:
+        a, b, c = f(x["total_assets"]), f(x["tga"]), f(x["on_rrp_amt"])
+        return None if None in (a, b, c) else a - b - c
+
+    head, net = rows[0], _net(rows[0])
+    chg = None
+    if len(rows) > 1 and net is not None:
+        prev = _net(rows[-1])
+        if prev:
+            chg = r((net / prev - 1) * 100, 2)
+    return {
+        "as_of": str(head["trade_date"]),
+        "tn": r(_to_usd_tn(net, "mn_usd"), 2),
+        "fed_tn": r(_to_usd_tn(head["total_assets"], "mn_usd"), 2),
+        # ⚠️ TGA / ON RRP 是 A5 的两个减项、量级可低到「亿美元」级（实测 ON RRP 最低 3,000 万美元）
+        #    ⇒ 折成万亿只剩 0.0000x，**三位小数会把 ON RRP 抹成 0.0**（实测踩到）
+        #    ⇒ 这两项同时给「万亿（4 位）」与「亿美元」两种精度，status 文案用后者。
+        "tga_tn": r(_to_usd_tn(head["tga"], "mn_usd"), 4),
+        "onrrp_tn": r(_to_usd_tn(head["on_rrp_amt"], "mn_usd"), 4),
+        "tga_yi": r((f(head["tga"]) or 0) / 100, 2),        # 百万美元 → 亿美元
+        "onrrp_yi": r((f(head["on_rrp_amt"]) or 0) / 100, 2),
+        "chg_13_pct": chg,
+        "n_days": len(rows),
+        "trend": [{"date": str(x["trade_date"]),
+                   "tn": r(_to_usd_tn(_net(x), "mn_usd"), 3)} for x in reversed(rows)],
+    }
+
+
+def _us_money(as_of: str | None) -> dict:
+    """美国 M2 / M1 / 基础货币（月度 H6，**十亿美元**）
+
+    ⚠️ 与欧元区 M3（**百万欧元**）、中国 M2（**亿元**）单位全不同 ⇒ 归一到万亿美元再比
+       （纪律 8 的归一纪律）。实测：美国 M2 23,342.8 十亿 = 23.34 万亿；
+       中国 M2 3,568,083.6 亿 = 52.87 万亿 —— **原值比大小会得到完全相反的结论**。
+    """
+    cond = " AND stat_month <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT stat_month, m2, m1, monetary_base, m2_yoy, m1_yoy "
+        "FROM us_money_supply_monthly WHERE m2 IS NOT NULL" + cond
+        + " ORDER BY stat_month DESC LIMIT 16", args)
+    if not rows:
+        return {"as_of": None, "m2_tn": None, "m2_yoy": None, "m2_yoy_d3": None,
+                "m1_tn": None, "m1_yoy": None, "m2_bn": None, "m1_bn": None,
+                "base_tn": None, "series": []}
+    head = rows[0]
+
+    def _yoy(col: str, yoy_col: str) -> float | None:
+        """优先用列（H6 官方同比），缺失才按 12 期前自算 —— 口径与列一致，不引入第三种算法"""
+        v = f(head[yoy_col])
+        if v is not None:
+            return v
+        if len(rows) > 12 and f(rows[12][col]):
+            return r((f(head[col]) / f(rows[12][col]) - 1) * 100, 2)
+        return None
+
+    # 同比的 3 期变化（方向）—— 见纪律 8
+    d3 = None
+    if len(rows) > 3 and f(head["m2_yoy"]) is not None and f(rows[3]["m2_yoy"]) is not None:
+        d3 = r(f(head["m2_yoy"]) - f(rows[3]["m2_yoy"]), 2)
+    return {
+        "as_of": str(head["stat_month"]),
+        "m2_tn": r(_to_usd_tn(head["m2"], "bn_usd"), 2), "m2_yoy": _yoy("m2", "m2_yoy"),
+        "m2_bn": r(head["m2"], 2), "m2_yoy_d3": d3,
+        "m1_tn": r(_to_usd_tn(head["m1"], "bn_usd"), 2), "m1_yoy": _yoy("m1", "m1_yoy"),
+        "m1_bn": r(head["m1"], 2),
+        "base_tn": r(_to_usd_tn(head["monetary_base"], "bn_usd"), 2),
+        "series": [{"month": str(x["stat_month"]), "m2_tn": r(_to_usd_tn(x["m2"], "bn_usd"), 2)}
+                   for x in reversed(rows[:14])],
+    }
+
+
+def _eu_money(as_of: str | None, eur_usd: float | None) -> dict:
+    """欧元区 M3 / M2 / M1（月度，**百万欧元**）→ 折美元须 EUR/USD
+
+    ⚠️ 源单一（ECB 直连三域全断，只能走 DBnomics）⇒ UI 必须标「**唯一通道，失效即告警**」。
+    ⚠️ 单位是**百万欧元**，与美国 M2（十亿美元）、中国 M2（亿元）**直接比大小会错**（见纪律 8）。
+    """
+    cond = " AND stat_month <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT stat_month, m3, m2, m1, m3_yoy FROM eu_money_supply_monthly "
+        "WHERE m3 IS NOT NULL" + cond + " ORDER BY stat_month DESC LIMIT 16", args)
+    if not rows:
+        return {"as_of": None, "m3_tn": None, "m3_yoy": None, "m3_yoy_d3": None,
+                "m2_tn": None, "m1_tn": None, "eur_usd": eur_usd, "series": []}
+    head = rows[0]
+    m3_yoy = f(head["m3_yoy"])
+    if m3_yoy is None and len(rows) > 12 and f(rows[12]["m3"]):
+        m3_yoy = r((f(head["m3"]) / f(rows[12]["m3"]) - 1) * 100, 2)
+    d3 = None
+    if len(rows) > 3 and f(head["m3_yoy"]) is not None and f(rows[3]["m3_yoy"]) is not None:
+        d3 = r(f(head["m3_yoy"]) - f(rows[3]["m3_yoy"]), 2)
+    return {
+        "as_of": str(head["stat_month"]),
+        "m3_tn": r(_to_usd_tn(head["m3"], "mn_eur", eur_usd), 2),
+        "m3_yoy": r(m3_yoy, 2), "m3_yoy_d3": d3,
+        "m2_tn": r(_to_usd_tn(head["m2"], "mn_eur", eur_usd), 2),
+        "m1_tn": r(_to_usd_tn(head["m1"], "mn_eur", eur_usd), 2),
+        "eur_usd": r(eur_usd, 4),
+        "series": [{"month": str(x["stat_month"]),
+                    "m3_tn": r(_to_usd_tn(x["m3"], "mn_eur", eur_usd), 2)}
+                   for x in reversed(rows[:14])],
+    }
+
+
+# 中国 M2 结构列：**源侧停更时点不齐**（实测），属口径调整而非采集失败 ⇒ 随数据下发给 UI 标注
+_CN_STRUCT_COLS: list[tuple[str, str]] = [
+    ("demand_deposit", "活期存款"),
+    ("time_deposit", "定期存款"),
+    ("savings_deposit", "储蓄存款"),
+    ("other_deposit", "其他存款"),
+    ("quasi_money", "准货币（M2−M1）"),
+]
+
+
+def _cn_money(as_of: str | None, usd_cny: float | None) -> dict:
+    """中国 M2 / M1 / M0（月度，**亿元**）+ M2 结构 + M1−M2 剪刀差
+
+    ⚠️ 结构列**停更时点不齐**（2026-09-26 实测：活期/定期停 2025-05、储蓄停 2024-12，
+       而 `quasi_money` / `other_deposit` 仍更新到 2026-08）⇒ 是**源口径调整**、不是采集失败，
+       本函数把每列「最后有值月」随数据下发（`struct_last`），UI 据此标注、不得当缺数处理。
+    """
+    cond = " AND stat_month <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT stat_month, m2, m1, m0, m2_yoy, m1_yoy, m1_m2_gap, demand_deposit, "
+        "time_deposit, savings_deposit, other_deposit, quasi_money "
+        "FROM cn_liquidity_monthly WHERE m2 IS NOT NULL" + cond
+        + " ORDER BY stat_month DESC LIMIT 18", args)
+    if not rows:
+        return {"as_of": None, "m2_tn": None, "m2_yoy": None, "m2_yoy_d3": None,
+                "gap": None, "gap_d3": None, "gap_word": None, "struct": [], "struct_last": {}}
+    head = rows[0]
+    d3 = None
+    if len(rows) > 3 and f(head["m2_yoy"]) is not None and f(rows[3]["m2_yoy"]) is not None:
+        d3 = r(f(head["m2_yoy"]) - f(rows[3]["m2_yoy"]), 2)
+    gap_d3 = None
+    if len(rows) > 3 and f(head["m1_m2_gap"]) is not None and f(rows[3]["m1_m2_gap"]) is not None:
+        gap_d3 = r(f(head["m1_m2_gap"]) - f(rows[3]["m1_m2_gap"]), 2)
+    # 结构列「最后有值月」用**独立聚合查询**取，不靠 LIMIT 窗口内扫描 ——
+    # ⚠️ 实测坑：储蓄存款停在 2024-12，而 LIMIT 16 只回溯到 2025-04 ⇒ 扫描法会把
+    #    「已停更」误报成「该列从未有值」（`last_month=None`），UI 就标不出「源口径调整」。
+    agg_cols = ", ".join(
+        f"MAX(CASE WHEN {c} IS NOT NULL THEN stat_month END) AS {c}" for c, _ in _CN_STRUCT_COLS)
+    agg_cond = " WHERE stat_month <= %s" if as_of else ""
+    agg = query_one(f"SELECT {agg_cols} FROM cn_liquidity_monthly{agg_cond}", args) or {}
+    struct: list[dict] = []
+    for col, label in _CN_STRUCT_COLS:
+        last = str(agg[col]) if agg.get(col) is not None else None
+        cur_v = f(head.get(col))
+        stale = cur_v is None and last is not None
+        struct.append({"key": col, "label": label, "last_month": last,
+                       "value": r(cur_v, 2) if cur_v is not None else None,
+                       "as_of": str(head["stat_month"]) if cur_v is not None else last,
+                       "stale": stale})
+    return {
+        "as_of": str(head["stat_month"]),
+        "m2_tn": r(_to_usd_tn(head["m2"], "yi_cny", usd_cny), 2),
+        "m2_yi": r(head["m2"], 2), "m2_yoy": r(head["m2_yoy"], 2), "m2_yoy_d3": d3,
+        "m1_tn": r(_to_usd_tn(head["m1"], "yi_cny", usd_cny), 2),
+        "m1_yi": r(head["m1"], 2), "m1_yoy": r(head["m1_yoy"], 2),
+        "m0_yi": r(head["m0"], 2),
+        # 剪刀差方向词：**口径在后端生成**（前端只透传），见设计 §四「判读条给判断」
+        "gap_word": ("活化度回升" if (gap_d3 or 0) > 0 else
+                     ("活化度回落" if (gap_d3 or 0) < 0 else "活化度持平")),
+        "gap": r(head["m1_m2_gap"], 2), "gap_d3": gap_d3,
+        "usd_cny": r(usd_cny, 4),
+        "struct": struct,
+        "struct_last": {k: v["last_month"] for k, v in
+                        zip([c for c, _ in _CN_STRUCT_COLS], struct)},
+    }
+
+
+def _cn_reserve(as_of: str | None) -> dict:
+    """中国官方外汇储备 / 黄金储备（月度，`cn_reserve_monthly`，批次 C2）
+
+    ⚠️ 外储单位是**亿美元**（本就美元 ⇒ 折算**不需要汇率**，÷1e4 即万亿）；
+       黄金是**万盎司**（**实物量，不是金额**）⇒ 留原生单位、不折美元。
+    ⚠️ `gold_reserve_oz_chg` 是采集器算好的**环比**（仅当紧邻上一月存在时才非空，跨年边界已在
+       采集器处理）⇒ 「连续增持 N 月」逐月回溯比现场做差更稳。
+    ⚠️ **不得**与 `cn_cb_balance_monthly` 的人民币口径外储相加或互校（纪律 6）。
+    """
+    cond = " AND stat_month <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT stat_month, fx_reserve_usd, fx_reserve_usd_yoy, gold_reserve_oz, "
+        "gold_reserve_oz_chg FROM cn_reserve_monthly WHERE fx_reserve_usd IS NOT NULL"
+        + cond + " ORDER BY stat_month DESC LIMIT 60", args)
+    if not rows:
+        return {"as_of": None, "fx_tn": None, "fx_yoy": None, "gold_oz": None,
+                "gold_chg": None, "gold_streak": None, "trend": []}
+    head = rows[0]
+    # 连续增持月数：从最新月回溯，逐月 chg > 0（缺 chg 视为断链，不猜）
+    streak = 0
+    for x in rows:
+        c = f(x["gold_reserve_oz_chg"])
+        if c is None or c <= 0:
+            break
+        streak += 1
+    return {
+        "as_of": str(head["stat_month"]),
+        "fx_tn": r(_to_usd_tn(head["fx_reserve_usd"], "yi_usd"), 2),
+        "fx_usd_yi": r(head["fx_reserve_usd"], 2),
+        "fx_yoy": r(head["fx_reserve_usd_yoy"], 2),
+        "gold_oz": r(head["gold_reserve_oz"], 2),
+        "gold_chg": r(head["gold_reserve_oz_chg"], 2),
+        "gold_streak": streak,
+        "trend": [{"month": str(x["stat_month"]),
+                   "fx_tn": r(_to_usd_tn(x["fx_reserve_usd"], "yi_usd"), 3),
+                   "gold_oz": r(x["gold_reserve_oz"], 0)} for x in reversed(rows[:24])],
+    }
+
+
+def _cn_cb(as_of: str | None) -> dict:
+    """中国央行**表内外汇**（人民币口径，`cn_cb_balance_monthly`，亿元）
+
+    ⚠️ 这是「外汇占款 ↔ 基础货币」联动用的**人民币表内口径**，与上面的美元官方口径
+       **不是一套东西**（折算率是历史成本/复合折算，实测 24 期由 6.886 单调降至 6.318，
+       非市场汇率）⇒ 只作**并列展示**，UI 必须各标口径，**严禁相加**。
+    """
+    cond = " AND stat_month <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    row = query_one(
+        "SELECT stat_month, fx_reserve, monetary_gold, foreign_assets, reserve_money, "
+        "total_assets FROM cn_cb_balance_monthly WHERE fx_reserve IS NOT NULL" + cond
+        + " ORDER BY stat_month DESC", args)
+    if not row:
+        return {"as_of": None, "fx_yi": None, "gold_yi": None, "foreign_yi": None,
+                "reserve_money_yi": None, "total_yi": None}
+    return {
+        "as_of": str(row["stat_month"]),
+        "fx_yi": r(row["fx_reserve"], 2),          # 人民币口径外汇（亿元）
+        "gold_yi": r(row["monetary_gold"], 2),     # 人民币口径货币黄金（亿元）
+        "foreign_yi": r(row["foreign_assets"], 2),
+        "reserve_money_yi": r(row["reserve_money"], 2),
+        "total_yi": r(row["total_assets"], 2),
+    }
+
+
+def _cn_omo(as_of: str | None, per_section: int = 5) -> list[dict]:
+    """央行公开市场操作**操作量事实**（**每个栏目各自最近 N 笔**，按 `section` 分列）
+
+    🔴 **不做「净投放」派生**（D4=B 主动决策，非遗漏）：净投放须按期限滚动推算到期日
+       （7 天期遇节假日顺延）、买断式期限不固定、人行另有国债买卖/国库现金定存等工具
+       ⇒ 会**系统性低估**。升级路径见 v2.1 §11.4。
+    🔴 **两个栏目不可混加**：`omo_trade`（逆回购/央票）与 `outright_repo`（买断式逆回购）
+       各自独立编号、量级差一个数量级 ⇒ 分列。直接 `SUM(win_amount)` 会把
+       「7 天期逆回购 515 亿」与「买断式 5000 亿」混成一个数。
+    🔴 **窗口按「栏目各自最近 N 笔」而非「全局最近 N 日」**（实测踩到）：买断式一个月才几次
+       ⇒ 用全局 5 日窗口会被整个吃掉、栏目在 UI 上凭空消失（实测近 5 日只剩 `omo_trade` 一项）。
+    ⚠️ **零操作日也是有效数据**（`win_amount=0`）⇒ 不过滤 0；把 0 当 NULL 会让「近期投放」偏大。
+    ⚠️ 买断式是**招标预告**：公告发布日 ≠ 操作日（实测 [2026]第18号发布 9-14、操作 9-15）
+       ⇒ 一律按 `trade_date`（正文操作日）。
+    """
+    cond = " AND trade_date <= %s" if as_of else ""
+    args: list = [as_of] if as_of else []
+    rows = query_all(
+        "SELECT section, trade_date, op_type, tenor_days, op_rate, win_amount "
+        "FROM cn_omo_daily WHERE win_amount IS NOT NULL" + cond
+        + " ORDER BY trade_date DESC, notice_no DESC", args)
+    if not rows:
+        return []
+    out: list[dict] = []
+    for sec in ("omo_trade", "outright_repo"):
+        ops = [x for x in rows if x["section"] == sec][:per_section]
+        if not ops:
+            continue
+        out.append({
+            "section": sec,
+            "label": "公开市场业务（逆回购 / 央票）" if sec == "omo_trade" else "买断式逆回购",
+            "as_of": str(ops[0]["trade_date"]),
+            "rows": [{"date": str(x["trade_date"]), "op_type": x["op_type"],
+                      "tenor_days": x["tenor_days"], "rate": r(x["op_rate"], 2),
+                      "amount_yi": r(x["win_amount"], 2)} for x in ops],
+            "amount_sum_yi": r(sum(f(x["win_amount"]) or 0 for x in ops), 2),
+            "days": len({x["trade_date"] for x in ops}),
+        })
+    return out
+
+
+def _q_dir(v: float | None) -> int:
+    """方向：+1 扩张 / -1 收缩 / 0 无法判定"""
+    if v is None:
+        return 0
+    return 1 if v > 0 else (-1 if v < 0 else 0)
+
+
+def _quantity_verdict(glb: dict, fed: dict, eu: dict, cn: dict) -> dict:
+    """数量维度的「多层同向」判定（tone 规则见设计 §四）
+
+    全球 / 美国 / 欧元区 / 中国四层：≥3 层同向扩张 → **偏松**（机会侧金）；
+    ≥3 层同向收缩 → **偏紧**（琥珀）；否则**背离**（中性蓝）。
+
+    🔴 判的是**增速的方向**（同比抬升/回落、扩表/缩表），**不是「同比为正」**：
+       货币供应长期正增长，拿符号当信号等于恒真（实测四层同比**全为正**，
+       但方向已分化）—— 这正是设计 §四 说的「同向」而不是「同号」。
+    """
+    layers = [
+        ("全球", "境外美元信贷同比", glb.get("total_yoy_chg"), "pp", glb.get("total_yoy"), "%"),
+        ("美国", "美联储总资产 13 周", fed.get("chg_13w_pct"), "%", None, None),
+        ("欧元区", "M3 同比", eu.get("m3_yoy_d3"), "pp", eu.get("m3_yoy"), "%"),
+        ("中国", "M2 同比", cn.get("m2_yoy_d3"), "pp", cn.get("m2_yoy"), "%"),
+    ]
+    exp_n = sum(1 for _, _, d, _, _, _ in layers if _q_dir(d) > 0)
+    con_n = sum(1 for _, _, d, _, _, _ in layers if _q_dir(d) < 0)
+    known = exp_n + con_n
+    if known == 0:
+        tone = "mixed"
+    elif exp_n >= 3:
+        tone = "loose"
+    elif con_n >= 3:
+        tone = "tight"
+    else:
+        tone = "mixed"
+
+    def _txt(name: str, d: float | None, unit: str, lv: float | None, lvu: str | None) -> str:
+        if d is None:
+            return f"{name}方向未就绪"
+        w = "扩张（加速）" if d > 0 else ("收缩（减速）" if d < 0 else "持平")
+        s = f"{name} {w}"
+        if lv is not None:
+            s += f"（水平 {lv:+.2f}{lvu or ''}）"
+        return s + f"，方向变化 {d:+.2f}{unit}"
+
+    head_map = {
+        "loose": "全球主要货币区的货币总量**同向扩张** —— 水位在抬升，数量维度偏松",
+        "tight": "全球主要货币区的货币总量**同向收缩** —— 水位在回落，数量维度偏紧",
+        "mixed": "各货币区的货币总量**方向背离** —— 数量维度无一致信号，须分地区看",
+    }
+    parts = []
+    if glb.get("total_tn") is not None:
+        parts.append(f"境外美元信贷 {glb['total_tn']} 万亿美元"
+                     + (f"（同比 {glb['total_yoy']:+.2f}%，债券占 {glb['bond_share']}%）"
+                        if glb.get("total_yoy") is not None else ""))
+    if fed.get("tn") is not None:
+        parts.append(f"美联储总资产 {fed['tn']} 万亿"
+                     + (f"（13 周 {fed['chg_13w_pct']:+.2f}%）"
+                        if fed.get("chg_13w_pct") is not None else ""))
+    if cn.get("m2_tn") is not None:
+        parts.append(f"中国 M2 {cn['m2_tn']} 万亿美元"
+                     + (f"（同比 {cn['m2_yoy']:+.2f}%）" if cn.get("m2_yoy") is not None else ""))
+    headline = ("；".join(parts) if parts else "货币总量数据未就绪") + "。" + head_map[tone].replace("**", "") + "。"
+    detail = (
+        f"四层方向判定：{' · '.join(_txt(n, d, u, lv, lvu) for n, _, d, u, lv, lvu in layers)}。"
+        f"（同向扩张 {exp_n} 层 / 同向收缩 {con_n} 层 ⇒ 结论：{head_map[tone]}）"
+        "⚠️ 这是**存量水位**的中期读数（BIS 季度、其余月/周度），**不是择时信号**；"
+        "它回答「钱在变多还是变少」，不回答「什么时候进」。"
+    )
+    if eu.get("m3_tn") is not None:
+        detail += (f"欧元区 M3 {eu['m3_tn']} 万亿美元"
+                   + (f"（同比 {eu['m3_yoy']:+.2f}%）" if eu.get("m3_yoy") is not None else "")
+                   + "作第二货币区的横向参照。")
+    return {"headline": headline, "detail": detail, "tone": tone,
+            "expand_n": exp_n, "tight_n": con_n, "known_n": known,
+            "layers": [{"name": n, "metric": m, "dir": _q_dir(d), "delta": d, "unit": u,
+                        "level": lv} for n, m, d, u, lv, _ in layers]}
+
+
+def _quantity_state(as_of: str | None) -> dict:
+    """货币总量块（数量维度）：全球 → 美国 → 欧元区 → 中国 四个分组 + 判读条
+
+    ⚠️ **优雅降级**：任一分组的数据未就绪（表缺 / 列缺 / 源断）只让**该卡显示"数据未就绪"**，
+       绝不让整个 `quantity` 块抛错（设计 §八 明文要求 —— C2 曾是可并行前置批次）。
+    """
+    usd_cny, eur_usd = _fetch_fx(as_of)
+    glb = _bis_offshore(as_of)
+    fed = _fed_assets(as_of)
+    net_liq = _us_net_liquidity(as_of)
+    us = _us_money(as_of)
+    eu = _eu_money(as_of, eur_usd)
+    cn_money = _cn_money(as_of, usd_cny)
+    cn_res = _cn_reserve(as_of)
+    cn_cb = _cn_cb(as_of)
+    cn_omo = _cn_omo(as_of)
+
+    def _kpi(key: str, label: str, value, status: str, anchor: str, hint: str,
+             highlight: bool = False, native: dict | None = None,
+             questions: list[str] | None = None, card_rank: int | None = None) -> dict:
+        """数量类 KPI：tone 一律 neutral（存量水位不是「某个资产在涨跌」，不染红绿）；
+        **不下发 scale**（纪律 8：单调上行序列的分位是伪信号）。
+
+        `questions` / `card_rank`（P2 · 2026-09-26）：这张读数归**哪张卡片墙的卡**、以及卡内第几位。
+        🔴 不标 `questions` ⇒ 卡片墙的 `scoped.length ? scoped : kpis` 过滤为空 ⇒ **静默回退全量**
+           ⇒ 数量卡上会冒出 Shibor（内容错、却不报错）。`card_rank` 只影响卡内「取前 3」的择优。
+        """
+        return {"key": key, "label": label, "value": value, "unit": " 万亿美元",
+                "tone": "neutral", "status": status, "highlight": highlight,
+                "anchor": anchor, "hint": hint, "pct": None, "scale": None,
+                "native": native, "questions": questions or [], "card_rank": card_rank}
+
+    items: list[dict] = [
+        _kpi("bis_offshore", "境外美元信贷（离岸美元）", glb.get("total_tn"),
+             (f"同比 {glb['total_yoy']:+.2f}%｜债券占 {glb['bond_share']}%｜BIS 官方口径"
+              if glb.get("total_yoy") is not None else "数据未就绪"),
+             "mc-qty-global",
+             "BIS 官方口径 `3P×N×A×I×B×USD` = **全体非美借款人**的**美元计价**信贷"
+             "（跨境 + 借款人本地外币），是「境外美元总量」的官方读数。"
+             f"⚠️ 口径已实测自证（贷款+债券 − 总量 = {glb.get('xcheck_pct')}%）。"
+             "⚠️ 这是**季度**数据、T+1 季发布，**不可当成「当前」读数**；表内只含美元口径，"
+             "不含欧元/日元等其它币种的境外信贷。",
+             native={"value": None, "unit": "百万美元", "note": "BIS WS_GLI，单位原生为百万美元"},
+             questions=["q5"]),
+        _kpi("fed_assets", "美联储总资产", fed.get("tn"),
+             (f"13 周 {fed['chg_13w_pct']:+.2f}%｜52 周 {fed['chg_52w_pct']:+.2f}%"
+              if fed.get("chg_52w_pct") is not None else "数据未就绪"),
+             "mc-qty-us",
+             "美联储总资产（周度 H41）。**扩表 = 放水、缩表 = 收水** —— 它是全球美元总闸门，"
+             "也是 A5「美元净流动性」的被减项之一。⚠️ 周度数据固定在**周三**发布口径。",
+             questions=["q3"], card_rank=2),
+        _kpi("us_net_liq", "美元净流动性（合成 A5）", net_liq.get("tn"),
+             (f"总资产 {net_liq['fed_tn']} 万亿 − TGA {net_liq['tga_yi']:,.0f} 亿美元"
+              f" − ON RRP {net_liq['onrrp_yi']:,.2f} 亿美元｜截至 {net_liq['as_of']}"
+              if net_liq.get("tn") is not None else "数据未就绪"),
+             "mc-qty-us",
+             "🔴 **合成口径、非官方**：市场最常用的「美元真实流动性」= 美联储总资产 − "
+             "财政部 TGA 余额 − 隔夜逆回购 ON RRP。三腿取**同一日期**的读数"
+             "（实测全史仅 52 个「三腿同日」，故不能拿各自最近值硬凑）。"
+             "⚠️ 它不是官方公布值，是本项目自合成 —— 金色强调是因为它是派生亮点，不代表官方背书。",
+             highlight=True, questions=["q3"], card_rank=3),
+        _kpi("us_m2", "美国 M2", us.get("m2_tn"),
+             (f"同比 {us['m2_yoy']:+.2f}%｜" if us.get("m2_yoy") is not None else "")
+             + (f"原生 {us['m2_bn']:,.1f} 十亿美元" if us.get("m2_bn") is not None
+                else "数据未就绪"),
+             "mc-qty-us",
+             "美国 M2（月度 H6）。⚠️ 原生单位是**十亿美元**（23,342.8 bn），"
+             "与欧元区 M3（百万欧元）、中国 M2（亿元）**单位全不同** —— "
+             "本卡已统一折成万亿美元，**原值直接比大小会得到相反结论**。",
+             questions=["q4"], card_rank=1),
+        _kpi("eu_m3", "欧元区 M3", eu.get("m3_tn"),
+             (f"同比 {eu['m3_yoy']:+.2f}%｜EUR/USD {eu['eur_usd']}"
+              if eu.get("m3_yoy") is not None else "数据未就绪"),
+             "mc-qty-eu",
+             "欧元区 M3（月度）。⚠️ 原生单位是**百万欧元**，本卡按 EUR/USD 中间价交叉汇率折美元。"
+             "⚠️ 数据源**只有 DBnomics 一条通道**（ECB 直连三域全断）—— 它失效则本卡断供，"
+             "DQ freshness 是唯一防线。",
+             questions=["q4"], card_rank=2),
+        _kpi("cn_m2", "中国 M2", cn_money.get("m2_tn"),
+             (f"同比 {cn_money['m2_yoy']:+.2f}%｜M1−M2 剪刀差 {cn_money['gap']}"
+              f"（{cn_money['gap_word']}）"
+              if cn_money.get("m2_yoy") is not None else "数据未就绪"),
+             "mc-qty-cn",
+             "中国 M2（月度，原生 **亿元**）。折美元需 USD/CNY 中间价 —— "
+             "**不折美元就与美国 M2 比大小是错的**（实测折美元后中国 M2 ≈ 美国的 2.3 倍，"
+             "而原值 3,568,083.6 vs 23,342.8 差 150 倍，方向也相反）。"
+             "M1−M2 剪刀差衡量**资金活化度**（活钱 vs 死钱）。",
+             questions=["q4"], card_rank=3),
+        _kpi("cn_fx_reserve", "中国官方外汇储备", cn_res.get("fx_tn"),
+             ((f"同比 {cn_res['fx_yoy']:+.2f}%｜" if cn_res.get("fx_yoy") is not None else "")
+              + f"黄金 {cn_res['gold_oz']:,.0f} 万盎司（连续增持 {cn_res['gold_streak']} 月）"
+              if cn_res.get("fx_tn") is not None else "数据未就绪"),
+             "mc-qty-cn",
+             "中国官方外汇储备（月度，原生 **亿美元** —— 本就美元，折算**不需要汇率**）。"
+             "⚠️ 中国层的「外储」有**三套口径**：① 本卡的美元官方口径；② 黄金**实物量**"
+             "（万盎司，非金额）；③ 央行表内的人民币口径（亿元）。三者**单位不同、"
+             "折算率不是市场汇率**（实测 24 期由 6.886 单调降至 6.318）⇒ **严禁相加、严禁按市价互校**。",
+             questions=["q5"]),
+    ]
+
+    # 汇率的截至日（P2 · 2026-09-26）：汇率会漂移，**不标日期的折算率不可审计** ——
+    # 目标 T3 要求「三经济体同视野 + 明示折算汇率与各自 as_of」。与 `_fetch_fx` 同源同表。
+    _fx_cond = " AND trade_date <= %s" if as_of else ""
+    _fx_args: list = [as_of] if as_of else []
+    _fx_row = query_one(
+        "SELECT MAX(trade_date) AS d FROM currency_boc_daily "
+        "WHERE COALESCE(mid_price, ref_price) IS NOT NULL" + _fx_cond, _fx_args)
+    fx_as_of = str(_fx_row["d"]) if (_fx_row and _fx_row["d"]) else None
+
+    reading = _quantity_verdict(glb, fed, eu, cn_money)
+    return {
+        "items": items,
+        "global": glb,
+        "us": {"fed": fed, "net_liquidity": net_liq, "money": us},
+        "eu": eu,
+        "cn": {"money": cn_money, "reserve": cn_res, "cb_balance": cn_cb, "omo": cn_omo},
+        "fx": {"usd_cny": r(usd_cny, 4), "eur_usd": r(eur_usd, 4),
+               "as_of": fx_as_of,
+               "source": "currency_boc_daily（人民币中间价 COALESCE(mid_price, ref_price)）"},
+        "reading": reading,
+        "as_of_bis": glb.get("period"),
+        "as_of_fed": fed.get("as_of"),
+        "as_of_net_liq": net_liq.get("as_of"),
+        "as_of_us_money": us.get("as_of"),
+        "as_of_eu": eu.get("as_of"),
+        "as_of_cn_money": cn_money.get("as_of"),
+        "as_of_cn_reserve": cn_res.get("as_of"),
+        "as_of_cn_cb": cn_cb.get("as_of"),
+        "as_of_omo": (cn_omo[0]["as_of"] if cn_omo else None),
+        "unit_target": "USD_TRILLION",
+        "note": QUANTITY_NOTE,
     }
 
 
@@ -684,6 +1437,86 @@ def _verdict_policy(lpr: dict) -> dict:
     return {"headline": head, "detail": detail, "tone": "normal"}
 
 
+# ---- 新增两问的子判读 + tone 收口（P2 · 2026-09-26）----
+# 需求：卡片墙 3 张卡 → 4 张（一卡一环），新增「数量」「外部约束」两张。卡片墙对每张卡取
+# `verdicts[<卡的 question>]`，缺 key 时**静默回退模块级 verdict** ⇒ 会出现「卡问数量、
+# 判读条答价格」。故必须为 q4/q5 补上子判读。
+#
+# 🔴 判读条合法 tone 枚举 = 前端**实际定义了 CSS 类**的那几个（AnalysisOverview.vue 的 `.ao-verdict--*`）：
+#   normal      → 走基类默认灰（有意不给修饰类）
+#   opportunity → 金（.ao-verdict--opportunity）
+#   caution     → 赭橙（.ao-verdict--caution）
+#   mixed       → 蓝（.ao-verdict--mixed，本次随 D5=(b) 一并新增）
+# 🔴 实测教训（2026-09-26）：`quantity.reading.tone='mixed'` 原先**没有对应 CSS 类**，直接透传会
+#   生成 `ao-verdict--mixed` ⇒ **判读条静默变灰**：不报错、不告警，但「四层方向分化」这个核心
+#   叙事被吃掉。故一律经 `_to_card_tone()` 收口 —— 接口**永不产出前端没有类的 tone**。
+_CARD_TONES = {"normal", "opportunity", "caution", "mixed"}
+
+
+def _to_card_tone(v, default: str = "normal") -> str:
+    """把任意来源的 tone 收口到判读条枚举，避免生成不存在的 CSS 类（静默降级为灰）。
+
+    ⚠️ 两套 tone **不可混用**：KPI 的 tone（`neutral` / `diff` / `updown`）与判读条的 tone
+    （`normal` / `opportunity` / `caution` / `mixed`）是两个独立枚举，不要互相赋值。
+    """
+    return v if v in _CARD_TONES else default
+
+
+def _verdict_quantity(quantity: dict) -> dict:
+    """q4 钱有没有派生到实体 —— 判的是**增速的方向**，不是「同比为正」
+
+    货币供应长期正增长，拿符号当信号等于恒真（四层同比实测全为**正**，但方向已分化）。
+
+    卡片墙判读条遵守 registry 契约 ⑨（V1~V4：「判读条给判断与影响，KPI 给读数与分位」）：
+    **不复述读数**、≤28 字、不机械拼接。故此处**不透传**模块级 `quantity.reading`
+    （那是给详情页的四层总述），而按本卡口径（三张读数卡对应的美 / 欧元区 / 中国）另出判断。
+
+    ⚠️ 2026-09-26 勘误：初版直接透传 `quantity.reading`，被判据守卫
+    `_scratch/_probe_cardtext.py` 拦下 —— **V3 超长 4.6 倍（128 > 28 字）**且触发
+    **V1**（「万亿美元（同比 +7.」重复 2 次，是模板拼接产物）。该守卫在契约 ⑨ 标注
+    「改判读条后必跑」，P2 批次漏跑 ⇒ 这是全站 16 张卡里**唯一违规卡**。
+    """
+    src = quantity.get("reading") or {}
+    layers = src.get("layers") or []
+    # 「全球」层（BIS 境外美元信贷）是外部约束卡（q5）的论据，不属本卡口径
+    sub = [x for x in layers
+           if x.get("name") in ("美国", "欧元区", "中国") and x.get("dir") is not None]
+    exp_n = sum(1 for x in sub if x["dir"] > 0)
+    con_n = sum(1 for x in sub if x["dir"] < 0)
+    if not sub:
+        return {"headline": "货币总量数据未就绪", "detail": "", "tone": "normal"}
+    if con_n and not exp_n:
+        head = "主要货币区同向收缩，水位在回落"
+    elif exp_n and not con_n:
+        head = "主要货币区同向扩张，水位在抬升"
+    else:
+        head = "各货币区方向背离，水位未同向变化"
+    return {
+        "headline": head,
+        "detail": "水位只判中期方向 —— 背离时须分地区看。状态描述，非择时信号。",
+        "tone": _to_card_tone(src.get("tone")),
+    }
+
+
+def _verdict_external(external: dict) -> dict:
+    """q5 外部在抽水还是送水 —— 美债曲线 / 中美利差 / 美元指数
+
+    headline 实测 20 字（V3 合规）故原样保留；detail 初版透传模块级
+    `external.reading.detail`（193 字，含四层清单 + 机制解释 + 免责），
+    虽 V3 只约束 headline，但同一段话在窄卡上折约 5 行 ⇒ 此处只留**组合定性的首句**
+    与短免责，机制解释留在详情页（不丢信息）。
+    """
+    src = external.get("reading") or {}
+    combo = src.get("combo") or ""
+    first = next((x.strip() for x in combo.split("。") if x.strip()), "")
+    detail = (first + "。" if first else "") + "状态描述，非择时信号。"
+    return {
+        "headline": src.get("headline", ""),
+        "detail": detail,
+        "tone": _to_card_tone(src.get("tone")),
+    }
+
+
 # ---------------- 主装配 ----------------
 
 @ttl_cache(600)
@@ -740,6 +1573,11 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
     external = _external_state(
         _fetch_bond(days + 60, as_of), _fetch_dxy(WINDOW_1Y + 5, as_of),
         data_as_of, pct_3m, as_of)
+
+    # ---- ⑤ 数量（步骤 1，2026-09-26）：货币总量（全球 → 美国 → 欧元区 → 中国）----
+    # 与上面四个「价格」切面正交；低频存量读数，**不占卡片墙**（D1=A），
+    # 只作本详情页的独立分区 + 一条判读条。任一分组缺数据时**优雅降级**（见 `_quantity_state`）。
+    quantity = _quantity_state(as_of)
 
     # 近一年振幅：3M 的高低差（bp）—— 用来说明"政策未动期间市场自己动了多少"
     amp_1y = r((max(s3_vals) - min(s3_vals)) * 100, 1) if s3_vals else None
@@ -833,14 +1671,20 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
          "anchor": "mc-trend",
          "hint": "3 个月期 Shibor（银行间同业拆借利率），是 A 股最上游的定价变量之一："
                  "利率是估值分母。⚠️ 绝对值跨期不可比，判断“贵不贵”一律看近一年分位"},
-        {"key": "term_spread", "card_rank": 2, "questions": ["q2"], "label": "期限利差（3M − 隔夜）",
+        # 「预期」并入「价格」卡（D6=(a) · 2026-09-26）：term_spread 与 shibor_3m **同源同表**
+        # （`interbank_rate_daily`），期限结构本就是「② 银行间定价」这一环的内部构成
+        # ⇒ 归 q1。`verdicts.q2` 保留（不再有卡消费，无害）。
+        {"key": "term_spread", "card_rank": 2, "questions": ["q1"], "label": "期限利差（3M − 隔夜）",
          "value": r(spread_cur, 1), "unit": "bp", "tone": "neutral",
          "status": f"{_shape_word(spread_cur, pct_spread)}",
          "pct": pct_spread, "scale": scale(pct_spread, "近一年"), "highlight": is_extreme(pct_spread),
          "anchor": "mc-curve",
          "hint": "长端减短端的利差，衡量资金期限结构：越陡说明短端资金越宽裕、"
                  "越平说明市场预期资金持续宽松；**倒挂**（3M 比隔夜还便宜）是流动性紧张的信号"},
-        {"key": "lpr", "card_rank": 3, "questions": ["q3"], "label": "LPR 1Y（政策利率）",
+        # card_rank 3 → 1（P3 · 2026-09-26）：rank 是**卡内**排序（`pickCardKpis` 在每个
+        # `question` 的子集内排序），不是全局排序。政策卡（q3 = 四环之①央行操作）现收三个读数：
+        # LPR + 美联储总资产 + 美元净流动性 A5 ⇒ 本项为卡内第 1。
+        {"key": "lpr", "card_rank": 1, "questions": ["q3"], "label": "LPR 1Y（政策利率）",
          "value": r(lpr.get("lpr_1y"), 2), "unit": "%", "tone": "neutral",
          "status": (f"已连续 {lpr['idle_months']} 个月未动"
                     if lpr.get("idle_months") is not None
@@ -848,14 +1692,17 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
          "pct": None, "scale": None, "highlight": False, "anchor": "mc-lpr",
          "hint": "贷款市场报价利率（1 年期），每月 20 日报价。它是政策姿态的观察窗，"
                  "但与市场资金价格（Shibor）不同步——两者背离本身就是信息"},
-        # 未标 card_rank：详情页完整呈现，卡片墙不放（避免挤掉上面三个正交问题）
-        {"key": "shibor_on", "label": "Shibor 隔夜",
+        # 补 `questions`（P2）：原先这两项不标 questions ⇒ 卡片墙过滤为空 ⇒ 静默回退全量。
+        # 二者都是价格侧读数，归 q1；`shibor_on` 带 rank3 与 shibor_3m/term_spread 凑满价格卡三格。
+        {"key": "shibor_on", "card_rank": 3, "questions": ["q1"], "label": "Shibor 隔夜",
          "value": r(on_cur, 2), "unit": "%", "tone": "neutral",
          "status": "短期资金面", "pct": pctile([f(x["shibor_on"]) for x in win if x["shibor_on"] is not None],
                                                on_cur),
          "scale": None, "highlight": False, "anchor": "mc-curve",
          "hint": "隔夜 Shibor。日间波动最大，是资金面松紧最敏感的读数，但噪声也最大"},
-        {"key": "curve_dispersion", "label": "期限离散度",
+        # 同样归 q1，但**不标 card_rank**：价格卡三格已被 shibor_3m / term_spread / shibor_on
+        # 占满，`pickCardKpis` 优先取带 rank 的 ⇒ 本项不会挤进卡里，只在详情页完整呈现。
+        {"key": "curve_dispersion", "questions": ["q1"], "label": "期限离散度",
          "value": r(std([c["cur"] for c in curve if c["cur"] is not None]), 4), "unit": "%",
          "tone": "neutral", "status": "四个期限的离散程度（越大=曲线越扭曲）",
          "pct": None, "scale": None, "highlight": False, "anchor": "mc-curve",
@@ -868,12 +1715,27 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
         "base_date_1y": str(base_1y["trade_date"]),
         "is_replay": bool(as_of),
         "kpis": kpis,
+        # 卡片墙专用数组（P2 · 2026-09-26）：`AnalysisOverview.vue:201` 原本只读 `r.kpis`，
+        # 而 `external_kpis` / `quantity_kpis` 是**独立数组、根本不被读取** ⇒ 新增卡上墙会是空的。
+        # 这里下发三组并集（含 `questions`），供卡片墙按 `question` 过滤；
+        # **详情页结论区仍读 `kpis`**（保持 5 张，不被 16 个读数撑大、稀释「结论先行」）。
+        # ⚠️ 前端写法是 `r?.card_kpis ?? r?.kpis`（回退兼容）⇒ 其余 4 个模块零改动。
+        "card_kpis": (kpis + external["items"]
+                      + ([external["dxy"]] if external["dxy"] else [])
+                      + quantity["items"]),
         # 外部约束的 KPI 单独一组（2026-09-25 批次 1）：主结论区只放国内三问 + 两个辅助读数，
         # 外部四项跟着 `mc-external` 分区一起渲染 —— 混进主结论区会把它从 5 个撑到 9 个，
-        # 稀释「结论先行」。另：这四项**不标 card_rank**，卡片墙仍是 3 张 track 卡
-        # （见《货币流动性观测体系设计》§6 批次 3 的「不拆大卡」原则）。
+        # 稀释「结论先行」。
+        # （P2/P3 · 2026-09-26：原「不标 card_rank、卡片墙仍是 3 卡」的做法已由 D6=(a) 取代 ——
+        #  四项中 cn_us_10y / us_10y / dxy 带 card_rank 上「外部约束」卡（q5），
+        #  us_10y_2y 标 q5 但不带 rank（详情页完整呈现）。）
         "external_kpis": external["items"] + ([external["dxy"]] if external["dxy"] else []),
         "external": external,
+        # 数量维度（步骤 1，2026-09-26）：KPI 单独一组，跟着 `mc-quantity` 分区渲染。
+        # （P2/P3 · 2026-09-26：原「不标 card_rank」的做法已由 D6=(a) 取代 —— 三经济体
+        #  us_m2 / eu_m3 / cn_m2 带 card_rank 上「数量」卡（q4），其余低频明细只在详情页。）
+        "quantity_kpis": quantity["items"],
+        "quantity": quantity,
         "curve": curve,
         "history": history,
         "lpr": lpr,
@@ -890,6 +1752,11 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
             "q1": _verdict_level(pct_3m),
             "q2": _verdict_expectation(spread_cur, pct_spread),
             "q3": _verdict_policy(lpr),
+            # q4 / q5（P2 · 2026-09-26）：新增「数量」「外部约束」两张卡后必须各有子判读 ——
+            # 卡片墙取 `verdicts[m.question]`，缺 key 时 `?? r?.verdict` **静默回退模块级**
+            # ⇒ 会出现「卡问数量、判读条答资金价格」，且不报错（评估报告 C1）。
+            "q4": _verdict_quantity(quantity),
+            "q5": _verdict_external(external),
         },
         "note": MONEY_COST_NOTE,
     }
