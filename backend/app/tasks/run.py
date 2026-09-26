@@ -61,6 +61,18 @@ from ..collectors.cn_liquidity_sync import CnLiquiditySyncCollector
 from ..collectors.cn_cb_balance_sync import CnCbBalanceSyncCollector
 from ..collectors.cb_policy_rate_sync import CbPolicyRateSyncCollector
 from ..collectors.usd_index_sync import UsdIndexSyncCollector
+# 2026-09-25 货币流动性补源 v2.0（无 FRED 密钥版）§7 批次 A/B/C/D —— 6 个新采集器
+#   批次 A（美国层双轨）：us_fed_balance_weekly / us_money_supply_monthly / us_money_market_daily
+#   批次 B（欧元区）：    eu_money_supply_monthly
+#   批次 C（中国层）：    cn_omo_daily（人行 OMO 日度；cn_liquidity 的 M2 结构已在既有采集器内扩展）
+#   批次 D（全球层）：    global_liquidity_bis
+from ..collectors.us_fed_balance_sync import UsFedBalanceSyncCollector
+from ..collectors.us_money_supply_sync import UsMoneySupplySyncCollector
+from ..collectors.us_money_market_sync import UsMoneyMarketSyncCollector
+from ..collectors.eu_money_supply_sync import EuMoneySupplySyncCollector
+from ..collectors.cn_omo_sync import CnOmoSyncCollector
+from ..collectors.cn_reserve_sync import CnReserveSyncCollector
+from ..collectors.global_liquidity_sync import GlobalLiquiditySyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -852,6 +864,131 @@ def run_usd_index_sync(params: dict) -> int:
     return result["records_written"]
 
 
+# ============ 货币流动性补源 v2.0（无 FRED 密钥版）批次 A/B/C/D ============
+
+def run_us_fed_balance_sync(params: dict) -> int:
+    """美国·美联储资产负债表周度（us_fed_balance_weekly，H.4.1）
+
+    批次 A「美国层双轨」主口径之一。DBnomics（免 Key）历史完整（2002-12 起 1241 行），
+    官网 H.4.1 只做最新一期交叉校验（实测偏差 0.000000%）。
+    ⚠️ 采集器内置 `session.trust_env=False` 绕过本机代理（代理会阻断国际源）。
+    params: timeout_sec(150)
+    """
+    p = _task_params(params, {"timeout_sec": 150})
+    collector = UsFedBalanceSyncCollector(timeout_sec=float(p.get("timeout_sec", 150)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 美联储资产负债表 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_us_money_supply_sync(params: dict) -> int:
+    """美国·货币供应量月度（us_money_supply_monthly，H.6：M1/M2/基础货币/准备金）
+
+    批次 A「美国层双轨」主口径之一。DBnomics 历史完整（1959-01 起 812 行），
+    官网 H.6 只做最新一期交叉校验（实测偏差 0.0000%）。
+    params: timeout_sec(120)
+    """
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = UsMoneySupplySyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 美国货币供应 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_us_money_market_sync(params: dict) -> int:
+    """美国·货币市场日度（us_money_market_daily：SOFR/EFFR/ON RRP/TGA/国债）
+
+    批次 A「美国层」短端抓手。NY Fed（SOFR/EFFR/ON RRP）+ 财政部（TGA/债务）零 Key 直连。
+    ⚠️ 多源并表，增量水位按列取（否则只有快照的行会顶前水位、静默跳过另一条腿）。
+    params: timeout_sec(60)
+    """
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = UsMoneyMarketSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 美国货币市场 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_eu_money_supply_sync(params: dict) -> int:
+    """欧元区·货币供应量月度（eu_money_supply_monthly，ECB BSI：M1/M2/M3）
+
+    批次 B「欧元区」。DBnomics 免 Key（1980-01 起 559 行）。源单一 ⇒ 三条全失败才 raise，
+    单条失败记 error 继续。
+    params: timeout_sec(120)
+    """
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = EuMoneySupplySyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 欧元区货币供应 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_cn_omo_sync(params: dict) -> int:
+    """中国·央行公开市场操作日度（cn_omo_daily，人行「公开市场业务」各栏目）
+
+    批次 C「中国层」短端抓手（M2 是月度存量、OMO 是日度流量）。
+    含交易公告 + 买断式逆回购两个栏目；零操作日也发公告（操作量=0）。
+    ⚠️ 人行官网有反爬限流，采集器内置全局请求节流 + 退避（并发 4 会触发 403）。
+    params: timeout_sec(900) / max_pages(25) / full(false)
+    """
+    p = _task_params(params, {"timeout_sec": 900, "max_pages": 25, "full": False})
+    collector = CnOmoSyncCollector(
+        timeout_sec=float(p.get("timeout_sec", 900)),
+        max_pages=int(p.get("max_pages", 25)),
+        workers=int(p.get("workers", 4)),
+        full=bool(p.get("full", False)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 央行 OMO {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_global_liquidity_sync(params: dict) -> int:
+    """全球·BIS 全球流动性指标季度（global_liquidity_bis，WS_GLI 美元计价跨境信贷）
+
+    批次 D「全球层」。BIS SDMX API 免 Key（2000-03 起 6720 行、19 个借款人国家/地区）。
+    离岸美元 = borrowers_cty<>'US' 且 sector='N' 且 l_pos_type='I'。
+    params: timeout_sec(90)
+    """
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = GlobalLiquiditySyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 全球流动性 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_cn_reserve_sync(params: dict) -> int:
+    """中国·官方外储（亿美元）+ 黄金储备（万盎司）月度（cn_reserve_monthly）
+
+    货币流动性补源 v2.1 批次 **C2**「中国层·央行对外资产」的**国际可比口径**。
+    ⚠️ 先勘误：`cn_cb_balance_monthly` **已有**人民币表内口径的 fx_reserve / monetary_gold
+      （亿元，到 2026-08 未停更）⇒ 本表只补 akshare 独有的两项（亿美元 / 万盎司），
+      **新建而非扩列**，避免与既有表重复且口径打架（三套口径严禁相加）。
+    ⚠️ 源 `统计时间` 是字符串 `'YYYY.M'`：**字符串序 ≠ 时间序**（2025.10 < 2025.2），
+      akshare 返回的 df 本身就是错序的 ⇒ 采集器按 (年,月) 元组排序（`parse_cn_month`），
+      **禁止 iloc[-1]**。
+    ⚠️ 双口径隐含折算率的软断言**在采集器内**（跨表、DQ 无 JOIN），且只做区间 + 变动，
+      **不按市价互校**（该比率是历史成本口径，同期市场汇率约 7.0~7.3，按市价会稳定误报）。
+    params: timeout_sec(90)
+    """
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = CnReserveSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 中国外储/黄金 {result['error_count']} 项异常: {result['errors'][:3]}")
+    xc = result.get("xcheck") or {}
+    if xc.get("out_of_range") or xc.get("jumps"):
+        logger.warning(f"⚠️ 外储双口径软断言命中: 越界 {len(xc.get('out_of_range') or [])} / "
+                       f"跳变 {len(xc.get('jumps') or [])}")
+    return result["records_written"]
+
+
 # ============ 任务注册表（所有 run_* 函数定义之后） ============
 TASKS = {
     "stock_daily_incr": run_stock_daily_incr,
@@ -910,6 +1047,15 @@ TASKS = {
     "cn_cb_balance_sync": run_cn_cb_balance_sync,
     "cb_policy_rate_sync": run_cb_policy_rate_sync,
     "usd_index_sync": run_usd_index_sync,
+    # 2026-09-25 货币流动性补源 v2.0（无 FRED 密钥版）批次 A/B/C/D
+    "us_fed_balance_sync": run_us_fed_balance_sync,
+    "us_money_supply_sync": run_us_money_supply_sync,
+    "us_money_market_sync": run_us_money_market_sync,
+    "eu_money_supply_sync": run_eu_money_supply_sync,
+    "cn_omo_sync": run_cn_omo_sync,
+    "global_liquidity_sync": run_global_liquidity_sync,
+    # 2026-09-26 货币流动性补源 v2.1 批次 C2（中国层·央行对外资产：外储/黄金）
+    "cn_reserve_sync": run_cn_reserve_sync,
 }
 
 

@@ -16,13 +16,60 @@ call_with_timeout：给 akshare 等「裸 requests 调用」加超时兜底。
   由调用方按「跳过该日 / 记 error / 下轮自动补」的容错策略处理，绝不无限等待。
 """
 import json
+import re
 import threading
 import time
 from datetime import date, datetime, timedelta
 
 __all__ = ["with_steps", "CollectorTimeout", "call_with_timeout", "is_source_missing",
-           "is_a_share", "latest_expected_report_period",
+           "is_a_share", "latest_expected_report_period", "parse_cn_month",
            "load_universe", "load_refresh_targets"]
+
+# ---------------------------------------------------------------------------
+# 中文/数字型月份字段解析（2026-09-26 沉淀，公共件）
+#
+# ⚠️ 本项目同类坑**已出现两次**，故抽公共件，别再让第三个采集器各写一份：
+#   · `macro_china_supply_of_money` 的 `统计时间` = `'2026.8'`（点号、月不补零）
+#   · `macro_china_foreign_exchange_gold` 的 `统计时间` = `'2026.8'`（同上）
+#
+# 共同后果：**字符串序 ≠ 时间序**（`'2025.10' < '2025.2'`）。实测 akshare 返回的 df
+# **本身就是错序的**（`df.tail(28)` 得到 …2025.1, 2025.10, 2025.11, 2025.12, 2025.2, 2025.3…），
+# 于是 `df.iloc[-1]` / `max(月份字符串)` 取到的不是最新月，**而且不报错**
+# —— 属「静默取错数」里最难发现的一类（水位判断与增量都会跟着错）。
+#
+# ⇒ 纪律：解析成 `(year, month)` 后比较；**绝不在月份列上做字符串排序**。
+# ---------------------------------------------------------------------------
+_CN_MONTH_CN = re.compile(r"(\d{4})\s*年\s*(\d{1,2})\s*月")
+_CN_MONTH_NUM = re.compile(r"^(\d{4})(\d{2})$")
+_CN_MONTH_SEP = re.compile(r"^(\d{4})[-/.](\d{1,2})(?!\d)")
+
+
+def parse_cn_month(v) -> tuple[int, int] | None:
+    """中文/数字型月份字段 → `(year, month)`；无法识别返回 None
+
+    支持形态：`'2026年08月份'`（人行系）· `'201501'`（社融）· `'2026.8'` / `'2026-08'` /
+    `'2026/08'`（点号/横线/斜线，月可**不补零**）· `date` / `datetime`。
+
+    ⚠️ 返回值刻意是**元组**而不是字符串：元组的比较就是时间序，
+    调用方若拿去做水位（`max(...)`）或排序，天然正确（见上方长注释）。
+    """
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return (v.year, v.month)
+    if isinstance(v, date):
+        return (v.year, v.month)
+    s = str(v).strip()
+    m = _CN_MONTH_CN.search(s)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    m = _CN_MONTH_NUM.match(s)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    m = _CN_MONTH_SEP.match(s)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    return None
 
 # 「源里根本没有这只票」的消息指纹（2026-09-20 实测立）
 #

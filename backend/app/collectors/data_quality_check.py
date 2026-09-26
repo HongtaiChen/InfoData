@@ -23,6 +23,13 @@ dq_rules.params（JSON）契约，按 check_type 分：
   freshness_interval {time_col, pass_hours, fail_hours}    距当前时长分级
   date_floor        {date_col, days_back}                  MAX(date_col) >= 今天-days_back
   date_floor_where  {date_col, where, days_back}           MAX(date_col) >= 今天-days_back（限 where 子集，专治"某条腿停更"）
+  date_ceiling      {date_col, grace_days}                 MAX(date_col) <= 今天+grace_days（**日期不得落到未来**）。
+                                                           为什么不能写成 where_count：`where` 标识符白名单
+                                                           不放行 `CURDATE`/`NOW`（扩大 SQL 注入面），
+                                                           「不晚于今天」这类**与当前时间比较**的判据
+                                                           在白名单里根本表达不出来。专治「解析把月份/年份
+                                                           拼错，静默写出一批未来日期的行」（2026-09-26 立，
+                                                           随批次 C2 cn_reserve_monthly 一起加）
   row_count_slice   {date_col, min_rows}                   最新切片行数下限
   row_count_total   {min_rows}                             总行数下限（防清空/大面积缺失）
   null_rate_slice   {date_col, col, max_pct}               最新切片空值率上限(%)
@@ -75,7 +82,7 @@ logger = logging.getLogger(__name__)
 RUN_STEPS = [
     {"no": 1, "name": "读启用规则", "params": "dq_rules enabled=1（按 rule_group 分组过滤，按表排序）"},
     {"no": 2, "name": "规则预校验", "params": "表/列（含参照表）information_schema 白名单 + where 标识符白名单（防注入）"},
-    {"no": 3, "name": "执行检查器", "params": "20 类检查器（新鲜度/切片行数/空值率/列水位线/违规数/全史缺口/跨源衔接/覆盖率/引用完整性/僵尸运行…）；单条失败记 error 不中断"},
+    {"no": 3, "name": "执行检查器", "params": "21 类检查器（新鲜度/切片行数/空值率/列水位线/日期上下限/违规数/全史缺口/跨源衔接/覆盖率/引用完整性/僵尸运行…）；单条失败记 error 不中断"},
     {"no": 4, "name": "写入结果", "params": "dq_report 每规则一行 + gap_scan 明细写 dq_gap_detail（供 L3 修复闭环）"},
     {"no": 5, "name": "轮次保留清理", "params": "删除 run_date 早于 30 天的 dq_report / dq_gap_detail 历史"},
 ]
@@ -298,6 +305,43 @@ class DataQualityCheckCollector:
         msg = (f"子集最新 {max_date}，应不早于 {floor}（{where}）" if status == "pass"
                else f"停更风险：子集（{where}）最新 {max_date}，应 ≥ {floor}")
         return {"status": status, "metric_value": max_date, "message": msg}
+
+    def _date_ceiling(self, conn, rule: dict) -> dict:
+        """日期上限：MAX(date_col) 不得晚于今天+grace_days（**日期不得落到未来**）
+
+        为什么需要这个检查器（2026-09-26 立，随批次 C2 `cn_reserve_monthly` 一起加）：
+        `_WHERE_FUNCS` 白名单刻意**不放行 `CURDATE` / `NOW`**（那会扩大 SQL 注入面），
+        于是「不晚于今天」这类**需要与当前时间比较**的判据在 `where_count` 里
+        **根本表达不出来** —— 只能靠本检查器在 Python 侧取 `date.today()` 后下推成字面量。
+
+        专治的故障形态：**源字段是字符串月份**（如 akshare 的 `'2026.8'`），
+        解析/拼接写错时不会报错，只会静默写出一批未来日期的行 —— 例如把
+        `'2025.10'` 当字符串排序后取「下一月」得到 `(2025, 11)` 之外的错月、
+        或把点号当小数点做算术。这类行会让 freshness / column_watermark 全部"新鲜"，
+        是**唯一能穿透新鲜度守护**的错误形态（表看起来永远在最新）。
+
+        grace_days 给「源侧提前发布下期」留余量（默认 0：连下月都不许有）。
+        """
+        p = rule.get("params") or {}
+        date_col = p.get("date_col", "trade_date")
+        grace_days = int(p.get("grace_days", 0))
+        table = rule["table_name"]
+        ceiling = (datetime.now() + timedelta(days=grace_days)).date()
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT MAX(`{date_col}`) AS d FROM `{table}`")
+            row = cur.fetchone()
+            if not row or row["d"] is None:
+                return {"status": "fail", "metric_value": "无数据", "message": MSG_EMPTY}
+            max_date = str(row["d"])[:10]
+            cur.execute(
+                f"SELECT COUNT(*) AS n FROM `{table}` WHERE `{date_col}` > %s", (ceiling,))
+            n_future = cur.fetchone()["n"]
+        if n_future == 0:
+            return {"status": "pass", "metric_value": max_date,
+                    "message": f"最新 {max_date}，不晚于上限 {ceiling}（未来行 0）"}
+        return {"status": "fail", "metric_value": f"{n_future} 行",
+                "message": f"🔴 有 {n_future} 行 {date_col} 晚于 {ceiling}（最大 {max_date}）"
+                           f" —— 日期解析或源格式已变，属**能穿透新鲜度守护**的静默错误，请立即排查"}
 
     def _latest_slice(self, conn, table: str, date_col: str):
         """最新时间切片计数（均走 MAX 索引定位，秒级）"""
@@ -884,6 +928,7 @@ class DataQualityCheckCollector:
         "freshness_interval": _freshness_interval,
         "date_floor": _date_floor,
         "date_floor_where": _date_floor_where,
+        "date_ceiling": _date_ceiling,
         "row_count_slice": _row_count_slice,
         "row_count_total": _row_count_total,
         "null_rate_slice": _null_rate_slice,

@@ -5,12 +5,28 @@ InvestBuddy 中国货币与信用月度采集器（cn_liquidity_monthly）
 
 蓝图的哪一块：**货币流动性 · 中国层「数量维度」**（设计文档 §2.3 数量维度 C6~C10）。
   货币流动性要回答的不只是「钱贵不贵」（价格，已有 Shibor/LPR），还有「钱多不多」（数量）——
-  而数量维度此前**一条数据都没有**。本采集器一次补四个接口：
+  而数量维度此前**一条数据都没有**。本采集器一次补五个接口：
 
   · `macro_china_money_supply`            M0/M1/M2 数量 + 同比 + 环比（2008-01 起）
+  · `macro_china_supply_of_money`         M2 **结构分解**：准货币/活期/定期/储蓄/其他存款 + 各自同比（1978-01 起 584 期）
   · `macro_china_new_financial_credit`    新增人民币贷款 当月/累计（2008-01 起）
   · `macro_china_shrzgm`                  社融增量 + 7 个分项（2015-01 起）
   · `macro_china_reserve_requirement_ratio` 法定准备金率调整事件（58 条，2007 起）
+
+  ⭐ 第 2 个源（`supply_of_money`）与第 1 个源**同源不同表**（都出自人行统计口径），
+     但列的**完整度与时点都不同**，实测 2026-09-25：
+
+       M2 总量 / 准货币 / 其他存款  → 均到最新（2026-08）
+       活期存款 / 定期存款          → **停在 2025-05**
+       储蓄存款                     → **停在 2024-12**
+       各「同比增长」列             → 比对应数量列停得更早
+
+     ⇒ 这不是采集失败，是源侧口径调整；近端这三列必然为空，DQ 不能按「近端必须非空」判。
+     ⇒ 同时它也是 M2 的**第二通道**：恒等式 `M2 = 准货币 + M1` 实测差 0.00，
+        可用来交叉校验主源的 M2（主源缺失时作 fallback）。
+
+  ⚠️ 另有格式坑：本源的月份列 `统计时间` 形如 **`2026.8`**（点号、月不补零），
+     且数据**倒序**（首行最新）—— 与本文件既有三种月份格式都不同，`_month()` 已一并支持。
 
 四条实测口径纪律（⚠️ 勿回退）：
 
@@ -47,11 +63,12 @@ logger = logging.getLogger(__name__)
 
 RUN_STEPS = [
     {"no": 1, "name": "拉取货币供应", "params": "macro_china_money_supply（M0/M1/M2 数量+同比+环比）"},
-    {"no": 2, "name": "拉取新增信贷", "params": "macro_china_new_financial_credit（当月/累计/同比）"},
-    {"no": 3, "name": "拉取社融", "params": "macro_china_shrzgm（增量 + 7 分项；⚠️ 源为商务数据中心，实测停更）"},
-    {"no": 4, "name": "拉取准备金率事件", "params": "macro_china_reserve_requirement_ratio（58 条调整事件）"},
-    {"no": 5, "name": "按月合并 + 准备金率顺延", "params": "三源按 stat_month 外连接；rrr 取该月末生效值；m1_m2_gap = m1_yoy − m2_yoy"},
-    {"no": 6, "name": "全量 Upsert", "params": "PRIMARY KEY(stat_month)；表约 230 行，重跑无成本"},
+    {"no": 2, "name": "拉取 M2 结构分解", "params": "macro_china_supply_of_money（准货币/活期/定期/储蓄/其他存款 + 同比；⚠️ 近端停更，见文件头）"},
+    {"no": 3, "name": "拉取新增信贷", "params": "macro_china_new_financial_credit（当月/累计/同比）"},
+    {"no": 4, "name": "拉取社融", "params": "macro_china_shrzgm（增量 + 7 分项；⚠️ 源为商务数据中心，实测停更）"},
+    {"no": 5, "name": "拉取准备金率事件", "params": "macro_china_reserve_requirement_ratio（58 条调整事件）"},
+    {"no": 6, "name": "按月合并 + 准备金率顺延", "params": "五源按 stat_month 外连接；rrr 取该月末生效值；m1_m2_gap = m1_yoy − m2_yoy"},
+    {"no": 7, "name": "全量 Upsert", "params": "PRIMARY KEY(stat_month)；含 1978 起结构数据约 600 行，重跑无成本"},
 ]
 
 _TGT = [
@@ -61,6 +78,12 @@ _TGT = [
     "shrzgm", "shrzgm_rmb_loan", "shrzgm_fx_loan", "shrzgm_entrust", "shrzgm_trust",
     "shrzgm_undiscounted", "shrzgm_ent_bond", "shrzgm_equity",
     "rrr_large", "rrr_small", "rrr_effective_date",
+    # M2 结构分解（源 macro_china_supply_of_money）—— 追加在末尾，rows 元组顺序须同步
+    "quasi_money", "quasi_money_yoy",
+    "demand_deposit", "demand_deposit_yoy",
+    "time_deposit", "time_deposit_yoy",
+    "savings_deposit", "savings_deposit_yoy",
+    "other_deposit", "other_deposit_yoy",
 ]
 
 _MONTH_CN = re.compile(r"(\d{4})\s*年\s*(\d{1,2})\s*月")
@@ -68,10 +91,11 @@ _MONTH_NUM = re.compile(r"^(\d{4})(\d{2})$")
 
 
 def _month(v) -> date | None:
-    """三种月份格式 → 当月 1 日
+    """四种月份格式 → 当月 1 日
 
     · '2026年08月份'（M2 / 信贷）
     · '201501'      （社融）
+    · '2026.8'      （macro_china_supply_of_money 的结构源，**点号分隔且月不补零**）
     · date/datetime （已是日期对象）
     """
     if v is None:
@@ -87,8 +111,8 @@ def _month(v) -> date | None:
     m = _MONTH_NUM.match(s)
     if m:
         return date(int(m.group(1)), int(m.group(2)), 1)
-    # '2026-08' / '2026/08'
-    m = re.match(r"^(\d{4})[-/](\d{1,2})", s)
+    # '2026-08' / '2026/08' / '2026.8'
+    m = re.match(r"^(\d{4})[-/.](\d{1,2})(?!\d)", s)
     if m:
         return date(int(m.group(1)), int(m.group(2)), 1)
     return None
@@ -158,6 +182,50 @@ class CnLiquiditySyncCollector:
                 "m0_yoy": _f(r.get("流通中的现金(M0)-同比增长"), 2),
                 "m0_mom": _f(r.get("流通中的现金(M0)-环比增长"), 4),
             }
+        return out
+
+    def _money_supply_struct(self, errors: list[str]) -> dict[date, dict]:
+        """M2 结构分解（准货币 / 活期 / 定期 / 储蓄 / 其他存款 + 各自同比）
+
+        ⚠️ 三个源侧事实（实测 2026-09-25，勿当「采集失败」处理）：
+          · 返回**倒序**（首行最新）—— 本方法按 stat_month 建 dict，顺序无关紧要
+          · 月份列形如 `2026.8`（点号、月不补零）—— `_month()` 已单独支持
+          · 结构列**停更时点不齐**：M2/准货币/其他存款到最新，而活期·定期停在 2025-05、
+            储蓄停在 2024-12；「同比增长」列比对应数量列停得更早。近端为空 = 源口径调整。
+        ⚠️ 列名用的是**全角括号**（`货币和准货币（广义货币M2）`），与主源 `macro_china_money_supply`
+           的**半角括号**（`货币和准货币(M2)-数量(亿元)`）不是同一套 —— 两者不可互相 copy。
+        """
+        out: dict[date, dict] = {}
+        try:
+            df = call_with_timeout(ak.macro_china_supply_of_money, max(self.timeout_sec, 90))
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"supply_of_money: {type(e).__name__} {str(e)[:60]}")
+            return out
+        if df is None or df.empty:
+            errors.append("supply_of_money: 返回为空")
+            return out
+        for _, r in df.iterrows():
+            m = _month(r.get("统计时间"))
+            if m is None:
+                continue
+            d = {
+                "quasi_money": _f(r.get("准货币"), 2),
+                "quasi_money_yoy": _f(r.get("准货币同比增长"), 2),
+                "demand_deposit": _f(r.get("活期存款"), 2),
+                "demand_deposit_yoy": _f(r.get("活期存款同比增长"), 2),
+                "time_deposit": _f(r.get("定期存款"), 2),
+                "time_deposit_yoy": _f(r.get("定期存款同比增长"), 2),
+                "savings_deposit": _f(r.get("储蓄存款"), 2),
+                "savings_deposit_yoy": _f(r.get("储蓄存款同比增长"), 2),
+                "other_deposit": _f(r.get("其他存款"), 2),
+                "other_deposit_yoy": _f(r.get("其他存款同比增长"), 2),
+                # 结构源自带的 M2 总量 → 只用于交叉校验/兜底，不覆盖主源
+                "_m2": _f(r.get("货币和准货币（广义货币M2）"), 2),
+            }
+            # 跳过「只有月份、结构值全空」的行：源含 1978 起的空壳行，
+            # 不过滤会把 1990 年之前约 150 行纯空记录灌进表里
+            if any(v is not None for k, v in d.items() if not k.startswith("_")):
+                out[m] = d
         return out
 
     def _credit(self, errors: list[str]) -> dict[date, dict]:
@@ -239,15 +307,16 @@ class CnLiquiditySyncCollector:
     def run(self) -> dict:
         errors: list[str] = []
         ms = self._money_supply(errors)
+        st = self._money_supply_struct(errors)
         cr = self._credit(errors)
         sz = self._shrzgm(errors)
         rrr = self._rrr_events(errors)
-        logger.info("  货币供应 %s 期 · 信贷 %s 期 · 社融 %s 期 · 准备金率事件 %s 条",
-                    len(ms), len(cr), len(sz), len(rrr))
+        logger.info("  货币供应 %s 期 · M2结构 %s 期 · 信贷 %s 期 · 社融 %s 期 · 准备金率事件 %s 条",
+                    len(ms), len(st), len(cr), len(sz), len(rrr))
 
-        months = sorted(set(ms) | set(cr) | set(sz))
+        months = sorted(set(ms) | set(st) | set(cr) | set(sz))
         if not months:
-            raise RuntimeError("四个源均未取到数据：" + "; ".join(errors[:4]))
+            raise RuntimeError("五个源均未取到数据：" + "; ".join(errors[:5]))
 
         # 准备金率顺延：每个统计月取「该月末（用 28 日近似，事件生效日不会落在 29~31）之前
         # 最后一次生效」的值。该月早于首个事件时留 NULL —— 刻意不做前向填充，
@@ -267,13 +336,15 @@ class CnLiquiditySyncCollector:
 
         rows = []
         for m in months:
-            a, b, c = ms.get(m, {}), cr.get(m, {}), sz.get(m, {})
+            a, b, c, s = ms.get(m, {}), cr.get(m, {}), sz.get(m, {}), st.get(m, {})
             m1y, m2y = a.get("m1_yoy"), a.get("m2_yoy")
             gap = round(m1y - m2y, 2) if (m1y is not None and m2y is not None) else None
             rv = rrr_map.get(m)
+            # M2 主源缺失时用结构源兜底（同口径的两张表；实测结构源的 M2 同样到最新）
+            m2v = a.get("m2") if a.get("m2") is not None else s.get("_m2")
             rows.append((
                 m,
-                a.get("m2"), a.get("m2_yoy"), a.get("m2_mom"),
+                m2v, a.get("m2_yoy"), a.get("m2_mom"),
                 a.get("m1"), a.get("m1_yoy"), a.get("m1_mom"),
                 a.get("m0"), a.get("m0_yoy"), a.get("m0_mom"), gap,
                 b.get("credit_month"), b.get("credit_cum"), b.get("credit_yoy"),
@@ -281,6 +352,11 @@ class CnLiquiditySyncCollector:
                 c.get("shrzgm_entrust"), c.get("shrzgm_trust"), c.get("shrzgm_undiscounted"),
                 c.get("shrzgm_ent_bond"), c.get("shrzgm_equity"),
                 rv[1] if rv else None, rv[2] if rv else None, rv[0] if rv else None,
+                s.get("quasi_money"), s.get("quasi_money_yoy"),
+                s.get("demand_deposit"), s.get("demand_deposit_yoy"),
+                s.get("time_deposit"), s.get("time_deposit_yoy"),
+                s.get("savings_deposit"), s.get("savings_deposit_yoy"),
+                s.get("other_deposit"), s.get("other_deposit_yoy"),
             ))
 
         conn = pymysql.connect(**get_db_config().to_dict(),
@@ -306,7 +382,9 @@ class CnLiquiditySyncCollector:
                     "MAX(CASE WHEN m2_yoy IS NOT NULL THEN stat_month END) AS d_m2, "
                     "MAX(CASE WHEN credit_month IS NOT NULL THEN stat_month END) AS d_cr, "
                     "MAX(CASE WHEN shrzgm IS NOT NULL THEN stat_month END) AS d_sz, "
-                    "MAX(CASE WHEN rrr_large IS NOT NULL THEN stat_month END) AS d_rrr "
+                    "MAX(CASE WHEN rrr_large IS NOT NULL THEN stat_month END) AS d_rrr, "
+                    "MAX(CASE WHEN quasi_money IS NOT NULL THEN stat_month END) AS d_qm, "
+                    "MAX(CASE WHEN demand_deposit IS NOT NULL THEN stat_month END) AS d_dd "
                     "FROM cn_liquidity_monthly")
                 r = cur.fetchone()
             new_rows = max(0, r["n"] - before)
@@ -323,10 +401,11 @@ class CnLiquiditySyncCollector:
             RUN_STEPS,
             {
                 1: f"{len(ms)} 期（{min(ms) if ms else '--'} ~ {max(ms) if ms else '--'}）",
-                2: f"{len(cr)} 期（{max(cr) if cr else '--'}）",
-                3: f"{len(sz)} 期（{max(sz) if sz else '--'} ⚠️ 源侧停更）",
-                4: f"{len(rrr)} 条事件（最后 {rrr[-1][0] if rrr else '--'}）",
-                5: f"合并 {len(rows)} 月；gap 覆盖 {sum(1 for x in rows if x[10] is not None)} 月",
-                6: f"upsert {len(rows)} 行（表内 {r['n']} 行，逐列水位见上）",
+                2: f"{len(st)} 期（{min(st) if st else '--'} ~ {max(st) if st else '--'}，准货币到 {r.get('d_qm') or '--'}）",
+                3: f"{len(cr)} 期（{max(cr) if cr else '--'}）",
+                4: f"{len(sz)} 期（{max(sz) if sz else '--'} ⚠️ 源侧停更）",
+                5: f"{len(rrr)} 条事件（最后 {rrr[-1][0] if rrr else '--'}）",
+                6: f"合并 {len(rows)} 月；gap 覆盖 {sum(1 for x in rows if x[10] is not None)} 月",
+                7: f"upsert {len(rows)} 行（表内 {r['n']} 行，逐列水位见上）",
             },
         )

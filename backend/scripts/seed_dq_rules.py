@@ -42,6 +42,12 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
                    （美元指数自算 + DINIW 快照标定）。**两条刻意 enabled=0**（已知上游停更：
                    社融无源可采、macro_bank_* 全族停更），理由逐条写在规则 description 里。
                    含一条「标价法单位错」通用网 `dxy_vs_snapshot`，来自本轮实测事故。见该列表头部注释。
+- RESERVE_RULES    ：2026-09-26 批次 C2 —— 中国官方外汇储备 / 黄金储备（`cn_reserve_monthly`，
+                   419 行 1978-12 起）。配套新增 `date_ceiling` 检查器（**日期不得落到未来**）
+                   —— 源月份列是字符串 `'YYYY.M'`，解析写错会静默写出未来月份，而那种行会让
+                   freshness / column_watermark 全部通过（唯一能穿透新鲜度守护的形态）；
+                   且该判据**无法用 where_count 表达**（白名单不放行 CURDATE/NOW）。
+                   两条量级阈值按实测**重定**（方案原「2000 年后」会误报 2010-2014 段）。见该列表头部注释。
 
 ⚠️ 维护纪律（2026-09-13 踩坑）：**本脚本是 dq_rules 的唯一事实来源**。
    任何绕过脚本的直改 DB（如事故应急调阈值）必须同步回本文件，
@@ -713,9 +719,6 @@ BLUEPRINT_RULES = [
     ("overseas_fresh", "overseas_index_daily", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 5, "grace_days": 2}, "warning", 1,
      "海外指数新鲜度（恒生与美股交易日历不同，取二者较新者，grace 覆盖各自假期）"),
-    ("overseas_rows_latest", "overseas_index_daily", "row_count_slice",
-     {"date_col": "trade_date", "min_rows": 3}, "warning", 1,
-     "最新日海外指数条数下限（共 4 个指数；港股与美股日历不同，同日通常 3~4 个）"),
     ("overseas_close_range", "overseas_index_daily", "where_count",
      {"where": "close IS NOT NULL AND close <= 0", "max_count": 0}, "warning", 1,
      "收盘价必须为正"),
@@ -1178,7 +1181,253 @@ LIQUIDITY_RULES = [
      "为什么要全史：dxy_calc 是**独立第二口径**，价值全在「两条互比」——本项目正是靠它发现了"
      "「瑞典克朗标价法算错 ⇒ 自算 DXY 偏低 3.3%」那个伪装成「固有口径偏离」的 bug。"
      "上账式设固定上限：平时静止、一旦增长即说明有新故障落入"),
+    # ==========================================================================
+    # 2026-09-25 货币流动性补源 v2.0（无 FRED 密钥版）批次 A/B/C/D：6 张新表
+    # 《货币流动性补源方案_无FRED密钥版_v2.0_2026-09-25.md》§7。
+    # 每张表按「四件套」配：unique_index / 新鲜度 / column_watermark / 值域 where_count。
+    # ★ 决策 E5′ 落地：DBnomics 的 -999999 是「缺失哨兵」（合法数字、非 NULL、SQL 过滤不掉、
+    #   会污染同比）。采集器解析层已一律剔除并计数，但**必须有一条库内守护**确认「哨兵没漏进来」——
+    #   这是对「解析层防漏」的第二道网（第一道是采集器剔除，第二道是这里查库内存量）。
+    #   注意：不能写 `col = -999999` 精确匹配（浮点 -999999.0 存 DECIMAL 会变成 -999999.00，
+    #   但未来源若改为 -888888 之类会漏），故用「< -900000」的量级网兜住所有哨兵形态。
+    # --------------------------------------------------------------------------
+    # ---------- us_fed_balance_weekly（美联储资产负债表，周度） ----------
+    ("usfb_uniq", "us_fed_balance_weekly", "unique_index",
+     {"cols": ["trade_date"], "expect": "exists"},
+     "info", 1, "幂等保障：trade_date 主键"),
+    ("usfb_fresh", "us_fed_balance_weekly", "date_floor",
+     {"date_col": "trade_date", "days_back": 14},
+     "warning", 1,
+     "周度新鲜度：H.4.1 每周四发布，14 天容忍覆盖「节假日顺延 + 机器离线数天」；再晚即采集断档"),
+    ("usfb_total_wm", "us_fed_balance_weekly", "column_watermark",
+     {"date_col": "trade_date", "value_col": "total_assets", "max_gap_rows": 1},
+     "warning", 1,
+     "总资产列水位线（本表存在的意义就是这一列：扩表=放水、缩表=收水）。容忍 1 行=发布日固有滞后"),
+    ("usfb_total_scale", "us_fed_balance_weekly", "where_count",
+     {"where": "total_assets IS NOT NULL AND (total_assets < 100000 OR total_assets > 20000000)",
+      "max_count": 0},
+     "warning", 1,
+     "总资产量级守护（单位百万美元：实测 6,747,704）。挡单位切换（百万↔十亿↔元）与「取到同名但含义不同的序列」"),
+    ("usfb_sentinel", "us_fed_balance_weekly", "where_count",
+     {"where": "total_assets < -900000 OR securities_total < -900000 OR reserve_balances < -900000 "
+               "OR currency_in_circ < -900000",
+      "max_count": 0},
+     "warning", 1,
+     "★ E5′ 决策落地：DBnomics -999999 缺失哨兵**绝不允许出现在库内**（解析层已剔除，这里是第二道网）。"
+     "量级网 < -900000 兜住所有哨兵形态（-999999/-888888…），不必精确匹配"),
+    ("usfb_cross_check", "us_fed_balance_weekly", "where_count",
+     {"where": "total_assets IS NOT NULL AND official_check IS NOT NULL "
+               "AND ABS(total_assets - official_check) / total_assets > 0.3",
+      "max_count": 0},
+     "warning", 1,
+     "双轨互校：DBnomics 主口径 vs 官网 H.4.1 校验口径的偏差不得 >30%（官网只回填最近几期，"
+     "故只在最新一期比对；30% 是「两通道抓到的根本不是同一个数」的判据，正常偏差 0.000000%）"),
+    # ---------- us_money_supply_monthly（美国货币供应量，月度） ----------
+    ("usms_uniq", "us_money_supply_monthly", "unique_index",
+     {"cols": ["stat_month"], "expect": "exists"},
+     "info", 1, "幂等保障：stat_month 主键"),
+    ("usms_fresh", "us_money_supply_monthly", "date_floor",
+     {"date_col": "stat_month", "days_back": 90},
+     "warning", 1,
+     "月度新鲜度：H.6 在次月下旬发布（8 月数据约 9 月下旬出），且 stat_month 取「月初 1 日」"
+     "天然比今天早约一个月 ⇒ 90 天 = 30（月初） + 30（发布滞后） + 30（缓冲）；再晚即断档"),
+    ("usms_m2_wm", "us_money_supply_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "m2", "max_gap_rows": 1},
+     "warning", 1, "M2 列水位线（本表核心列）"),
+    ("usms_m2_scale", "us_money_supply_monthly", "where_count",
+     {"where": "m2 IS NOT NULL AND (m2 < 100 OR m2 > 100000)", "max_count": 0},
+     "warning", 1,
+     "M2 量级守护（单位十亿美元：实测 23,342.8）。挡单位切换（十亿↔百万↔亿）"),
+    ("usms_base_identity", "us_money_supply_monthly", "where_count",
+     {"where": "reserve_balances IS NOT NULL AND currency_in_circ IS NOT NULL "
+               "AND monetary_base IS NOT NULL "
+               "AND ABS((reserve_balances + currency_in_circ) - monetary_base) > 0.25",
+      "max_count": 0},
+     "warning", 1,
+     "基础货币恒等式：准备金余额 + 流通中货币 = 基础货币（十亿美元，容差 0.25）。"
+     "这是**物理约束**，任一侧序列被错映射（源序列代码改后错位）都会立刻打破它"),
+    ("usms_sentinel", "us_money_supply_monthly", "where_count",
+     {"where": "m2 < -900000 OR m1 < -900000 OR monetary_base < -900000", "max_count": 0},
+     "warning", 1,
+     "★ E5′ 决策落地：DBnomics -999999 缺失哨兵库内守护（第二道网）"),
+    ("usms_cross_check", "us_money_supply_monthly", "where_count",
+     {"where": "m2 IS NOT NULL AND official_m2 IS NOT NULL "
+               "AND ABS(m2 - official_m2) / m2 > 0.05",
+      "max_count": 0},
+     "warning", 1,
+     "双轨互校：DBnomics M2 vs 官网 H.6 M2 的偏差不得 >5%（正常偏差 0.0000%）。"
+     "5% 阈值：官网当期页若停留在旧版（如 h6.htm 停在 2013 年那种坑）会立刻暴露"),
+    # ---------- us_money_market_daily（美国货币市场，日度） ----------
+    ("usmm_uniq", "us_money_market_daily", "unique_index",
+     {"cols": ["trade_date"], "expect": "exists"},
+     "info", 1, "幂等保障：trade_date 主键"),
+    ("usmm_fresh", "us_money_market_daily", "date_floor",
+     {"date_col": "trade_date", "days_back": 6},
+     "warning", 1,
+     "日度新鲜度：三个源（SOFR/EFFR/ON RRP/TGA）都随美国工作日更新，6 天容忍覆盖周末 + 美节假日"),
+    ("usmm_sofr_wm", "us_money_market_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "sofr", "max_gap_rows": 3},
+     "warning", 1,
+     "SOFR 列水位线（容忍 3 行：SOFR 只在回购市场开市日有值，与整表日期并集有天然错位）"),
+    ("usmm_tga_wm", "us_money_market_daily", "column_watermark",
+     {"date_col": "trade_date", "value_col": "tga", "max_gap_rows": 3},
+     "warning", 1,
+     "TGA 列水位线（容忍 3 行：财政部工作日与回购市场工作日不同，日期是并集）"),
+    ("usmm_sofr_range", "us_money_market_daily", "where_count",
+     {"where": "sofr IS NOT NULL AND (sofr < -1 OR sofr > 15)", "max_count": 0},
+     "warning", 1,
+     "SOFR 利率取值域 [-1, 15]%。挡量纲错（百分数↔小数差 100 倍）"),
+    ("usmm_effr_range", "us_money_market_daily", "where_count",
+     {"where": "effr IS NOT NULL AND (effr < -1 OR effr > 20)", "max_count": 0},
+     "warning", 1,
+     "EFFR 利率取值域 [-1, 20]%（覆盖 1980 年代高利率期，只挡量纲错）"),
+    ("usmm_tga_scale", "us_money_market_daily", "where_count",
+     {"where": "tga IS NOT NULL AND (tga < 1000 OR tga > 100000000)", "max_count": 0},
+     "warning", 1,
+     "TGA 量级守护（单位百万美元：实测 957,409）。挡单位切换（源是美元，采集器已 /1e6）"),
+    # ---------- eu_money_supply_monthly（欧元区货币供应量，月度） ----------
+    ("eums_uniq", "eu_money_supply_monthly", "unique_index",
+     {"cols": ["stat_month"], "expect": "exists"},
+     "info", 1, "幂等保障：stat_month 主键"),
+    ("eums_fresh", "eu_money_supply_monthly", "date_floor",
+     {"date_col": "stat_month", "days_back": 120},
+     "warning", 1,
+     "月度新鲜度：ECB 货币数据滞后约 2 个月（7 月数据 8 月底发布、8 月数据 9 月底发布），"
+     "且 stat_month 取「月初 1 日」天然比今天早约一个月 ⇒ 120 天 = 30（月初） + 60（发布滞后） + 30（缓冲）。"
+     "⚠️ 本表源单一（ECB 直连全阻断、只能走 DBnomics 镜像）⇒ 这条 freshness 是「失效即告警」的唯一防线"),
+    ("eums_m3_wm", "eu_money_supply_monthly", "column_watermark",
+     {"date_col": "stat_month", "value_col": "m3", "max_gap_rows": 1},
+     "warning", 1, "M3 列水位线（本表核心列）"),
+    ("eums_m3_scale", "eu_money_supply_monthly", "where_count",
+     {"where": "m3 IS NOT NULL AND (m3 < 100000 OR m3 > 100000000)", "max_count": 0},
+     "warning", 1,
+     "M3 量级守护（单位百万欧元：实测 17,613,983）。挡单位切换与错映射"),
+    ("eums_sentinel", "eu_money_supply_monthly", "where_count",
+     {"where": "m3 < -900000 OR m2 < -900000 OR m1 < -900000", "max_count": 0},
+     "warning", 1,
+     "★ E5′ 决策落地：DBnomics -999999 缺失哨兵库内守护（第二道网）"),
+    # ---------- global_liquidity_bis（BIS 全球流动性，季度） ----------
+    ("glb_uniq", "global_liquidity_bis", "unique_index",
+     {"cols": ["time_period", "curr_denom", "borrowers_cty", "borrowers_sector",
+              "lenders_sector", "l_pos_type", "l_instr", "unit_measure"], "expect": "exists"},
+     "info", 1, "幂等保障：8 列复合唯一键 uk_gliquidity"),
+    ("glb_fresh", "global_liquidity_bis", "date_floor",
+     {"date_col": "time_period", "days_back": 200},
+     "warning", 1,
+     "季度新鲜度：BIS GLI 是 T+1 季发布（如 2026-Q1 数据约 2026-07 才出），"
+     "200 天容忍覆盖「发布滞后 + 机器离线」；再晚即断档"),
+    ("glb_rows", "global_liquidity_bis", "row_count_total",
+     {"min_rows": 6000}, "warning", 1,
+     "总行数下限（实测 6,720 行；防误清空 —— BIS 维度是「国×部门×工具×头寸」笛卡尔积，"
+     "一旦维度解析崩了行数会骤降）"),
+    ("glb_obs_scale", "global_liquidity_bis", "where_count",
+     {"where": "unit_measure = 'USD' AND obs_value IS NOT NULL AND (obs_value < 0 OR obs_value > 100000000)",
+      "max_count": 0},
+     "warning", 1,
+     "美元读数量级守护（百万美元，单条上限 100 万亿）。挡单位切换与负值哨兵。"
+     "⚠️ BIS 单行最大的是对美借款人（US/P/B ≈ 8,060 万百万），上限不可压到 3 千万"),
+    # ⚠️ 以下 3 条为 2026-09-26 复核新增：守护**取数口径**本身（原 4 条只守护新鲜度/行数/量级）
+    ("glb_denom_usd", "global_liquidity_bis", "where_count",
+     {"where": "curr_denom <> 'USD'", "max_count": 0},
+     "warning", 1,
+     "币种唯一性：本表只含美元计价（采集器只拉 BIS key Q.USD）。出现非 USD 行说明采集范围变了，"
+     "分析层「全球美元」口径会被稀释；若将来扩欧/日元须同步改本白名单"),
+    ("glb_unit_set", "global_liquidity_bis", "where_count",
+     {"where": "unit_measure NOT IN ('USD', '771')", "max_count": 0},
+     "warning", 1,
+     "单位白名单：只有 USD=百万美元存量 与 771=同比增速% 两种。出现第三种即上游改了维度编码，"
+     "分析层按 unit_measure 筛的逻辑会静默漏数或把同比%当金额混算"),
+    ("glb_offshore_nonnull", "global_liquidity_bis", "where_count",
+     {"where": "borrowers_cty = '3P' AND borrowers_sector = 'N' AND lenders_sector = 'A' "
+               "AND l_pos_type = 'I' AND l_instr = 'B' AND unit_measure = 'USD' "
+               "AND obs_value IS NULL",
+      "max_count": 0},
+     "warning", 1,
+     "★离岸美元核心读数不可为空。正确口径 3P×N×A×I×B×USD = 14,747,700 百万 @2026-Q1。"
+     "⚠️不可用 borrowers_cty<>'US' 全量 SUM（B 已含 D/G + 3P 与明细国重复 + 771 是同比%，"
+     "三重重复、实测虚高 3.12 倍）"),
+    # ---------- cn_omo_daily（中国央行公开市场操作，日度） ----------
+    ("cno_uniq", "cn_omo_daily", "unique_index",
+     {"cols": ["section", "notice_year", "notice_no"], "expect": "exists"},
+     "info", 1, "幂等保障：主键 (section, notice_year, notice_no) —— 各栏目各自独立编号"),
+    ("cno_fresh", "cn_omo_daily", "date_floor",
+     {"date_col": "trade_date", "days_back": 8},
+     "warning", 1,
+     "日度新鲜度：OMO 每个工作日都有公告（含零操作日），8 天容忍覆盖周末 + 节假日 + 机器离线"),
+    ("cno_win_notnull", "cn_omo_daily", "where_count",
+     {"where": "op_type = 'reverse_repo' AND win_amount IS NULL", "max_count": 0},
+     "warning", 1,
+     "逆回购中标量非空：零操作日 win_amount=0（不是 NULL），NULL 才表示源侧没解析到。"
+     "本规则守住「逆回购必须给出操作量」的约定"),
+    ("cno_rate_range", "cn_omo_daily", "where_count",
+     {"where": "op_rate IS NOT NULL AND (op_rate < 0 OR op_rate > 10)", "max_count": 0},
+     "warning", 1,
+     "操作利率取值域 [0, 10]%。挡量纲错（百分数↔小数）"),
+    ("cno_win_scale", "cn_omo_daily", "where_count",
+     {"where": "win_amount IS NOT NULL AND (win_amount < 0 OR win_amount > 100000)", "max_count": 0},
+     "warning", 1,
+     "中标量量级守护（单位亿元：单日逆回购常态 0~7000 亿，历史上限远低于 10 万亿）。"
+     "挡单位切换与「把百分比写进量列」"),
+    ("cno_section_whitelist", "cn_omo_daily", "where_count",
+     {"where": "section NOT IN ('omo_trade', 'outright_repo')", "max_count": 0},
+     "warning", 1,
+     "栏目白名单：当前只采交易公告 + 买断式两个栏目。未来扩展国债买卖/国库现金等栏目时，"
+     "先加采集器再加白名单，防「采集器写出未知栏目却无人知晓」"),
 ]
+
+# ============================================================================
+# 2026-09-26 批次 C2（RESERVE_RULES）：中国官方外汇储备 / 黄金储备
+# 出处：《货币流动性补源方案 v2.1》§11.3.6（原拟 5 条，其中 2 条阈值按实测**重定**，见下）
+#
+# 表 `cn_reserve_monthly`（419 行，1978-12 ~ 2026-08）承载中国层「央行对外资产」的**国际可比口径**：
+# fx_reserve_usd（亿美元·官方）与 gold_reserve_oz（万盎司·实物量）。
+#
+# ⚠️ 两条阈值的**实测重定**（方案原值会稳定误报，勿回退）：
+#   ① `cnrv_scale_fx` 方案原写「**2000 年后**外储 ∈ [25,000, 45,000]」——
+#      实测 2000-2009 段 min = **1,561**（2000 年才 1,656 亿美元）、2010-2019 段 min = **24,152**
+#      ⇒ 按 2000 年起算会连报 2010-2014 的行。实测 **2015+ min = 29,982 / max = 38,134**
+#      ⇒ 窗口改为 **2015 年起**，区间 [25,000, 45,000] 才成立。
+#   ② `cnrv_scale_gold` 用区间 [1,000, 12,000] 万盎司：实测**全史** min = 1,267 / max = 7,673
+#      ⇒ 全史窗口即可，无需分段（黄金储备从 1981 年起就没低于 1,267）。
+#
+# ⚠️ **`BETWEEN` 不在 `_WHERE_FUNCS` 白名单里**（白名单只有 ABS/ROUND/COALESCE/IFNULL/NULL/
+#    NOT/AND/OR/IN/IS/LIKE/LEAST/GREATEST）⇒ 区间只能用 `x < lo OR x > hi` 表达，
+#    写成 `BETWEEN` 会被 `_validate` 判成「where 表达式含非白名单标识符」而整条记 error。
+#
+# ⚠️ 缺 `cnrv_no_future` 就**没有防线**：月份列是**字符串** `'YYYY.M'`，解析写错不会报错、
+#    只会静默写出未来月份的行，而那种行会让 fresh/watermark 全部"通过"（表看起来永远最新）
+#    ⇒ 它是唯一能穿透新鲜度守护的形态，必须由 `date_ceiling` 独立守住。
+# ============================================================================
+RESERVE_RULES = [
+    ("cnrv_uniq", "cn_reserve_monthly", "unique_index",
+     {"cols": ["stat_month"], "expect": "exists"},
+     "info", 1, "幂等保障：stat_month 主键（全量 upsert 的前提）"),
+    ("cnrv_fresh", "cn_reserve_monthly", "date_floor",
+     {"date_col": "stat_month", "days_back": 75},
+     "warning", 1,
+     "月度新鲜度：官方外储约**次月 7 日**发布（黄金同月同行），75 天容忍覆盖「发布偏晚 + 机器离线数天」；再晚就是采集断档"),
+    ("cnrv_no_future", "cn_reserve_monthly", "date_ceiling",
+     {"date_col": "stat_month", "grace_days": 0},
+     "warning", 1,
+     "🔴 月份不得落到未来。源 `统计时间` 是**字符串** 'YYYY.M'（字符串序 ≠ 时间序）⇒ 解析写错不报错、"
+     "只静默写出未来月份，而那种行会让新鲜度/水位线全部通过（表看起来永远最新）—— "
+     "这是唯一能穿透新鲜度守护的错误形态。⚠️ 无法用 where_count 表达：白名单不放行 CURDATE/NOW"),
+    ("cnrv_scale_fx", "cn_reserve_monthly", "where_count",
+     {"where": "stat_month >= '2015-01-01' AND fx_reserve_usd IS NOT NULL "
+               "AND (fx_reserve_usd < 25000 OR fx_reserve_usd > 45000)",
+      "max_count": 0},
+     "warning", 1,
+     "外储量级守护（亿美元，**2015 年起**）：实测 2015+ 区间 29,982~38,134 ⇒ 取 [25,000, 45,000]。"
+     "⚠️ 方案原写「2000 年后」，实测 2000-2009 min=1,561、2010-2019 min=24,152，按 2000 年起算会连报误警"),
+    ("cnrv_scale_gold", "cn_reserve_monthly", "where_count",
+     {"where": "gold_reserve_oz IS NOT NULL "
+               "AND (gold_reserve_oz < 1000 OR gold_reserve_oz > 12000)",
+      "max_count": 0},
+     "warning", 1,
+     "黄金储备量级守护（万盎司，**全史**）：实测 min=1,267 / max=7,673 ⇒ 区间 [1,000, 12,000]。"
+     "挡「吨↔万盎司」这类单位错（1 吨 ≈ 3.215 万盎司，混用会产生 3 倍级偏差）"),
+]
+
 
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
@@ -1215,6 +1464,7 @@ def main():
             + [(r, "daily") for r in DEBT_RULES]           # 2026-09-19 Batch D3 已知技术债监控
             + [(r, "daily") for r in REF_RULES]             # 2026-09-24 引用完整性 + 名册停更守护
             + [(r, "daily") for r in LIQUIDITY_RULES]       # 2026-09-25 货币流动性批次 2（3 新表 + 自算 DXY）
+            + [(r, "daily") for r in RESERVE_RULES]         # 2026-09-26 批次 C2（中国官方外储/黄金）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:

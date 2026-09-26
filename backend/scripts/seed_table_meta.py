@@ -505,6 +505,98 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "⚠️ 快照落位改为按日期并集在 Python 侧合并；增量水位必须按列取，否则「只有快照的行」会顶前水位、静默跳过另一条腿一整天。"
      "消费方：货币流动性「外部约束」。",
      ["usd_index_sync"], ""),
+
+    # ---- 2026-09-25 货币流动性补源 v2.0（无 FRED 密钥版）批次 A/B/C/D：6 张新表 ----
+    # 出处：《货币流动性补源方案_无FRED密钥版_v2.0_2026-09-25.md》§7。
+    # 一句话背景：FRED 免费 API Key 申请不到，故全线转 DBnomics（免 Key 免注册）+ 官网 HTML 双轨互校。
+    ("us_fed_balance_weekly", "宏观",
+     "DBnomics FED/H41（主口径，免 Key）+ 美联储官网 H.4.1 HTML（交叉校验，仅最新一期）",
+     "美联储资产负债表周度（1,241 期，2002-12-18 起）：总资产/证券持仓(美债+机构债+MBS)/"
+     "逆回购(外国官方+其他)/流通中货币/准备金余额/其他存款。⭐ 本域「美国数量维度」核心："
+     "总资产 = 美联储放水/收水的总闸门。⚠️ 双轨制：主口径 DBnomics（历史完整，零哨兵），"
+     "校验口径官网 H.4.1（official_check 列，仅最新一期），实测两通道逐位一致 6,747,704 ⇒ "
+     "任一通道失效可自动降级且即时发现。⚠️ 官网当期页只含最近数周、无法回填历史，故主口径"
+     "必须是 DBnomics（对 v1.0「主口径=官网」的实测修正）。派生列 securities_total / "
+     "reverse_repo_total 为分项相加。单位一律百万美元。"
+     "消费方：分析研究「货币流动性」模块「货币总量」区块（批次 3 视图重构范围）。",
+     ["us_fed_balance_sync"], ""),
+    ("us_money_supply_monthly", "宏观",
+     "DBnomics FED/H6_H6_M2 + _H6_MBASE（主口径）+ 美联储官网 H.6 default.htm（交叉校验）",
+     "美国货币供应量月度（812 期，1959-01 起）：M1/M2（SA + NSA）、基础货币/准备金余额/"
+     "流通中货币、及各自同比（本地派生，用 NSA 算）。⚠️ 单位一律**十亿美元**。⚠️ 口径变更："
+     "2020-05 起 M1 改革（纳入储蓄存款）⇒ M1 跨 2020 不可比绝对值、一律看同比。⚠️ 恒等式"
+     "实测成立：准备金 + 流通中货币 = 基础货币 ⇒ 可作 DQ 守护。⚠️ 双轨：主=DBnomics、"
+     "校验=官网 H.6（仅最新一期，official_m2 列）。⚠️ 官网当期页是 current/default.htm，"
+     "current/h6.htm 实测停在 2013 年（坑）。update_source 列记录本行 m2 实际来源。"
+     "消费方：分析研究「货币流动性」模块「货币总量」区块。",
+     ["us_money_supply_sync"], ""),
+    ("us_money_market_daily", "宏观",
+     "纽约联储 markets API（SOFR/EFFR/ON RRP）+ 美财政部 fiscaldata（TGA/国债总额）",
+     "美国货币市场日度（5,270 行，2005-10-03 起）：SOFR（含分位/成交量）、EFFR（含目标区间/"
+     "成交量）、ON RRP 接纳额、TGA、国债总额。⭐ 支撑两个关键口径：① 政策利率**实际成交价**"
+     "（EFFR 相对目标区间的位置 = 准备金是否充裕）；② 「美元净流动性」合成指标 A5 = 美联储"
+     "总资产 − TGA − ON RRP（⚠️ 合成口径、非官方，须在 UI 显式标注）。⚠️ 单位不统一且无法统一："
+     "利率 %、成交量/TGA/ON RRP 百万美元、国债总额美元 —— 一律以列注释为准。⚠️ 三个源交易日历"
+     "不同 ⇒ 日期是并集、增量水位**按列**取。⚠️ NY Fed SOMA 接口实测全 400（路径已变），不采。"
+     "消费方：分析研究「货币流动性」模块「外部约束 / 美国短端」区块。",
+     ["us_money_market_sync"], ""),
+    ("eu_money_supply_monthly", "宏观",
+     "DBnomics ECB/BSI（欧元区货币金融机构资产负债表，免 Key）",
+     "欧元区货币供应量月度（559 期，1980-01 起）：M1/M2/M3 及各自同比（本地派生）。"
+     "⭐ 全球第二大货币区，「欧元区 M2/M3 增速 vs 美国」是判断全球美元/欧元流动性相对松紧的"
+     "直接读数。⚠️ 唯一免费通道：ECB 直连三域实测**全部阻断**（SSL timeout / DNS 失败），"
+     "经 DBnomics 镜像取得 ⇒ **源单一、必须「失效即告警」**（DQ freshness 规则）。"
+     "⚠️ 序列口径为「Euro area (changing composition)」= 按当期成员国组成回溯。单位百万欧元。"
+     "消费方：分析研究「货币流动性」模块「货币总量」区块（全球对比）。",
+     ["eu_money_supply_sync"], ""),
+    ("global_liquidity_bis", "宏观",
+     "BIS SDMX API（stats.bis.org，WS_GLI 数据集，免 Key）",
+     "BIS 全球流动性指标季度（6,720 行，2000-03-31 起，19 个借款人国家/地区）：**美元计价的"
+     "境外信贷**（= 跨境 + 借款人本地外币；官方维度名 Cross-border & Local in FCY，**不要**简化成"
+     "「跨境」），按借款人国/部门、贷款方部门、头寸类型、工具、单位七维展开。"
+     "⭐ 这是「全球美元有多少」的**官方口径**，替代 v1.0 自建全球 M2 汇总（那需拼 N 国×汇率且"
+     "非官方）。🔴 **唯一正确取数口径**（2026-09-26 复核实测）：borrowers_cty='3P' AND "
+     "borrowers_sector='N' AND lenders_sector='A' AND l_pos_type='I' AND l_instr='B' AND "
+     "unit_measure='USD' ⇒ 14,747,700 百万美元 @2026-Q1（与 BIS 官方公布值逐位吻合）。"
+     "⚠️ 三重重复陷阱：① l_instr 的 B 是**合计**（已含 D=只债券、G=只贷款）② 3P=全体非美合计，"
+     "与各国明细并存，相加即重复 ③ unit_measure='771' 是**同比增速%**、不是金额。"
+     "错口径（borrowers_cty<>'US' 全量 SUM）= 45,951,383 百万 = 真值的 3.12 倍。"
+     "⚠️ 实测 API 形式（已勘误）：resource key 只有 3 段（Q.USD / Q.USD.US），多一段或 /all 均 404。"
+     "⚠️ BIS 用自有国家码（US/CN/4T），非 ISO2。⚠️ 美国借款人只报 G/P 两部门、无 N。"
+     "⚠️ 季度数据、T+1 季发布，时效天然滞后。"
+     "消费方：分析研究「货币流动性」模块「全球层」区块。",
+     ["global_liquidity_sync"], ""),
+    ("cn_omo_daily", "宏观",
+     "人行官网「公开市场业务」栏目群（零 Key 官网直连）",
+     "中国央行公开市场操作日度（631 行，2024-05-29 起回补；源共约 3,810 条）：现采 2 个栏目——"
+     "①公开市场业务交易公告（7天期逆回购日度 + 香港央票）②公开市场买断式逆回购业务公告（月度）。"
+     "⭐ 中国层数量维度的**短端抓手**：M2 是月度存量、OMO 是日度流量，二者合起来才答得了"
+     "「央行这周在放水还是收水」。字段含 期限/利率/投标量/中标量/原文留档。⚠️ 两栏目**各自独立"
+     "编号** ⇒ 主键 (section, notice_year, notice_no)。⚠️ 零操作日**也发公告**（win_amount=0）。"
+     "⚠️ 批量补发：发布日 ≠ 操作日（实测 2025-10-09 一个发布日挂 17 条公告）。⚠️ 只有事实列、"
+     "**没有净投放/未到期余额**（净投放需按期限滚动推算到期日，口径选择权属分析层）。"
+     "⚠️ 人行官网有反爬限流（并发 4 会 403），采集器内置节流 + 退避。"
+     "消费方：分析研究「货币流动性」模块「中国短端」区块。",
+     ["cn_omo_sync"], ""),
+    ("cn_reserve_monthly", "宏观",
+     "akshare macro_china_foreign_exchange_gold（人行/外管局官方口径）",
+     "中国·官方外汇储备（亿美元）+ 黄金储备（万盎司）月度（419 行，1978-12 起，止 2026-08）。"
+     "⭐ 中国层「央行对外资产」的**国际可比口径**（补源方案 v2.1 批次 C2）。"
+     "⚠️ 先勘误：v2.0 §7 批次 C 与复核报告 §5.1 都写「外储/黄金 ❌ 未落地」，**实测推翻了它** ——"
+     "`cn_cb_balance_monthly` 已有 `fx_reserve`（217,247.55 亿元 @2026-08）与 `monetary_gold`"
+     "（5,243.77 亿元 @2026-08）且未停更，缺的只是 akshare 独有的**美元口径**与**黄金实物量**。"
+     "⇒ 本表**新建而非扩列**（单位/语义不同轴 + 不污染既有资产负债恒等式 DQ + 便于独立守护）。"
+     "🔴 中国层储备有**三套口径、三种单位，严禁相加、严禁互校**：① fx_reserve_usd（亿美元·官方）"
+     "② gold_reserve_oz（万盎司·实物量）③ cn_cb_balance_monthly.fx_reserve（亿元·人民币表内）。"
+     "实测「人民币表内 ÷ 官方美元」的隐含折算率**不是汇率**：全史 346 个共有月份 6.1683~9.4068"
+     "（1994 汇率并轨后长期在 9 附近），近年（2015+ 140 期）6.2362~7.4930、|月变动| max 2.881%，"
+     "而同期市场汇率约 7.0~7.3 ⇒ 按市价互校（「偏差 >1% 告警」）会**稳定误报**，只能做区间 + 变动，"
+     "且因**跨表**（DQ 检查器是单表+where、无 JOIN）而**放在采集器内断言**。"
+     "⚠️ 源 `统计时间` 是字符串 `'YYYY.M'`：**字符串序 ≠ 时间序**（2025.10 < 2025.2），"
+     "akshare 返回的 df 本身就是错序的 ⇒ 采集器经公共件 `parse_cn_month` 按 (年,月) 元组排序，"
+     "**禁止 iloc[-1]**。⚠️ 早期量级极端（1980-12 外储 −12.96 亿美元）⇒ 量级 DQ 只守 2015 年后。"
+     "消费方：分析研究「货币流动性」模块「货币总量」区块 · 中国层。",
+     ["cn_reserve_sync"], ""),
 ]
 
 # 列级血缘：table_name -> { 任务名: {source, cols[], derived[], note?, col_notes{}} }
@@ -1057,6 +1149,148 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
                            "其余 5 个都走直接标价（源值 = 人民币/100 外币，需 v/100）。"
                            "把 SEK 当直标算会得到 4.58（真值 9.94）并把 DXY 拉低 3.3% —— "
                            "这是 2026-09-25 实测事故的根因",
+            },
+        },
+    },
+    "us_fed_balance_weekly": {
+        "us_fed_balance_sync": {
+            "source": "DBnomics FED/H41（主口径，免 Key）+ 美联储官网 H.4.1 HTML（交叉校验）",
+            "cols": ["trade_date", "total_assets", "securities_total", "treasury_securities",
+                     "agency_debt", "mbs", "reverse_repo_total", "reverse_repo_foreign",
+                     "reverse_repo_other", "currency_in_circ", "reserve_balances",
+                     "other_deposits", "official_check"],
+            "derived": ["securities_total", "reverse_repo_total"],
+            "note": "双轨制：主口径 DBnomics（历史完整、零哨兵）+ 官网 H.4.1 仅最新一期交叉校验"
+                    "（official_check 列）；官网单元格含**未解码 HTML 实体 `&#xa0;`**，须 html.unescape"
+                    "（坑）；采集器内置 trust_env=False 绕过本机代理（代理会阻断国际源）",
+            "col_notes": {
+                "trade_date": "周三水平日（H.4.1 每周四发布、数据截至前一日周三）",
+                "total_assets": "★总资产（百万美元）。DBnomics RESPPMA_N.WW。实测 6,747,704 "
+                                "@2026-09-23。扩表=放水、缩表=收水",
+                "securities_total": "【派生】证券持仓合计 = 美债 + 机构债 + MBS（源无单一合计序列）",
+                "reserve_balances": "★准备金余额（百万美元）。银行体系可动用的「水位」",
+                "official_check": "【交叉校验】官网 H.4.1 HTML 解析的总资产，仅最新一期有值；"
+                                   "与 total_assets 实测偏差 0 ⇒ DQ 跨通道守护",
+            },
+        },
+    },
+    "us_money_supply_monthly": {
+        "us_money_supply_sync": {
+            "source": "DBnomics FED/H6_H6_M2 + _H6_MBASE（主口径）+ 美联储官网 H.6 default.htm（交叉校验）",
+            "cols": ["stat_month", "m2", "m2_nsa", "m1", "m1_nsa", "monetary_base",
+                     "reserve_balances", "currency_in_circ", "m2_yoy", "m1_yoy", "base_yoy",
+                     "official_m2", "update_source"],
+            "derived": ["m2_yoy", "m1_yoy", "base_yoy"],
+            "note": "单位一律**十亿美元**；同比用 NSA（未季调）算；恒等式自检：准备金 + 流通中货币"
+                    "= 基础货币（容差 0.25）；官网当期页是 current/default.htm（h6.htm 实测停在 2013 年）",
+            "col_notes": {
+                "stat_month": "源 period 形如 2026-08-31，取当月 1 日",
+                "m2": "★M2（十亿美元，季调 SA）。实测 23,342.8 @2026-08",
+                "m1": "★M1（十亿美元）。2020 口径改革后含储蓄存款 ⇒ 跨 2020 不可比绝对值、一律看同比",
+                "m2_yoy": "【派生】M2 同比（%，同月比，用 NSA 算）",
+                "official_m2": "【交叉校验】官网 H.6 HTML 解析的 M2，仅最新一期；DQ 跨通道守护",
+                "update_source": "本行 m2 实际来源：dbnomics / official（主口径失效时自动降级）",
+            },
+        },
+    },
+    "us_money_market_daily": {
+        "us_money_market_sync": {
+            "source": "纽约联储 markets API（SOFR/EFFR/ON RRP）+ 美财政部 fiscaldata（TGA/国债总额）",
+            "cols": ["trade_date", "sofr", "sofr_p1", "sofr_p25", "sofr_p75", "sofr_p99",
+                     "sofr_volume_bn", "effr", "effr_target_low", "effr_target_high",
+                     "effr_volume_bn", "on_rrp_amt", "tga", "debt_total"],
+            "derived": [],
+            "note": "三个源交易日历不同 ⇒ 日期是并集、增量水位**按列**取（否则只有快照的行会顶前"
+                    "水位、静默跳过另一条腿）；NY Fed SOMA 接口实测全 400 不采；ON RRP search.json"
+                    "实测 400 只能 last/N",
+            "col_notes": {
+                "sofr": "SOFR 有担保隔夜融资利率（%）。实测 3.87 @2026-09-23",
+                "effr": "EFFR 有效联邦基金利率（%）。相对目标区间的位置 = 准备金是否充裕",
+                "on_rrp_amt": "ON RRP 隔夜逆回购接纳额（**百万美元**，源为美元已 /1e6）",
+                "tga": "★TGA 财政部一般账户余额（**百万美元**）。抽水项：TGA 上升=财政抽走银行准备金",
+                "debt_total": "美国未偿国债总额（**美元**，源单位直存）",
+            },
+        },
+    },
+    "eu_money_supply_monthly": {
+        "eu_money_supply_sync": {
+            "source": "DBnomics ECB/BSI（欧元区货币金融机构资产负债表，免 Key）",
+            "cols": ["stat_month", "m3", "m2", "m1", "m3_yoy", "m2_yoy", "m1_yoy"],
+            "derived": ["m3_yoy", "m2_yoy", "m1_yoy"],
+            "note": "ECB 直连三域实测全部阻断（SSL timeout / DNS 失败），经 DBnomics 镜像取得 ⇒ "
+                    "**源单一、必须「失效即告警」**；序列口径为「Euro area (changing composition)」",
+            "col_notes": {
+                "stat_month": "源 period 形如 2026-07，取当月 1 日",
+                "m3": "★M3（百万欧元）。实测 17,613,983 @2026-07",
+                "m3_yoy": "【派生】M3 同比（%，本地自算）",
+            },
+        },
+    },
+    "global_liquidity_bis": {
+        "global_liquidity_sync": {
+            "source": "BIS SDMX API（stats.bis.org，WS_GLI 数据集，免 Key）",
+            "cols": ["time_period", "freq", "curr_denom", "borrowers_cty", "borrowers_sector",
+                     "lenders_sector", "l_pos_type", "l_instr", "unit_measure", "obs_value",
+                     "title"],
+            "derived": [],
+            "note": "resource key 只有 3 段（Q.USD / Q.USD.US），多一段或 /all 均 404（已勘误）；"
+                    "BIS 用自有国家码（US/CN/4T），非 ISO2。🔴 离岸美元正确口径 = borrowers_cty='3P' "
+                    "AND sector='N' AND lenders_sector='A' AND l_pos_type='I' AND l_instr='B' AND "
+                    "unit_measure='USD'；⚠️ 不可用 `borrowers_cty<>'US'` 全量 SUM（B/D/G 重复 + "
+                    "3P 与明细国重复，实测虚高 3.12 倍）",
+            "col_notes": {
+                "time_period": "统计期（季度末，源 2026-Q1 → 2026-03-31）",
+                "borrowers_cty": "借款人国家/地区（BIS 自有码）。3P=All countries excluding residents"
+                                 "（全体非美合计）★取总量用这个；其余为个别经济体（本库仅新兴市场）",
+                "l_instr": "工具：B=Credit（贷款&债券**合计**）★ / D=只 IDS 债券 / G=只银行贷款。"
+                           "⚠️ B 已含 D 与 G，三者**不可相加**",
+                "l_pos_type": "头寸：I=Cross-border & Local in FCY（境外，含借款人本地外币）/ A=境内（对美借款人）",
+                "obs_value": "读数。unit_measure='USD' 时为**百万美元存量**；'771' 时为**同比增速%**",
+                "unit_measure": "USD=百万美元存量 / 771=同比增速(%)【官方算好的 yoy，可直接用】",
+            },
+        },
+    },
+    "cn_omo_daily": {
+        "cn_omo_sync": {
+            "source": "人行官网「公开市场业务」栏目群（零 Key 官网直连）",
+            "cols": ["section", "notice_year", "notice_no", "trade_date", "op_type",
+                     "tenor_days", "op_rate", "bid_amount", "win_amount", "notice_url",
+                     "raw_text"],
+            "derived": [],
+            "note": "现采 2 个栏目（交易公告 + 买断式）；主键 (section, notice_year, notice_no) —— "
+                    "两栏目**各自独立编号**；翻页 modulekey 可能是 UUID（b0da893b），须动态解析；"
+                    "人行官网有反爬限流（并发 4 会 403），内置节流 + 退避",
+            "col_notes": {
+                "section": "来源栏目：omo_trade=交易公告 / outright_repo=买断式（各自独立编号）",
+                "trade_date": "操作日：正文日期优先，其次中文落款，最后公告 ID 前 8 位。"
+                              "⚠️ 发布日 ≠ 操作日（批量补发 + 买断式招标预告）",
+                "op_type": "reverse_repo=7天期逆回购 / outright_reverse_repo=买断式 / "
+                           "cbb=香港央票 / treasury_deposit=国库现金定存 / other",
+                "win_amount": "★中标量（亿元）。零操作日也发公告、本列=0（不是 NULL）",
+                "raw_text": "首个含操作信息的正文句（原文留档，供口径复核）",
+            },
+        },
+    },
+    "cn_reserve_monthly": {
+        "cn_reserve_sync": {
+            "source": "akshare macro_china_foreign_exchange_gold（官方口径，1978-12 起 419 期）",
+            "cols": ["stat_month", "fx_reserve_usd", "fx_reserve_usd_yoy",
+                     "gold_reserve_oz", "gold_reserve_oz_chg"],
+            "derived": ["fx_reserve_usd_yoy", "gold_reserve_oz_chg"],
+            "note": "PRIMARY KEY(stat_month) 全量 upsert（约 419 行，重跑无成本）。"
+                    "⚠️ 月份列是字符串 'YYYY.M'，字符串序 ≠ 时间序 ⇒ 经 _common.parse_cn_month "
+                    "按 (年,月) 元组排序后入库，**禁止 iloc[-1]**（akshare 返回的 df 本身即错序）。"
+                    "⚠️ 双口径隐含折算率的软断言**在采集器内**（跨表，DQ 无 JOIN），"
+                    "且只对 2015+ 断言、只做区间+变动 —— 该比率是历史成本口径而非汇率",
+            "col_notes": {
+                "fx_reserve_usd": "★国家外汇储备（亿美元·官方口径）。⚠️ 三套口径之一，"
+                                  "与 cn_cb_balance_monthly.fx_reserve（亿元）**严禁相加、严禁按市价互校**",
+                "fx_reserve_usd_yoy": "【派生】同月同比（%）。仅当两期都存在且**基期 >0** 才算 ——"
+                                      "早期有负值（1980-12 = −12.96 亿美元）；早期量级极小故同比噪声大，UI 不用",
+                "gold_reserve_oz": "★黄金储备（万盎司·实物量）",
+                "gold_reserve_oz_chg": "【派生】较上月增减（万盎司，**正 = 增持**），只在紧邻上一月都在时算。"
+                                       "⚠️ 未增持月该值为常数，故「连续增持 N 月」必须判 **chg<>0**，"
+                                       "不能按月序连续推断（实测 2026-08 往前连续 22 个月增持）",
             },
         },
     },
