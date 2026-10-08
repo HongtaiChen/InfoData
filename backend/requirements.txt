@@ -3,6 +3,10 @@ uvicorn[standard]>=0.30
 pymysql>=1.1
 pandas>=2.0
 akshare>=1.14
+# baostock 必需：stock_status_sync（采集器）/ backfill_stock_status（脚本）**顶层** import，
+#          缺失会导致后端直接启动失败（Application startup failed）。
+#          注意：baostock 0.9.x 只提供「上市/退市状态全量」基础接口，无融资融券/复权因子。
+baostock>=0.8
 APScheduler>=3.10,<4
 # tushare 可选（备源，需 TUSHARE_TOKEN 环境变量）
 # tushare>=1.4

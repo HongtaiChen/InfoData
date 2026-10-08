@@ -318,11 +318,23 @@ RULES = [
     ("news_rows", "news", "row_count_total",
      {"min_rows": 100}, "warning", 1, "资讯总量下限（防误清空；保留策略另议）"),
     # ---------- 财经日历 ----------
-    ("finance_calendar_fresh", "finance_calendar", "date_floor",
-     {"date_col": "event_date", "days_back": 7}, "critical", 1,
-     "事件表窗口需覆盖近 7 天（曾停更 8 个月；东财源 60 天滚动窗口）"),
+    # 2026-10-08 换规则。原 `finance_calendar_fresh` = date_floor(event_date, days_back=7)
+    # 对本表**结构性致盲**：表里存的是**未来事件**（东财 60 天滚动窗口），
+    # MAX(event_date) 常年领先今天 40+ 天 ⇒ `>= CURDATE()-7` 恒真、永不告警。
+    # 实测坐实：10-08 时同步已**连续失败 11 天**（最后成功 09-27 19:10），
+    # 而该规则照常 pass（当时 MAX(event_date)=2026-11-25，比今天还晚 48 天）。
+    # ⇒ 已退役（见 RETIRED_RULES），换成「同步还活着吗」+「窗口还在滚动吗」两条互补的：
+    #     · 前者答「有没有再成功同步过」（时间维度，72h 内必暴露）；
+    #     · 后者答「成功的那次窗口还在往前滚吗」（覆盖维度，抓窗口塌陷/被近端数据挤掉）。
+    ("finance_calendar_sync_alive", "finance_calendar", "freshness_interval",
+     {"time_col": "update_time", "pass_hours": 36, "fail_hours": 72}, "critical", 1,
+     "同步存活：update_time 由采集器 INSERT 写入、失败即回滚不动它 ⇒ 它就是最后一次成功同步。超 36h 提示、72h 失败"),
+    ("finance_calendar_horizon", "finance_calendar", "date_floor_where",
+     {"date_col": "event_date", "where": "data_source='EM-CAL'", "days_back": -35}, "warning", 1,
+     "窗口滚动：days_back 取负=未来下限，要求 EM-CAL 腿 MAX(event_date) ≥ 今天+35（实测余量 24 天；同步成功但窗口塌陷时抓得住）"),
     ("finance_calendar_rows", "finance_calendar", "row_count_total",
-     {"min_rows": 500}, "warning", 1, "事件总量下限（当前 ~2,067）"),
+     {"min_rows": 500}, "warning", 1,
+     "事件总量下限（实测 2,773 行 @2026-10-08；JY 1,332 + EM-CAL 1,441。原记 ~2,637 系当日同步前口径）"),
     # ---------- 债券 ----------
     ("bond_freshness", "bond_profit_daily", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 3}, "warning", 1, "国债收益率对齐交易日历（中美债假日略有差异，容错 3 日）"),
@@ -1445,6 +1457,11 @@ RETIRED_RULES = [
     "frozen_sw_industry_rows",    # → sw_rows + sw_stock_code + sw_uniq
     "frozen_fin_abstract_rows",   # → fin_abstract_rows + fin_abstract_floor + fin_abstract_uniq
     "frozen_shares_rows",         # → shares_rows + shares_floor + shares_total_positive + shares_uniq
+    # 2026-10-08 财经日历换规则：`date_floor(event_date, days_back=7)` 对**未来事件表**
+    # 结构性恒通过（MAX(event_date) 领先今天 40+ 天），实测同步已连停 11 天它照样是绿的。
+    # ⇒ 退役，换成 finance_calendar_sync_alive（update_time 存活）
+    #    + finance_calendar_horizon（EM-CAL 腿未来下限）。详见 RULES 中该段注释。
+    "finance_calendar_fresh",
     # 保留：frozen_capital_flow_rows（东财域不可达，采集器已实现但默认禁用）
 ]
 
