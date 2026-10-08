@@ -223,6 +223,26 @@ REGISTRY: list[dict] = [
             {"label": "跨市场对照看外部环境", "target": "/analysis/cross-market"},
             {"label": "市场风向看股债性价比", "target": "/analysis/market-wind"},
         ],
+        # 页内锚点导航（B 级 · 2026-09-27）：由 **shell 统一渲染**，不在本页模板里。
+        # 为什么放到后端元数据而不是留在前端常量：
+        #   标题行右侧实测空置 943px，导航并入可省掉独立一行（23px 行高 + 10px 间距）。
+        #   唯一可行手段是让 shell 渲染；而 shell 拿不到子页的常量 —— 子组件是
+        #   `<component :is>` 异步渲染的（`defineAsyncComponent`），shell 在渲染时它还没加载。
+        #   曾试过让本页 Teleport 投递到 shell 标题行，**实测否决**：shell 的 NCard 是
+        #   `v-if="moduleMeta"`，切模块时先卸载、target 随 DOM 消失，Teleport 卸载失效节点抛
+        #   `Cannot set properties of null (setting '__vnode')`，导致切回后整页不渲染
+        #   （详见 AnalysisModuleView.vue 的注释）。
+        # ⚠️ id 必须与详情页模板里的 DOM id **逐字一致** —— `getElementById(...)?.scrollIntoView()`
+        #    在 id 缺失时**静默无反应、零报错**。登记在此后即可被 `_scratch/_verify_anchors.py`
+        #    纳入自动清单（此前这 5 个 id 不在任何自动断言的覆盖范围内）。
+        # ⚠️ 其他模块**没有**本字段 ⇒ shell 侧按 `v-if` 渲染，对它们是零影响。
+        "sections": [
+            {"id": "mc-lpr", "label": "① 央行操作"},
+            {"id": "mc-curve", "label": "② 银行间定价"},
+            {"id": "mc-quantity", "label": "③ 信用派生"},
+            {"id": "mc-external", "label": "④ 对外与资产"},
+            {"id": "mc-cross", "label": "交叉印证"},
+        ],
     },
     # ================= 市场风向 · 三卡（data=market-wind，共用一份 TTL 缓存响应） =================
     {
