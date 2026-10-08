@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""分析模块：货币流动性（银行间资金价格 / 期限结构 / 政策利率 / 外部约束）
+"""分析模块：货币流动性（银行间资金价格 / 期限结构 / 政策姿态 / 外部约束）
 
 🔒 第一原则「数据用来比较才有意义」（设计规范 §1.0）：
 本模块落的是参照系 ② **自身纵比**（Shibor 3M 现在处于近一年什么位置）、
 ① **同类横比**（ON→1W→1M→3M 四个期限之间的利率阶梯）、
 ⑤ **结构分解**（陡/平/倒挂 —— 同样一个 3M 利率，曲线形状不同含义完全不同），
-并在末尾做一次 ④ **交叉印证**（政策利率按兵不动 ↔ 市场利率是否在动；
+并在末尾做一次 ④ **交叉印证**（LPR 报价按兵不动 ↔ 市场利率是否在动；
 资金价格 ↔ 权益位置；**国内松紧 ↔ 外部约束**）。
 
 **五个切面（2026-09-25 批次 1 补齐第四面；2026-09-26 补第五面「数量」）**：
@@ -313,6 +313,601 @@ def _is_tight(p: float | None, high_is_tight: bool, lo: float = 35, hi: float = 
     return p >= hi if high_is_tight else p <= lo
 
 
+# ---------------- 口径两轴：region × market（R8 · 2026-09-27）----------------
+# 需求依据：需求文档 v2.5 的 R8「地区／市场口径上标」。本页横跨 6 类市场、
+# 4 个地区，原先一个口径字都没有 ⇒ 读者会拿「货币总量的存量口径」和
+# 「银行间同业拆借的价格口径」并列比较（见需求 §四 S5 失败②）。
+#
+# 🔴 三条纪律（勿破坏）：
+# 1. **唯一真源**：16 项的两轴归属只在本 `SCOPE` 里可枚举 ⇒ 验收脚本可直接
+#    `import SCOPE` 做 MECE（互斥完备）断言，不必 read 源码文本。
+# 2. **单一注入点**：`_tag()` 是唯一写入口，覆盖 3 个装配点（结论区字面量 /
+#    外部 spec 的两个分支 / 数量工厂）。漏注入一处 ⇒ 16 项里掉几项，是典型的
+#    「看着改好了」。
+# 3. **label 前缀写进 `label` 本身** ⇒ 结论区卡 / 卡片墙卡 / 明细区 KpiCards
+#    三处自动逐字一致（它们消费同一个字段），R8 的「逐字一致」由构造保证。
+# ⚠️ 两轴各自合法 ≠ 组合合法：「欧元区 × 银行间」是无效组合（见 `LEGAL_COMBOS`）。
+SCOPE: dict[str, tuple[str, str]] = {
+    # key                 region          market
+    "shibor_3m":        ("中国 · 在岸", "银行间"),
+    "shibor_on":        ("中国 · 在岸", "银行间"),
+    "term_spread":      ("中国 · 在岸", "银行间"),
+    "curve_dispersion": ("中国 · 在岸", "银行间"),
+    "lpr":              ("中国 · 在岸", "贷款报价"),
+    "cn_m2":            ("中国 · 在岸", "货币总量"),
+    "cn_fx_reserve":    ("中国 · 在岸", "外汇储备"),
+    "us_m2":            ("美国",        "货币总量"),
+    "fed_assets":       ("美国",        "央行资产"),
+    "us_net_liq":       ("美国",        "央行资产"),
+    "us_10y":           ("美国",        "国债"),
+    "us_10y_2y":        ("美国",        "国债"),
+    "eu_m3":            ("欧元区",      "货币总量"),
+    "cn_us_10y":        ("全球 · 离岸", "国债"),
+    "dxy":              ("全球 · 离岸", "外汇"),
+    "bis_offshore":     ("全球 · 离岸", "境外信贷"),
+}
+REGIONS = ("中国 · 在岸", "美国", "欧元区", "全球 · 离岸")
+MARKETS = ("银行间", "贷款报价", "货币总量", "央行资产", "国债", "外汇", "外汇储备", "境外信贷")
+LEGAL_COMBOS = frozenset({
+    ("中国 · 在岸", "银行间"), ("中国 · 在岸", "贷款报价"),
+    ("中国 · 在岸", "货币总量"), ("中国 · 在岸", "外汇储备"),
+    ("美国", "货币总量"), ("美国", "央行资产"), ("美国", "国债"),
+    ("欧元区", "货币总量"),
+    ("全球 · 离岸", "国债"), ("全球 · 离岸", "外汇"), ("全球 · 离岸", "境外信贷"),
+})
+
+
+# =====================================================================================
+# R12 用途口径五段式（P2 · 2026-09-27）
+# =====================================================================================
+# 需求 R12：每个读数的悬浮说明统一为五段 ——
+# **① 是什么 · ② 做什么 · ③ 为什么 · ④ 异常情况 · ⑤ 何时失效**。
+# **前四段是必需集（必写）**；⑤「何时失效」**有陷阱才写**，无陷阱则**整键省略**（不做补位）。
+#
+# 🔴 四条纪律（改动本段前必读）：
+# 1. **段序与标签只在 `HINT_SEGMENTS` 定义一次**。前端不内联词表、不认 key 顺序 ——
+#    一律按 `order` 排；分组线按 `group` 画（D6-a：前端认组不认 key）⇒ 以后加段只改这里。
+# 2. **⑤ 缺省 = 不出现**：`_hint_parts()` 用 `if s["key"] in row` 过滤，不产占位项、不产空串。
+#    ⇒ 前端"缺省不补位"是**后端保证**的结果，前端无需为它写特判分支。
+# 3. **文案不许写进装配点**：五段全文只住在本字典，装配点通过 `_tag()` 自动获得 `hint_parts`
+#    —— 与两轴 region/market 同一哲学（由 key 派生、不许手抄）。
+# 4. **字数预算只告警、不抛错**：R12.1 定的预算是「必需集 ≤250 字 / 含⑤ ≤310 字」，但实测
+#    R12.3 的定稿文案（去掉当日值后）仍超预算 —— 若在此 `raise`，后端**直接起不来**。
+#    ⇒ 硬拦只拦**结构性**错误（见 `_selfcheck_hint_parts`），超标走 WARNING ＋ 验收报告。
+#    ⚠️ 这是**需求 R12.1 与 R12.3 之间的自相矛盾**（已记入勘误，待所有者裁量），
+#       不是本段实现走样；预算的实际用途是限制浮窗行数，而浮窗已明确不加 max-height。
+HINT_SEGMENTS: list[dict] = [
+    {"key": "what",     "label": "是什么",   "order": 1, "required": True,  "group": "understand"},
+    {"key": "use",      "label": "做什么",   "order": 2, "required": True,  "group": "understand"},
+    {"key": "why",      "label": "为什么",   "order": 3, "required": True,  "group": "understand"},
+    {"key": "abnormal", "label": "异常情况", "order": 4, "required": True,  "group": "operate"},
+    {"key": "invalid",  "label": "何时失效", "order": 5, "required": False, "group": "operate"},
+]
+# 🔴 分段字数预算（需求 R12.1）。**2026-09-27 由 250/310 放宽到 300/400**（决策：方案 A）：
+#    原预算与 R12.3 的**定稿文案**自相矛盾 —— 按 R12.3 逐字落进 `HINT_PARTS`，实测
+#    `term_spread` 必需集 **270 字**（上限 250）、含 ⑤ **359 字**（上限 310），**无法通过
+#    改代码消除**。所有者裁定放宽预算（而非压缩已定稿文案），并留出 P3 铺满 16 条时的余量。
+#    放宽后的量测依据：浮窗 `max-width: 320px`、正文 12.5px/1.65 ⇒ 约 23 字/行；
+#    400 字 ≈ 18 行 ≈ 370px 正文高度（浮窗总高约 420px），仍在 1080p 可视区内。
+HINT_BUDGET = {"required": 300, "total": 400}
+
+# 🔴 与需求 R12.3 的**唯一有意偏离**：定稿文案里的 `当前 1.43%` / `当前 24.4 分位 ⇒ 偏平坦`
+#    这类**当日数值**已剔除。三个理由：
+#    ① 数值已有唯一真源（卡片大数字 + 分位刻度条），口径里再写一遍就是**第二个真源**，
+#       次日必然与卡面不一致（"卡片说 5.2、口径说 6.6"—— 比不写更坏）；
+#    ② 硬编码的当日值**必然过期**，且过期是静默的；
+#    ③ 剔除后文案与日期解耦，才能安全地以常量形式写进代码（本字典的前提）。
+#    ⇒ 保留的是**判据本身**（阈值、口径阶梯、机制），那些才是"口径"该承载的信息。
+HINT_PARTS: dict[str, dict[str, str]] = {
+    # ── 样板①（**正**：含 ⑤）· 期限利差 · 来源：需求 R12.3 第 2 条 ──
+    "term_spread": {
+        "what": "3M Shibor − 隔夜 Shibor，衡量资金**期限结构**的宽窄，单位 bp（基点，1bp = 0.01%）。",
+        "use": "判断「这个松是全面的、还是只有短端松」。它回答松的**结构**，"
+               "不回答松的**程度**（程度看 Shibor 3M）。",
+        "why": "利差被压平 = 短端被投放填满、机构敢用隔夜滚长钱 → 杠杆套息交易活跃 → "
+               "一旦利差回摆，去杠杆会先砸高杠杆、高波动品种。",
+        "abnormal": "**倒挂（<0，即 3M 比隔夜还便宜）是流动性紧张的经典信号**；"
+                    "分位口径：≤10 极度平坦 / ≤30 偏平坦 / 30–70 中性 / 70–90 偏陡 / >90 极陡。",
+        "invalid": "① 曲线单调时它与「期限离散度」**信息共线**，二者只看一个即可；"
+                   "② 跨季/跨节时点会因“跨节资金”虚增，与趋势无关；"
+                   "③ 分位窗口为近一年，跨越降准/降息台阶后参照系整体漂移。",
+    },
+    # ── 以下 15 条为 P3 铺满（2026-09-27）。来源：需求 R12.3 的 16 条定稿文案；
+    #    与定稿文案的**唯一有意偏离**同上（剔除当日数值，理由见上方注释）。
+    #    ⑤「何时失效」**16/16 全部保留** —— R12.3 每条都写了实质陷阱，
+    #    "有陷阱才写"的判据下没有需要省略的项（决策 #7 目标 ≥14/16 已超额达成）。
+    # ── 1 · Shibor 3M ──
+    "shibor_3m": {
+        "what": "3 个月期上海银行间同业拆放利率 —— 在岸人民币银行间的 3 个月期资金价格，单位 %。",
+        "use": "判断「钱贵不贵」，是四条链条最上游的价格锚。它回答融资成本的**水平**，"
+               "不回答投放的**数量**（数量看央行 OMO / 美联储总资产）。",
+        "why": "3M 是银行负债成本的定价基准 → 它下行会压低新发贷款与债券的票息 → "
+               "折现率下降 → 高估值成长风格受益、银行息差承压。",
+        "abnormal": "看**近一年分位**：≤20 低位（偏松）/ ≤40 偏松 / 40–60 中性 / 60–80 偏紧 / "
+                    ">80 高位；≤10 或 ≥90 后端金色高亮。**绝对水平不设阈值** —— "
+                    "同一个 1.4% 在有的年份算高、有的年份算低。",
+        "invalid": "① 绝对值**跨期不可比**，一律看分位；② 它是**报价**利率不是成交利率，"
+                   "极端行情下报价可能失真；③ 季末 / 年末 / 缴税日的跳升是时点性的，不构成趋势。",
+    },
+    # ── 3 · LPR 1Y ──
+    "lpr": {
+        "what": "1 年期**贷款市场报价利率**，由报价行每月 20 日报出，单位 %。",
+        "use": "判断「政策姿态动没动」。LPR 是政策**传导的结果**；与 Shibor 对照，"
+               "可把「市场自己在松」与「政策在松」分开。",
+        "why": "LPR 不动 → 存量浮动利率贷款的利息支出不变 → 实体付息成本不降 → "
+               "宽货币没有变成宽信用；它的下调才会改善企业与房贷的还款现金流。",
+        "abnormal": "**不做分位** —— 政策利率是台阶状，长期不变时「分位」无意义。改看三件事："
+                    "① 本轮持续时长；② 上次调整的方向与幅度；③ **LPR 与 Shibor 的背离**："
+                    "Shibor 明显下行而 LPR 不动 ⇒ 宽松来自市场端而非政策端。",
+        "invalid": "① 它是**报价**利率，不等于实际贷款利率（真实成本看新发放贷款加权平均利率）；"
+                   "② 每月 20 日才更新，**月中不变是设计而不是信号**；"
+                   "③ 1Y 与 5Y 是两条腿，只看 1Y 会漏掉房贷利率取向。",
+    },
+    # ── 4 · Shibor 隔夜 ──
+    "shibor_on": {
+        "what": "隔夜期上海银行间同业拆放利率，单位 %。",
+        "use": "判断「**当下这一天**钱紧不紧」。它是资金面松紧**最敏感**的读数，"
+               "也是观察央行 OMO「呵护不呵护」的第一现场。",
+        "why": "隔夜是银行日终轧差的边际价格 → 它跳升最先抬高杠杆资金的滚动成本 → "
+               "压制两融与中性策略的持仓意愿；这是资金面传到股市**最快**的一环。",
+        "abnormal": "近一年分位：≤20 低位 / ≤40 偏松 / 40–60 中性 / 60–80 偏紧 / >80 高位"
+                    "（与 Shibor 3M 同一套判定）。极端信号：**持续贴近 SLF 利率上限**"
+                    "（走廊上沿）或单日跳升 >30bp。",
+        "invalid": "① **噪声最大** —— 受缴税、缴准、跨节、政府债发行扰动，单日跳升不构成趋势；"
+                   "② 必须与 7 天逆回购利率、R007 对照才可定性；③ **日频数据不可外推为月度结论**。",
+    },
+    # ── 5 · 期限离散度 ──
+    "curve_dispersion": {
+        "what": "ON/1W/1M/3M 四期限 Shibor 的**标准差**，单位 %。",
+        "use": "判断曲线**中间**有没有拐点。期限利差只看**两端**，离散度看**全形** —— "
+               "能发现两端看不出的中间畸变。",
+        "why": "中间期限异常**凹陷** → 该期限资金淤积、利率被压低 → 机构倾向用该期限滚动融资 → "
+               "一旦结构性因素（跨季、MPA 考核）消退，该期限利率回摆、滚动成本突升。",
+        "abnormal": "**没有天然零点、没有均值回复 ⇒ 不能做分位**。异常判据：曲线**非单调**"
+                    "（不满足 ON < 1W < 1M < 3M）**且**中间期限相对两端线性插值**凹陷 >5bp**；"
+                    "凸起不计（7 天资金跨月末的日历效应，不是曲线异常）。",
+        "invalid": "曲线**单调**时它与「期限利差」**信息共线**、无独立信息量 —— 此时本卡不进结论区，"
+                   "只在期限结构明细的读数条里显示（处置见 R14-4）。",
+    },
+    # ── 6 · 中美 10Y 利差 ──
+    "cn_us_10y": {
+        "what": "中债 10Y 收益率 − 美债 10Y 收益率，单位 pp（百分点，1pp = 1%）。",
+        "use": "判断「人民币资产相对美元的**吸引力**」，是汇率与资本外流的**压力源**读数。",
+        "why": "利差收窄 → 对冲后持有人民币债券的收益低于美债 → 外资配置盘减配 → "
+               "影响债市增量资金与汇率预期 → 再经汇率预期影响北向资金的进出节奏。",
+        "abnormal": "近一年分位 **≤35 记为「外部收紧」一项**；≤10 后端金色高亮"
+                    "（近一年最窄 = 极端）。",
+        "invalid": "① 美债与中债**交易时段不同**，两腿原生日期可能差 1 个交易日；"
+                   "② 资本管制使「利差 → 资金流」的传导**不是即时的**，利差走阔 ≠ 资金立刻回流；"
+                   "③ 它不是汇率预测器。",
+    },
+    # ── 7 · 美债 10Y ──
+    "us_10y": {
+        "what": "美国 10 年期国债收益率，单位 %。",
+        "use": "它是**全球无风险利率的锚**，也是全球风险资产估值分母的直接来源。",
+        "why": "它上行 → 全球贴现率抬升 → 长久期成长资产估值先于盈利受压；"
+               "同时抬高美元融资成本 → 压制新兴市场风险偏好与再通胀交易。",
+        "abnormal": "近一年分位 **≥65 记为「外部收紧」一项**；≥90 后端金色高亮"
+                    "（近一年最高 = 极端）。绝对水平可参照前一轮周期高点作为强警示。",
+        "invalid": "① 绝对值**跨期不可比**（不同年代的同一数字含义完全不同）；"
+                   "② 它是**名义**收益率，高通胀期要看 TIPS 实际利率才有意义；"
+                   "③ 期限溢价与降息预期会让它与「美联储政策松紧」短期背离。",
+    },
+    # ── 8 · 美债 10Y − 2Y ──
+    "us_10y_2y": {
+        "what": "美债 10Y 收益率 − 2Y 收益率，单位 pp。",
+        "use": "判断美国长端曲线的**陡平与倒挂**，是市场对「紧缩末期 / 衰退风险」的核心定价。",
+        "why": "倒挂 = 市场预期未来短端利率低于当前 → 隐含对增长与通胀的下修 → 衰退预期 → "
+               "经企业盈利下修传导至全球权益。",
+        "abnormal": "**<0 = 倒挂**；倒挂是 1980 年以来最可靠的**单一**衰退预警信号，"
+                    "历史上前置衰退 6–24 个月。分位 ≤35 记「外部收紧」一项。",
+        "invalid": "① 倒挂的**领先期长且不稳定**（6–24 个月），**不能用于择时**；"
+                   "② 需与信用利差（HY OAS）配合才能判断「会不会真衰退」；"
+                   "③ 「高位 + 平坦」是紧缩中后段的典型形态，但**形态相似 ≠ 结局相同**。",
+    },
+    # ── 9 · 美元指数 ──
+    "dxy": {
+        "what": "美元对一篮子货币（EUR / JPY / GBP / CAD / SEK / CHF，欧元权重约 58%）"
+                "的加权汇率指数。",
+        "use": "它是**全球美元松紧的总闸门**，回答的是「美元相对强弱」这一层。",
+        "why": "美元走强 → 非美主体的美元债务偿付成本上升 → 新兴市场融资条件收紧；"
+               "同时美元计价大宗对非美买家变贵 → 输入型需求走弱 → 压制全球再通胀交易。",
+        "abnormal": "分位口径：≤10 近一年最弱 / ≤30 偏弱 / 30–70 居中 / 70–90 偏强 / "
+                    ">90 近一年最强；近一年分位 **≥65 记「外部收紧」一项**。",
+        "invalid": "① 它**只反映美元与他国货币的相对强弱**，推不出美元绝对流动性"
+                   "（那是美元净流动性的活）；② 权重偏欧洲（欧元约 58%），"
+                   "「欧元涨」会机械压低 DXY；③ 卡内已有**三条口径互校**"
+                   "（官方日线 / 自算 / DINIW 快照）。",
+    },
+    # ── 10 · 境外美元信贷（离岸美元）──
+    "bis_offshore": {
+        "what": "BIS 官方口径 —— **全体非美借款人**持有的**美元计价**信贷"
+                "（跨境 + 借款人本地外币），单位万亿美元。",
+        "use": "看**离岸美元存量**的水位与趋势，是「美元潮汐」的官方读数。",
+        "why": "离岸美元信贷收缩 → 非美主体再融资缺口扩大 → 被迫去杠杆或抛售美元资产 → "
+               "放大新兴市场汇率与信用利差波动。",
+        "abnormal": "**不做分位**（季频、趋势性、低波动）。看两点：① **同比**"
+                    "（为正 = 离岸美元仍在扩张）；② **结构** —— 债券占比快速上升 = "
+                    "融资从银行贷款转向市场，对利率更敏感。",
+        "invalid": "① **季度数据、T+1 季发布**，绝不能当「当前」读数；"
+                   "② 只含**美元**口径，不含欧元 / 日元计价的境外信贷；"
+                   "③ 口径已实测自证（贷款 + 债券 − 总量 = 0.0%）。",
+    },
+    # ── 11 · 美联储总资产 ──
+    "fed_assets": {
+        "what": "美联储资产负债表总规模（周度 H41），单位万亿美元。",
+        "use": "判断美联储在**扩表还是缩表**（扩表 = 放水、缩表 = 收水），"
+               "也是「美元净流动性」的被减项之一。",
+        "why": "缩表直接减少银行准备金供给 → 货币市场利率承压 → 传导至全球美元融资成本；"
+               "扩表则反向 —— 它是美元流动性的总阀门。",
+        "abnormal": "**不做分位**（存量、单调）。看三点：① **13 周方向**；② **52 周方向**；"
+                    "③ 缩表节奏是否偏离计划（taper / 停止）。",
+        "invalid": "① 它是**总闸门但不等于市场流动性** —— 必须减去 TGA 与 ON RRP 才是"
+                   "「真流动性」（见美元净流动性卡）；② 周度数据固定**周三**发布口径，"
+                   "月中看到的可能滞后一周；③ 不能据此推断准备金充裕度"
+                   "（那要看单一银行准备金余额）。",
+    },
+    # ── 12 · 美元净流动性（合成 A5）──
+    "us_net_liq": {
+        "what": "**合成口径、非官方**：美联储总资产 − 财政部 TGA 余额 − 隔夜逆回购 ON RRP，"
+                "单位万亿美元。",
+        "use": "看**美元「真实可用」流动性的水位**。它是市场最常用的美元流动性代理变量 —— "
+               "总闸门减掉被财政部与美联储自己「锁住」的部分，剩下的才是流向市场的钱。",
+        "why": "TGA 与 ON RRP 是两把「锁」：它们吸收投放 → 市场可用资金减少 → "
+               "货币基金与回购市场资金变紧 → 风险资产估值分母端承压；水位持续回落即这一链条在起作用。",
+        "abnormal": "**非官方、无历史分布可比 ⇒ 不做分位**。看 **13 周变化方向**："
+                    "持续下行（如 −5% 以上）是美元流动性收紧的强信号；三腿**同日**读数缺失时"
+                    "当日不出值。",
+        "invalid": "① 🔴 **它不是官方公布值**，是本项目自合成；② 三腿必须取**同一日期**，"
+                   "拿各自最近值硬凑会产生假信号；③ 它不含海外美元（那是 BIS 卡），"
+                   "也不含货币基金 / 回购市场的结构变化。",
+    },
+    # ── 13 · 美国 M2 ──
+    "us_m2": {
+        "what": "美国 M2 货币供应量（月度 H6）＝ M1 + 储蓄存款 + 小额定期 + 零售货币基金。"
+                "原生单位**十亿美元**，本卡已折**万亿美元**。",
+        "use": "看美国**广义货币水位与增速**，是判断「美元流动性宽还是收」的月度慢变量，"
+               "与美联储总资产（政策端）互为印证。",
+        "why": "M2 增速回升 → 名义购买力扩张 → 支撑消费与企业名义营收 → "
+               "也决定通胀回落的粘性；它是美联储政策空间的上游约束。",
+        "abnormal": "**不做分位**（存量、单调上行 ⇒ 分位恒贴近 100，是**伪信号**）。"
+                    "看**同比**与**同比方向的拐点**：同比由负转正 = 货币收缩结束。",
+        "invalid": "① 原生单位是十亿美元，与欧元区 M3（百万欧元）、中国 M2（亿元）"
+                   "**单位全不同** —— 本卡已统一折算，**拿原值直接比大小会得到相反结论**；"
+                   "② 疫情后 M2 与物价 / 名义 GDP 的关系**已不稳定**（货币流通速度变化）；"
+                   "③ 月度且有事后修订。",
+    },
+    # ── 14 · 欧元区 M3 ──
+    "eu_m3": {
+        "what": "欧元区 M3（月度 ECB 口径），原生单位**百万欧元**，本卡按 EUR/USD 中间价折美元。",
+        "use": "看欧元区广义货币水位 —— 它是 ECB 政策与欧元的「数量侧」参照，"
+               "也是判断「欧元区流动性 vs 美国」的相对位置。",
+        "why": "M3 增速与 ECB 参考值的距离 → 决定 ECB 的政策容忍度 → 影响欧元利率与汇率 → "
+               "经 EUR/USD 传导到美元指数与非美资产定价。",
+        "abnormal": "**不做分位**。看**同比**与 ECB 参考值的关系：增速持续低于参考值 ⇒ 政策偏紧。",
+        "invalid": "① 数据源**只有 DBnomics 一条通道**（ECB 直连三域全断）—— 它失效则本卡断供，"
+                   "DQ freshness 是唯一防线；② 折算用 **EUR/USD 中间价**，"
+                   "汇率变动会污染同比的可比性；③ 月度、滞后约 3 周。",
+    },
+    # ── 15 · 中国 M2 ──
+    "cn_m2": {
+        "what": "中国 M2（月度，原生单位**亿元**），折美元需 USD/CNY 中间价。",
+        "use": "看中国**广义货币水位与活化度**：M2 同比看「水多不多」，"
+               "**M1−M2 剪刀差**看「钱活不活」。",
+        "why": "M2 扩张但剪刀差为负 → 钱停在定期 / 理财 → 宽货币未进入实体与股市；"
+               "只有剪刀差转正并走阔，增量资金才会去找风险资产。",
+        "abnormal": "**不做分位**。看两点：① M2 同比；② **M1−M2 剪刀差** —— 为负 ⇒ 活化度回落；"
+                    "剪刀差由负转正并走阔是股市增量资金的经典前兆。",
+        "invalid": "① **不折美元就与美国 M2 比大小是错的** —— 两者单位不同"
+                   "（亿元 vs 十亿美元），折算前后的数量级甚至方向都不同；"
+                   "② 口径历经多次修订，**跨口径的长期序列不可直接比**；"
+                   "③ 月度、央行不发布环比，只有同比与余额。",
+    },
+    # ── 16 · 中国官方外汇储备 ──
+    "cn_fx_reserve": {
+        "what": "中国官方外汇储备（月度，原生单位**亿美元**，无需汇率折算）。",
+        "use": "看**央行的干预能力与汇率防守弹药**。外储下降 = 央行在消耗弹药稳汇率、"
+               "或有资本外流。",
+        "why": "外储持续下降 → 稳汇率弹药减少 → 汇率防守的容错空间收窄；"
+               "它同时反映跨境资金的净流出强度。",
+        "abnormal": "**不做分位**。看三点：① **月度变动的方向与幅度**"
+                    "（连续大幅减少 = 干预 / 流出压力）；② **与汇率的关系**"
+                    "（人民币贬值而外储稳 ⇒ 干预少、属市场自发）；③ **黄金连续增持月数**"
+                    "（储备多元化的持续信号）。",
+        "invalid": "① ⚠️ 中国层「外储」有**三套口径**：本卡（美元官方口径）／"
+                   "黄金**实物量**（万盎司，非金额）／央行表内**人民币口径**（亿元）—— "
+                   "三者**单位不同、折算率不是市场汇率** ⇒ **严禁相加、严禁按市价互校**；"
+                   "② 外储变动含**估值效应**（美元指数与美债价格变动会机械改变折算值），"
+                   "不全是交易性变动。",
+    },
+}
+
+
+def hint_parts_budget() -> list[dict]:
+    """逐项字数体检（供验收脚本与启动日志消费）。⚠️ 只报告，不判错 —— 见纪律 4。"""
+    out: list[dict] = []
+    for key, row in sorted(HINT_PARTS.items()):
+        req = sum(len(row[s["key"]]) for s in HINT_SEGMENTS if s["required"] and s["key"] in row)
+        tot = sum(len(row[s["key"]]) for s in HINT_SEGMENTS if s["key"] in row)
+        out.append({
+            "key": key, "required_chars": req, "total_chars": tot,
+            "has_invalid": "invalid" in row,
+            "over_required": req > HINT_BUDGET["required"],
+            "over_total": tot > HINT_BUDGET["total"],
+        })
+    return out
+
+
+def _selfcheck_hint_parts() -> None:
+    """导入时自检（P2）：**硬拦结构性错误**，字数预算只 WARNING。
+
+    为什么硬拦这几条而不是"写文案时小心点"：这四条一旦破了，症状都是**静默**的 ——
+    段键拼错 ⇒ 该段凭空消失；必需集缺段 ⇒ 读者拿到的口径信息量只有别人的 3/4；
+    空串段 ⇒ 前端渲染出一条空白（比缺省更糟：缺省是"不补位"，空串是"占位"）。
+    """
+    valid = {s["key"] for s in HINT_SEGMENTS}
+    for key, row in HINT_PARTS.items():
+        if key not in SCOPE:
+            raise ValueError(f"HINT_PARTS[{key!r}] 不是 SCOPE 登记的读数 key（16 项全集见 SCOPE）")
+        bad = sorted(set(row) - valid)
+        if bad:
+            raise ValueError(f"HINT_PARTS[{key!r}] 含未定义段键 {bad}（合法键={sorted(valid)}）")
+        miss = [s["key"] for s in HINT_SEGMENTS if s["required"] and s["key"] not in row]
+        if miss:
+            raise ValueError(f"HINT_PARTS[{key!r}] 必需集缺段 {miss}（①②③④ 必写）")
+        empty = sorted(k for k, v in row.items() if not v.strip())
+        if empty:
+            raise ValueError(f"HINT_PARTS[{key!r}] 有空段 {empty}"
+                             "（无陷阱应**整键省略**，不是写空串）")
+    log = logging.getLogger(__name__)
+    for b in hint_parts_budget():
+        if b["over_required"] or b["over_total"]:
+            log.warning(
+                "R12 字数超预算 %s：必需集 %d/%d 字、含⑤ %d/%d 字"
+                "（预算已于 2026-09-27 放宽到 300/400，此处超出即为**新增**超限）",
+                b["key"], b["required_chars"], HINT_BUDGET["required"],
+                b["total_chars"], HINT_BUDGET["total"])
+
+
+def _hint_parts(key: str, row: dict | None = None) -> list[dict]:
+    """按 `HINT_SEGMENTS` 顺序生成**有序**段数组；⑤ 缺省时**整键省略**（不产占位项）。
+
+    `row` 只留作**可测**的口子：缺省走 `HINT_PARTS[key]`；测试可传入一个不含 `invalid`
+    的行来验证"缺省不补位"（需求附录 A⑥ 的「一正一反两条样板」，见 `_scratch/_verify_p2.py`）。
+    """
+    r = HINT_PARTS.get(key) if row is None else row
+    if not r:
+        return []
+    return [{"key": s["key"], "text": r[s["key"]]}
+            for s in HINT_SEGMENTS if s["key"] in r]
+
+
+_selfcheck_hint_parts()
+
+
+def _tag(key: str, d: dict) -> dict:
+    """给任一 KPI 注入两轴字段 + label 前缀（幂等）。🔴 唯一注入点，见上方纪律 2。
+
+    ⚠️ 未在 `SCOPE` 登记的 key 会**显式抛错**而不是静默跳过 —— 静默跳过等于
+       16 项里悄悄掉几项（正是纪律 2 要防的"看着改好了"）。新增读数时必须同批登记。
+    """
+    if key not in SCOPE:
+        raise KeyError(f"_tag: key={key!r} 未在 SCOPE 登记（16 项全集见 SCOPE）")
+    r, m = SCOPE[key]
+    d["region"], d["market"] = r, m
+    base = d.get("label") or ""
+    prefix = f"{r} / {m}　"
+    # ⚠️ 幂等判据必须比对**完整前缀**，不能只看 `startswith(region)` ——
+    #    实测踩过：`美国 M2` / `欧元区 M3` 这些 label **本身就以地区名开头**，
+    #    用 `startswith("美国")` 判会被误认为"已加过前缀"而不加（A22 实测抓出 2/16）。
+    if base and not base.startswith(prefix):
+        d["label"] = prefix + base
+    # R12 五段（P2 · 2026-09-27）：与两轴**同一哲学** —— 由 key 派生、不许在手写点抄文案。
+    # 登记在 `HINT_PARTS` 的项自动获得 `hint_parts`；未登记项**不带该字段** ⇒ 前端回落旧 `hint`。
+    # ⚠️ 本模块已于 P3（2026-09-27）**铺满 16/16** ⇒ **本模块不再进入回落态**（实测全页 15/15 五段）；
+    #    该回落分支仍为**另 4 个模块**与**未来新增读数**保留 —— 由 `_probe_p3_dom.js` 的 `DP2-6b`
+    #    **读源码**断言其存在（避免"以为还在、其实已被删"）。
+    # ⚠️ 另注：下方各手写点的 `hint` 与 `HINT_PARTS` 是**两份独立拷贝**（`_tag` 只追加、不派生），
+    #    P3 后前端只消费 `parts` ⇒ 那些 `hint` 已成**展示上不可达**的内容。是否停发见落地方案 §6.7 勘误 ⑬。
+    parts = _hint_parts(key)
+    if parts:
+        d["hint_parts"] = parts
+    return d
+
+
+def _scope_text(items: list[dict], head: str = "本区口径") -> dict:
+    """区块级口径声明：由 items 的两轴字段**聚合**生成，绝不手写字面量。
+
+    🔴 调用时机：必须在 R14-4 的条件过滤**之后** —— 若在过滤前调用，异常日与
+       常态日都会得到「5 张」的计数，正是需求 E4 勘误（"上一版笼统断言银行间
+       市场"）那类错误的翻版。
+    """
+    rc: dict[str, int] = {}
+    mc: dict[str, int] = {}
+    for it in items:
+        r, m = it.get("region"), it.get("market")
+        if r:
+            rc[r] = rc.get(r, 0) + 1
+        if m:
+            mc[m] = mc.get(m, 0) + 1
+    r_txt = "、".join(f"{k} {v}" for k, v in rc.items())
+    m_txt = "、".join(f"{k} {v} 张" for k, v in mc.items())
+    return {"region_counts": rc, "market_counts": mc,
+            "text": f"{head}：{r_txt}｜市场：{m_txt}"}
+
+
+# R14-4 判据阈值：中间期限相对两端线性插值的**凹陷**幅度门槛（bp）。
+# 只认凹陷方向 ⇒ 天然排除 1W 跨月末凸起这一类日历效应（见 `_curve_anomaly` 注释）。
+CURVE_ANOMALY_BP = 5.0
+
+
+def _curve_anomaly(curve: list[dict]) -> dict:
+    """四期限是否出现「中间期限异常**凹陷**」（R14-4 条件显示的判据 · 方案 A）。
+
+    判据两条**同时成立**才算异常：
+      ① 曲线非单调（不满足 ON < 1W < 1M < 3M）；
+      ② **凹陷方向**存在中间期限相对两端线性插值低于门槛（取凹陷最深者）。
+
+    🔴 为什么是「**只认凹陷**」而不是原来的「任一形态 + 取绝对值最大者」——
+       2026-09-27 实测定案（方案 A）。全史 4989 个交易日扫描：
+       原判据（双形态 + max|偏离| > 5bp）年均触发 **54.6 日**，其中 **88% 是 `1W` 高于
+       两端的**凸起** —— 那是 7 天资金**跨月末的日历效应**，不是曲线异常。两个后果：
+       ① 结论区卡数每月抖动 4~5 次，「常态 4 张」这个新基线不稳定；
+       ② 「狼来了」式提醒会把读者的注意力训练到忽略它。
+       ⇒ 按 R6-1 的方案 A 把日历效应从判据中**排除**（处理根因，而非调高阈值）。
+
+    🔴 为什么取「**凹陷分支的极值**」而不是「max|偏离| 且要求它是凹陷」（备选 A-1）——
+       A-1 会被凸起**遮蔽**：若 `1W` 凸起 +20bp 而 `1M` 凹陷 -8bp，`max|偏离|` 取到的是
+       `1W` 的 +20 ⇒ 判为非凹陷 ⇒ **真实异常被静默漏报**（实测近 4 年漏报 **17 日**）。
+       只在凹陷分支里取极值，则不受凸起幅度干扰。
+
+    实测触发（`_scratch/_scan_anomaly_A.py`，2026-09-27）：
+       口径                全史年均   近 4 年年均
+       原判据（双形态）      54.6       37.2
+       A-1（max 且凹陷）      6.4       11.6   ← 有遮蔽漏报
+       **A-2（本实现）**    **13.1**   **15.0**   ← 零漏报，仍在「年均 ≤20 日」门槛内
+    当日（2026-09-24）：1W +1.4bp、1M +1.8bp，**无凹陷** ⇒ 非异常（结论区 4 张）。
+    """
+    vals = [c.get("cur") for c in curve]
+    empty = {"is_anomaly": False, "term": None, "dev_bp": None, "all_devs": {}, "text": ""}
+    if len(vals) < 3 or any(v is None for v in vals):
+        return empty
+    devs: dict[str, float] = {}
+    for i in range(1, len(vals) - 1):
+        exp = vals[0] + (vals[-1] - vals[0]) * i / (len(vals) - 1)
+        devs[curve[i]["term"]] = round((vals[i] - exp) * 100, 1)
+    if not devs:
+        return empty
+    mono = all(vals[i] < vals[i + 1] for i in range(len(vals) - 1))
+    dips = {t: d for t, d in devs.items() if d < 0}      # 只认凹陷方向（排除跨月末凸起）
+    if mono or not dips:
+        return {"is_anomaly": False, "term": None, "dev_bp": None,
+                "all_devs": devs, "text": ""}
+    worst_term, worst_dev = min(dips.items(), key=lambda kv: kv[1])
+    hit = worst_dev < -CURVE_ANOMALY_BP
+    return {
+        "is_anomaly": hit,
+        "term": worst_term if hit else None,
+        "dev_bp": worst_dev if hit else None,
+        "all_devs": devs,
+        "text": (f"{worst_term} 相对曲线两端凹陷 {abs(worst_dev)}bp"
+                 f"（>{CURVE_ANOMALY_BP:g}bp），曲线非单调 —— 该期限资金淤积，"
+                 f"存在供给或考核约束"
+                 if hit else ""),
+    }
+
+
+def _shape_tone(shape: str) -> str:
+    """形状词对应的**着色档**（前端 `mc-tag--{na|warn|flat|ok}` 直接消费）。
+
+    🔴 为什么要后端下发而不是前端映射：颜色档若写在前端，就等于前端**内联了第二份
+       形状词表** —— 后端把「偏平坦」改成「偏平」时颜色会静默失配，且两头各自演化。
+       由后端随词一起下发 ⇒ 词与色永远同源（需求附录 B #14 / #15 的同一纪律）。
+    只表达"是否要注意"，不表达方向（卡片墙契约 ④）。
+    """
+    if shape == "锚位" or shape == "数据未就绪":
+        return "na"
+    if shape.startswith("倒挂"):
+        return "warn"
+    if "平坦" in shape:
+        return "flat"
+    return "ok"
+
+
+def _dispersion_note(curve: list[dict], anom: dict) -> str:
+    """`mc-curve` 卡内「期限离散度」常驻读数条的说明句（D4-a：移走 ≠ 删除）。
+
+    单调时给"与期限利差共线"的解释（说明它为何不在结论区），异常时给具体期限名。
+    """
+    if any(c.get("cur") is None for c in curve):
+        return "曲线数据未就绪"
+    if anom.get("is_anomaly"):
+        return anom["text"]
+    return "曲线单调、无中间拐点 ⇒ 与「期限利差」信息共线，结论区不再单列"
+
+
+# =====================================================================================
+# R11｜方向语义与影响句（"这意味着什么"）—— 词表**一处定义**
+# =====================================================================================
+# 需求 R11 的五条纪律：
+#   ① **只对「权益」与「债」两个维度**，不扩展到汇率 / 大宗 / 行业（两个维度是 L2 读者
+#      能用上的上限，再多就变成研究报告）；
+#   ② 两者**共用同一套词表** `正面影响 / 负面影响 / 中性`，不得引入券商 / 债市的行话变体
+#      （**具体的禁用词清单在需求 R11 纪律 2** —— 这里不逐字复述，因为项目级断言 A15
+#       扫描全部 `.py/.vue/.ts` 源码找旧词，注释里写全清单会被自己扫出来）——
+#      单套词表是**可机器断言**的前提（枚举断言只认这三个值）；
+#   ③ **必须带因果**：本页把因果放在口径浮窗的 ③「为什么」段（与影响句**同源同方向**，
+#      由 P3 的人工复核项守护），卡面只留标签 ⇒ 卡宽有限，且两处都写必然不一致；
+#   ④ **方向不明确时老实留白**（返回 `None`），硬凑一个"中性"就是**新增误导** ——
+#      读者无法区分"真的中性"与"我们没想清楚"；
+#   ⑤ 整句 ≤ 24 字（实测最长 18 字）。
+IMPACT_SHORT = {"pos": "正面影响", "neg": "负面影响", "neu": "中性"}
+
+# 资金价格水平 → (权益, 债)：钱便宜 → 两者皆正面；钱贵 → 皆负面。
+# ⚠️ `_level_word` 的输出**带后缀**（如「偏松（近一年低位）」）⇒ 按**前缀**匹配。
+#    键序无关：三个前缀互不为前缀（实测「偏松（近一年低位）」只命中「偏松」）。
+LEVEL_IMPACT: dict[str, tuple[str, str]] = {
+    "偏松": ("pos", "pos"),
+    "中性": ("neu", "neu"),
+    "偏紧": ("neg", "neg"),
+}
+
+# 期限结构形状 → (权益, 债)（词表 = `_shape_brief` 的 6 个非缺省值）
+#   平坦：短端被投放填满、杠杆成本低 ⇒ 权益**正面**；长端无期限溢价 ⇒ 债**中性**。
+#   陡  ：短端相对紧张、杠杆成本抬升 ⇒ 权益**负面**；长端期限溢价走阔 ⇒ 债**中性**。
+#   倒挂：当下短端比长端贵（资金紧张）⇒ 权益**负面**；同时市场已定价未来降息、
+#         长端有资本利得空间 ⇒ 债**正面**。
+#   ⚠️ **「倒挂」一行是本实现的推断** —— 需求 R11 的定稿句只给了「偏平坦」一档
+#      （见 §B6 的表）。已登记为 P3 一致性复核的第一顺位，人工确认后如有异议即改此表。
+SHAPE_IMPACT: dict[str, tuple[str, str]] = {
+    "倒挂": ("neg", "pos"),
+    "极度平坦": ("pos", "neu"),
+    "偏平坦": ("pos", "neu"),
+    "中性": ("neu", "neu"),
+    "偏陡": ("neg", "neu"),
+    "极陡": ("neg", "neu"),
+}
+
+
+def _impact(eq: str, bd: str) -> str:
+    """R11 固定句式（**不得自由改写**）：`对权益：X · 对债：Y`（实测最长 18 字）。"""
+    return f"对权益：{IMPACT_SHORT[eq]} · 对债：{IMPACT_SHORT[bd]}"
+
+
+def _impact_of(word: str | None, table: dict[str, tuple[str, str]]) -> str | None:
+    """判断词 → 影响句；**未命中或缺省一律返回 `None`**（不产影响句，前端 `v-if` 自然不渲染）。
+
+    为什么宁缺勿凑（纪律 ④）：硬凑的"中性"与真实的"中性"在页面上长得一样，
+    却一个是判断、一个是没判断 —— 这正是本需求要消灭的那类**静默歧义**。
+    """
+    if not word or word.startswith("数据未就绪"):
+        return None
+    for k, (a, b) in table.items():
+        if word.startswith(k):
+            return _impact(a, b)
+    return None
+
+
+def _impact_lpr(lpr: dict) -> str | None:
+    """LPR 的方向 = **本月是否调整过**（判据是 `idle_months == 0`）。
+
+    🔴 不能直接比较「当前值 vs `prev`」—— `prev` 是 `_lpr_state` 里**上一次不同取值**，
+       当前值已静止 16 个月时 `prev` 仍是 16 个月前那个值 ⇒ `cur != prev` **恒成立**，
+       会永远判成"刚调整过"，进而给出"正面影响"。这是 P3 首版实现被验收脚本 AP3-3
+       抓出来的真 bug（症状：`status` 说"已连续 16 个月未动"，`impact` 却说"正面影响"，
+       两者当场矛盾）。
+    ⇒ 判据改为 `idle_months`：`0` = 本月刚调整（按下调 / 上调给方向）；
+       `≥1` = 处于**未动**状态 ⇒ **中性**（需求 R11 定稿句："没给新增宽松，也没收紧"）。
+    """
+    cur, prev = f(lpr.get("lpr_1y")), f((lpr.get("prev") or {}).get("lpr_1y"))
+    idle = lpr.get("idle_months")
+    if cur is None or prev is None or idle is None:
+        return None
+    if idle >= 1:
+        return _impact("neu", "neu")
+    return _impact("pos", "pos") if cur < prev else _impact("neg", "neg")
+
+
 def _us_curve(bond: list[dict]) -> list[dict]:
     """美债曲线四点（2Y/5Y/10Y/30Y）：各自现值 / 一年前 / 20 日变化 / 近一年区间 / 相对 2Y 的期差"""
     base2 = f(next((x["us_bond_2y"] for x in bond if x.get("us_bond_2y") is not None), None))
@@ -429,8 +1024,14 @@ def _external_reading(items: list[dict], dxy_item: dict | None, tight: dict,
     if nt >= 2:
         parts.append("外部偏紧时，国内宽松对外资的定价优势会被利差与汇率打折 —— "
                      "⚠️ 这是**状态描述**，不是择时信号。")
+    # R12.4：把「合成规则」也**说出口** —— 读者看到「外部约束偏紧」应能自行复核，
+    # 而不是只能相信一个不给依据的定性词（需求 R12.4 的核心诉求）。
+    rule = ("合成规则：每项按**近一年分位**判紧（中美利差 / 美债期差取「偏低」口径，"
+            "美债 10Y / 美元指数取「偏高」口径，阈值 35 / 65 分位）；"
+            "记紧项数 ≥3 → 偏紧（互相印证），2 项 → 偏紧，1 项 → 大体中性，0 项 → 不构成压力。"
+            f"当前：{nt}/{n} 项记紧。")
     return {"headline": head, "detail": " ".join(parts), "tone": tone,
-            "tight_n": nt, "total_n": n, "combo": combo}
+            "tight_n": nt, "total_n": n, "combo": combo, "rule": rule}
 
 
 def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
@@ -461,12 +1062,15 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
         k = sp["key"]
         pairs = _ext_pairs(bond, k)
         if not pairs:
-            items.append({"key": k, "label": sp["label"], "value": None, "unit": sp["unit"],
+            # ⚠️ 降级分支**也必须**注入两轴（漏这一处 ⇒ 降级态丢 region/market，
+            #    区块声明会算错计数）—— 故统一走 `_tag()` 唯一注入点。
+            items.append(_tag(k, {
+                          "key": k, "label": sp["label"], "value": None, "unit": sp["unit"],
                           "tone": sp["tone"], "status": "数据未就绪", "pct": None, "scale": None,
                           "highlight": False, "anchor": sp["anchor"], "hint": sp["hint"],
                           "as_of": None, "prev_year": None, "min_1y": None, "max_1y": None,
                           "chg20": None, "tight": None,
-                          "questions": ["q5"], "card_rank": _EXT_CARD_RANK.get(k)})
+                          "questions": ["q5"], "card_rank": _EXT_CARD_RANK.get(k)}))
             tight[k] = None
             continue
         a0, cur = pairs[0]
@@ -487,7 +1091,8 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                    else f"｜一年前 {prev:.2f}{sp['unit']}")
         tg = _is_tight(p, k == "us_10y")
         tight[k] = tg
-        items.append({"key": k, "label": sp["label"], "value": r(cur, 2), "unit": sp["unit"],
+        items.append(_tag(k, {
+                      "key": k, "label": sp["label"], "value": r(cur, 2), "unit": sp["unit"],
                       "tone": sp["tone"], "status": st,
                       "pct": p, "scale": scale(p, "近一年"), "highlight": is_extreme(p),
                       "anchor": sp["anchor"], "hint": sp["hint"],
@@ -495,7 +1100,7 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
                       "min_1y": r(min(win), 2) if win else None,
                       "max_1y": r(max(win), 2) if win else None,
                       "chg20": chg20, "tight": tg,
-                      "questions": ["q5"], "card_rank": _EXT_CARD_RANK.get(k)})
+                      "questions": ["q5"], "card_rank": _EXT_CARD_RANK.get(k)}))
 
     # ---- 美元指数（★主口径 = 新浪官方日线；自算与实时快照作交叉校验）----
     dpairs = _ext_pairs(dxy, "dxy")
@@ -517,7 +1122,7 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
         p = pctile(vals[:WINDOW_1Y], cur)
         chg20 = r(cur - vals[20], 2) if len(vals) > 20 else None
         dev = r((cur / snap["value"] - 1) * 100, 3) if (snap and snap["value"]) else None
-        dxy_item = {
+        dxy_item = _tag("dxy", {
             "key": "dxy", "label": "美元指数", "value": r(cur, 2), "unit": "",
             "tone": "neutral",
             "status": f"{_usd_word(p)}｜20日 {('%+.2f' % chg20) if chg20 is not None else '--'}",
@@ -538,7 +1143,7 @@ def _external_state(bond: list[dict], dxy: list[dict], data_as_of: str,
             "tight": _is_tight(p, True),
             # 卡片墙（P3）：美元指数是外部卡的卡内第 3 格（利差 → 美债 → 美元）
             "questions": ["q5"], "card_rank": 3,
-        }
+        })
         tight["dxy"] = dxy_item["tight"]
 
 
@@ -1182,10 +1787,11 @@ def _quantity_state(as_of: str | None) -> dict:
         🔴 不标 `questions` ⇒ 卡片墙的 `scoped.length ? scoped : kpis` 过滤为空 ⇒ **静默回退全量**
            ⇒ 数量卡上会冒出 Shibor（内容错、却不报错）。`card_rank` 只影响卡内「取前 3」的择优。
         """
-        return {"key": key, "label": label, "value": value, "unit": " 万亿美元",
+        return _tag(key, {
+                "key": key, "label": label, "value": value, "unit": " 万亿美元",
                 "tone": "neutral", "status": status, "highlight": highlight,
                 "anchor": anchor, "hint": hint, "pct": None, "scale": None,
-                "native": native, "questions": questions or [], "card_rank": card_rank}
+                "native": native, "questions": questions or [], "card_rank": card_rank})
 
     items: list[dict] = [
         _kpi("bis_offshore", "境外美元信贷（离岸美元）", glb.get("total_tn"),
@@ -1307,13 +1913,19 @@ def _level_word(p: float | None) -> str:
 
 
 def _shape_brief(spread_bp: float | None, p: float | None) -> str:
-    """期限结构形状的**短词**（判读条用；不带括号解释）"""
+    """期限结构形状的**短词**（判读条用；不带括号解释）
+
+    ⚠️ 缺省词统一为「数据未就绪」（F4）：原为「未知」，而 `_shape_word` 又把它
+       转成「已就绪」—— 同一个缺省在两套函数里两种说法，且「已就绪」对读者
+       毫无意义。现统一；`_shape_word` 不再改写缺省词。
+    ⚠️ 倒挂优先于分位：`spread_bp < 0` 是**不需要分位**就能判的硬事实。
+    """
     if spread_bp is None:
         return "数据未就绪"
     if spread_bp < 0:
         return "倒挂"
     if p is None:
-        return "未知"
+        return "数据未就绪"
     if p <= 10:
         return "极度平坦"
     if p <= 30:
@@ -1330,8 +1942,6 @@ def _shape_word(spread_bp: float | None, p: float | None) -> str:
     b = _shape_brief(spread_bp, p)
     if b == "倒挂":
         return "倒挂（短端比长端贵）"
-    if b == "未知":
-        return "已就绪"
     return b
 
 
@@ -1351,7 +1961,7 @@ def _level_brief(p: float | None) -> str:
 def _card_verdict(level_pct, spread_bp, spread_pct, lpr: dict) -> dict:
     """卡片顶部一句话结论（口径在后端生成，前端只透传 —— 见 registry.py 卡片墙契约 ①）
 
-    tone：资金价格进近一年低位（<=20 分位）→ 金（低估/机会侧：利率是估值分母，钱便宜对权益是顺风）；
+    tone：资金价格进近一年低位（<=20 分位）→ 金（低估/机会侧：利率是估值分母，钱便宜对权益是正面影响）；
           进高位（>=80）或**期限结构倒挂** → 琥珀（提醒）；其余蓝。
           倒挂单独提级，因为它不是"贵"而是"紧"—— 流动性紧张的定性完全不同。
     """
@@ -1391,18 +2001,18 @@ def _verdict_tone(level_pct, spread_bp) -> str:
 # 文案四判据 V1~V4 见 registry.py 卡片墙契约 ⑨（回归探针 _scratch/_probe_cardtext.py）。
 # 本模块 2026-09-25 踩过 V2/V4：三张卡的判读条原来都在念分位（「近一年 38% 分位」）与
 # 月数（「已连续 16 个月未动」），而这些数同卡 KPI 的刻度条与 status 里都有 —— 判读条
-# 退化成了读数回声。现在判读条只给判断与影响（顺风/逆风、是否倒挂、政策动没动）。
+# 退化成了读数回声。现在判读条只给判断与影响（正面/负面影响、是否倒挂、政策动没动）。
 
 
 def _verdict_level(level_pct) -> dict:
-    """q1 钱现在贵不贵 —— Shibor 3M 的近一年分位（判断句：对权益是顺风还是逆风）"""
+    """q1 钱现在贵不贵 —— Shibor 3M 的近一年分位（判断句：对权益是正面还是负面影响）"""
     if level_pct is None:
         return {"headline": "资金价格数据未就绪", "detail": "", "tone": "normal"}
     word = _level_brief(level_pct)
     if word == "偏松":
-        head = "资金价格偏松，对权益是顺风"
+        head = "资金价格偏松，对权益是正面影响"
     elif word == "偏紧":
-        head = "资金价格偏紧，对权益是逆风"
+        head = "资金价格偏紧，对权益是负面影响"
     else:
         head = "资金价格中性，对权益无明确方向"
     tone = "opportunity" if level_pct <= 20 else "caution" if level_pct >= 80 else "normal"
@@ -1416,6 +2026,9 @@ def _verdict_expectation(spread_bp, spread_pct) -> dict:
         return {"headline": "期限利差数据未就绪", "detail": "", "tone": "normal"}
     if spread_bp < 0:
         head = "期限结构倒挂，流动性紧张"
+    elif spread_pct is None:
+        # F4：分位窗口不足时给**读得懂**的说明，不再输出「未知 / 已就绪」这类无意义词
+        head = "期限结构：分位窗口不足，暂无法判陡平"
     else:
         head = f"期限结构{_shape_brief(spread_bp, spread_pct)}，尚未出现倒挂"
     # 倒挂不是「贵」而是「紧」—— 流动性紧张的定性，单独提级（与 _verdict_tone 同规）
@@ -1426,12 +2039,12 @@ def _verdict_expectation(spread_bp, spread_pct) -> dict:
 
 
 def _verdict_policy(lpr: dict) -> dict:
-    """q3 政策利率动没动 —— 政策姿态（月数与 LPR 报价在 KPI 区，判读条不重复）"""
+    """q3 报价利率动没动 —— 政策姿态（月数与 LPR 报价在 KPI 区，判读条不重复）"""
     l1 = lpr.get("lpr_1y")
     if l1 is None:
         return {"headline": "LPR 数据未就绪", "detail": "", "tone": "normal"}
     idle = lpr.get("idle_months")
-    head = "政策利率刚刚调整" if idle == 0 else "政策利率按兵不动"
+    head = "LPR 报价刚刚调整" if idle == 0 else "LPR 报价按兵不动"
     detail = ("LPR 每月 20 日报价；它与市场资金价格（Shibor）是否同步，本身就是信息"
               if lpr.get("since") else "")
     return {"headline": head, "detail": detail, "tone": "normal"}
@@ -1542,15 +2155,33 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
     for label, col in TERMS:
         vals = [f(x[col]) for x in win if x[col] is not None]
         cv = f(cur[col])
+        # 相对隔夜的利差（bp）：ON 自身恒为 0，作为锚
+        sp_raw = (cv - on_cur) * 100 if (cv is not None and on_cur is not None) else None
+        # 🔴 R14-1：形状词**只在后端算一次**（前端原有第二套 `shapeTag()` 已删除）。
+        #    分位与判定一律用**未舍入**的 `sp_raw`：结论区 `term_spread.status` 用的是
+        #    `spread_cur = (s3_cur - on_cur) * 100`，与本循环 3M 行是**同一算式、同一窗口**
+        #    ⇒ 两处形状词必然逐字相同，不靠人工对齐（需求 §四 失败⑤ 的两处矛盾由此根治）。
+        sp_hist = [(f(x[col]) - f(x["shibor_on"])) * 100 for x in win
+                   if x[col] is not None and x["shibor_on"] is not None]
+        if col == "shibor_on":
+            shape = "锚位"          # F3：ON 自身即锚，利差恒为 0，根本谈不上"平陡"
+        elif sp_raw is None:
+            shape = "数据未就绪"
+        else:
+            shape = _shape_word(sp_raw, pctile(sp_hist, sp_raw))
         curve.append({
             "term": label,
             "cur": r(cv, 4),
             "prev_year": r(f(base_1y[col]), 4),
             "min_1y": r(min(vals), 4) if vals else None,
             "max_1y": r(max(vals), 4) if vals else None,
-            # 相对隔夜的利差（bp）：ON 自身为 0，作为锚
-            "spread_bp": r((cv - on_cur) * 100, 1) if (cv is not None and on_cur is not None) else None,
+            "spread_bp": r(sp_raw, 1) if sp_raw is not None else None,
+            "shape": shape,
+            # 着色档随词一起下发 ⇒ 前端不再内联形状词表（见 `_shape_tone`）
+            "shape_tone": _shape_tone(shape),
         })
+
+    anom = _curve_anomaly(curve)
 
     s3_cur = f(cur["shibor_3m"])
     s3_vals = [f(x["shibor_3m"]) for x in win if x["shibor_3m"] is not None]
@@ -1591,13 +2222,13 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
     }
     if lpr.get("idle_months") is not None and amp_1y is not None:
         policy_market["reading"] = (
-            f"政策利率（LPR 1Y）已连续 {lpr['idle_months']} 个月按兵不动，"
+            f"LPR 报价（1Y）已连续 {lpr['idle_months']} 个月按兵不动，"
             f"而市场利率（Shibor 3M）在这一年里自己走了 {amp_1y}bp 的振幅 —— "
             "说明当前是**政策观察期、市场自发定价**：资金面的边际变化来自市场供求而非政策调整，"
             "盯 Shibor 的边际变化比等 LPR 更能提前看到转向。"
         )
     elif lpr.get("idle_months") is not None:
-        policy_market["reading"] = f"政策利率已连续 {lpr['idle_months']} 个月未动。"
+        policy_market["reading"] = f"LPR 报价已连续 {lpr['idle_months']} 个月未动。"
 
     # ---- ④ 交叉印证二：资金价格 × 权益位置 ----
     # 利率是估值分母。单独看"钱便宜"没有交易含义，得跟"权益已经走到哪了"配着看：
@@ -1619,13 +2250,13 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
         cheap = pct_3m <= 40
         low_pos = bench_pos <= 40
         if cheap and low_pos:
-            verdict, lvl = "钱便宜而权益位置也低 —— 分母（利率）与分子（位置）同时顺风", "opportunity"
+            verdict, lvl = "钱便宜而权益位置也低 —— 分母（利率）与分子（位置）同时有利", "opportunity"
         elif cheap and not low_pos:
             verdict, lvl = "钱便宜但权益位置不低 —— 宽松大概率已被 price in", "normal"
         elif not cheap and low_pos:
             verdict, lvl = "钱不便宜但权益位置低 —— 分母在收紧，位置低不足以单独构成机会", "caution"
         else:
-            verdict, lvl = "钱不便宜且权益位置不低 —— 两个维度都不顺风", "caution"
+            verdict, lvl = "钱不便宜且权益位置不低 —— 两个维度都不利", "caution"
         equity_cross["level"] = lvl
         equity_cross["reading"] = (
             f"Shibor 3M 近一年 {pct_3m}% 分位（{'偏便宜' if cheap else '偏贵'}），"
@@ -1636,7 +2267,7 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
 
     # ---- 时序（供图表）----
     # 主图只放三条 Shibor：LPR 1Y 在 3.0% 而 Shibor 在 1.4% 附近，同轴会把三条 Shibor
-    # 压成底部一坨、失去可读性。政策利率另给一条**独立纵轴**的阶梯序列（lpr.step），
+    # 压成底部一坨、失去可读性。LPR 另给一条**独立纵轴**的阶梯序列（lpr.step），
     # 日期轴与主图对齐，前端画第二张小图。
     chart_rows = rows[:min(len(rows), max(60, int(trend_days)))]
     chart_rows = list(reversed(chart_rows))
@@ -1651,7 +2282,7 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
              "values": [r(f(x["shibor_on"]), 4) for x in chart_rows]},
         ],
     }
-    # 政策利率阶梯（与主图同一日期轴；LPR 只在每月 20 日变，画出来天然是阶梯）
+    # LPR 阶梯（与主图同一日期轴；LPR 只在每月 20 日变，画出来天然是阶梯）
     lpr["step"] = {
         "dates": history["dates"],
         "values": [r(f(x["lpr_1y"]), 4) for x in chart_rows],
@@ -1663,52 +2294,101 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
     # tone：利率水平与利差都不是"某个资产在涨跌"，故全 neutral（主色蓝、不带正号）——
     #      利率上行/下行交给 status 文案与刻度条表达，染红绿会把"资金收紧"误读成"利好"。
     #      （见 registry.py 卡片墙契约第 ④ 条）
+    # ---- 结论区：常态 4 张 + 异常日的第 5 张（R14-4 条件显示）----
+    # 三个盒子各答一个正交问题：资金贵不贵（水平）/ 资金预期陡不陡（结构）/ 政策动没动（姿态）。
+    # tone：利率水平与利差都不是"某个资产在涨跌"，故全 neutral（主色蓝、不带正号）——
+    #      利率上行/下行交给 status 文案与刻度条表达，染红绿会把"资金收紧"误读成"利好"。
+    #      （见 registry.py 卡片墙契约第 ④ 条）
+    # 🔴 顺序约束（R8 × R14-4 的交叉）：`curve_dispersion` 的**条件追加必须在
+    #    `_scope_text()` 之前** —— 区块声明报的是"当日常驻卡"的计数（常态 4 / 异常日 5）；
+    #    若在追加前聚合，两种日子都会算出 5 张，正是需求 E4 勘误那类错误的翻版。
+    # 两轴（R8）：每项都经 `_tag()` **唯一注入点**写入 region/market 并给 label 加前缀。
+    # R10（P2 · 2026-09-27）：`Shibor 隔夜` 的分位**早就算出来了但没下发**（`scale=None`）⇒
+    #    5 张卡里只有 2 张有参照系，而"绝对值对非专业读者是无意义字符串"。这里把它**算一次**
+    #    提到装配前，避免在字典字面量里重复三遍同一算式（pct / scale / highlight 共用）。
+    pct_on = pctile([f(x["shibor_on"]) for x in win if x["shibor_on"] is not None], on_cur)
     kpis = [
-        {"key": "shibor_3m", "card_rank": 1, "questions": ["q1"], "label": "Shibor 3M（资金价格）",
+        _tag("shibor_3m", {
+         "key": "shibor_3m", "card_rank": 1, "questions": ["q1"], "label": "Shibor 3M（资金价格）",
          "value": r(s3_cur, 2), "unit": "%", "tone": "neutral",
          "status": f"{_level_word(pct_3m)}｜20日 {('%+.1fbp' % chg20) if chg20 is not None else '--'}",
+         "impact": _impact_of(_level_word(pct_3m), LEVEL_IMPACT),   # R11
          "pct": pct_3m, "scale": scale(pct_3m, "近一年"), "highlight": is_extreme(pct_3m),
          "anchor": "mc-trend",
          "hint": "3 个月期 Shibor（银行间同业拆借利率），是 A 股最上游的定价变量之一："
-                 "利率是估值分母。⚠️ 绝对值跨期不可比，判断“贵不贵”一律看近一年分位"},
+                 "利率是估值分母。⚠️ 绝对值跨期不可比，判断“贵不贵”一律看近一年分位"}),
         # 「预期」并入「价格」卡（D6=(a) · 2026-09-26）：term_spread 与 shibor_3m **同源同表**
         # （`interbank_rate_daily`），期限结构本就是「② 银行间定价」这一环的内部构成
         # ⇒ 归 q1。`verdicts.q2` 保留（不再有卡消费，无害）。
-        {"key": "term_spread", "card_rank": 2, "questions": ["q1"], "label": "期限利差（3M − 隔夜）",
+        # ⚠️ R14-1：本项 `status` 与 `curve` 中 3M 行的 `shape` 由**同一算式、同一窗口**
+        #    得出（`_shape_word(spread_cur, pct_spread)`）⇒ 两处形状词必然逐字一致，
+        #    不靠人工对齐 —— 需求 §四 失败⑤ 的"上下一百像素两个结论"由此根治。
+        _tag("term_spread", {
+         "key": "term_spread", "card_rank": 2, "questions": ["q1"], "label": "期限利差（3M − 隔夜）",
          "value": r(spread_cur, 1), "unit": "bp", "tone": "neutral",
          "status": f"{_shape_word(spread_cur, pct_spread)}",
+         "impact": _impact_of(_shape_word(spread_cur, pct_spread), SHAPE_IMPACT),   # R11
          "pct": pct_spread, "scale": scale(pct_spread, "近一年"), "highlight": is_extreme(pct_spread),
          "anchor": "mc-curve",
          "hint": "长端减短端的利差，衡量资金期限结构：越陡说明短端资金越宽裕、"
-                 "越平说明市场预期资金持续宽松；**倒挂**（3M 比隔夜还便宜）是流动性紧张的信号"},
+                 "越平说明市场预期资金持续宽松；**倒挂**（3M 比隔夜还便宜）是流动性紧张的信号"}),
         # card_rank 3 → 1（P3 · 2026-09-26）：rank 是**卡内**排序（`pickCardKpis` 在每个
         # `question` 的子集内排序），不是全局排序。政策卡（q3 = 四环之①央行操作）现收三个读数：
         # LPR + 美联储总资产 + 美元净流动性 A5 ⇒ 本项为卡内第 1。
-        {"key": "lpr", "card_rank": 1, "questions": ["q3"], "label": "LPR 1Y（政策利率）",
+        # ⚠️ R14-2（D5-b：全页统一）：LPR 是**贷款市场报价利率**，不是央行设定的政策操作利率。
+        #    「政策利率」一词只留给真正的政策操作利率（OMO 中标利率），本页不再拿它称 LPR。
+        _tag("lpr", {
+         "key": "lpr", "card_rank": 1, "questions": ["q3"], "label": "LPR 1Y（贷款报价利率）",
          "value": r(lpr.get("lpr_1y"), 2), "unit": "%", "tone": "neutral",
          "status": (f"已连续 {lpr['idle_months']} 个月未动"
                     if lpr.get("idle_months") is not None
                     else ("数据未就绪" if lpr.get("lpr_1y") is None else "--")),
+         "impact": _impact_lpr(lpr),                                # R11（与上次取值比）
          "pct": None, "scale": None, "highlight": False, "anchor": "mc-lpr",
          "hint": "贷款市场报价利率（1 年期），每月 20 日报价。它是政策姿态的观察窗，"
-                 "但与市场资金价格（Shibor）不同步——两者背离本身就是信息"},
+                 "但与市场资金价格（Shibor）不同步——两者背离本身就是信息"}),
         # 补 `questions`（P2）：原先这两项不标 questions ⇒ 卡片墙过滤为空 ⇒ 静默回退全量。
         # 二者都是价格侧读数，归 q1；`shibor_on` 带 rank3 与 shibor_3m/term_spread 凑满价格卡三格。
-        {"key": "shibor_on", "card_rank": 3, "questions": ["q1"], "label": "Shibor 隔夜",
+        # ⚠️ R14-3（P2 · 2026-09-27）：原 `status` 是手写的**定义句**「短期资金面」——
+        #    它不是判断（另 3 张给的都是偏松/偏平坦/16 个月未动）⇒ 读者拿不到"这算高还是低"。
+        #    现接入 `_level_word(pct_on)`，与 Shibor 3M **同源同窗口**（实测 pct=65.6 ⇒ 偏紧）。
+        # R10：`scale` 由 `None` 改为 `scale(pct_on, "近一年")` ⇒ 刻度条终于渲染（值早就有了）。
+        # R13-4 锚点去重：隔夜是**短端利率**，它的论据是趋势图（`mc-trend`）而非期限结构表；
+        #    原指向 `mc-curve`，会造成结论区 3 张卡跳同一处。
+        _tag("shibor_on", {
+         "key": "shibor_on", "card_rank": 3, "questions": ["q1"], "label": "Shibor 隔夜",
          "value": r(on_cur, 2), "unit": "%", "tone": "neutral",
-         "status": "短期资金面", "pct": pctile([f(x["shibor_on"]) for x in win if x["shibor_on"] is not None],
-                                               on_cur),
-         "scale": None, "highlight": False, "anchor": "mc-curve",
-         "hint": "隔夜 Shibor。日间波动最大，是资金面松紧最敏感的读数，但噪声也最大"},
+         "status": _level_word(pct_on),
+         "impact": _impact_of(_level_word(pct_on), LEVEL_IMPACT),   # R11
+         "pct": pct_on, "scale": scale(pct_on, "近一年"),
+         "highlight": is_extreme(pct_on), "anchor": "mc-trend",
+         "hint": "隔夜 Shibor。日间波动最大，是资金面松紧最敏感的读数，但噪声也最大"}),
+    ]
+    # R14-4 条件显示：仅当曲线**非单调且中间期限凹陷 >5bp** 时，离散度才进结论区
+    # （v2.6 · 方案 A：**只认凹陷**，凸起属跨月末日历效应，判据见 `_curve_anomaly`）；
+    # 常态下它移入「银行间定价」明细的常驻读数条（说明句见 `_dispersion_note()`）—— 移走 ≠ 删除。
+    # `status` 给的是**判断句**（指名哪个期限拐了），不是定义句（R14-3 的同一纪律）。
+    if anom["is_anomaly"]:
         # 同样归 q1，但**不标 card_rank**：价格卡三格已被 shibor_3m / term_spread / shibor_on
-        # 占满，`pickCardKpis` 优先取带 rank 的 ⇒ 本项不会挤进卡里，只在详情页完整呈现。
-        {"key": "curve_dispersion", "questions": ["q1"], "label": "期限离散度",
+        # 占满，`pickCardKpis` 优先取带 rank 的 ⇒ 本项不会挤进卡片墙，只在详情页结论区呈现。
+        kpis.append(_tag("curve_dispersion", {
+         "key": "curve_dispersion", "questions": ["q1"], "label": "期限离散度",
          "value": r(std([c["cur"] for c in curve if c["cur"] is not None]), 4), "unit": "%",
-         "tone": "neutral", "status": "四个期限的离散程度（越大=曲线越扭曲）",
+         "tone": "neutral",
+         "status": f"曲线非单调：{anom['term']} 相对两端凹陷 {abs(anom['dev_bp'])}bp",
+         # R11：凹陷 = 该期限资金淤积、利率被压低 ⇒ 机构倾向用该期限滚动融资 ⇒
+         # 结构性因素消退时利率回摆、依赖该期限滚动的机构成本突升 ⇒ 权益负面；
+         # 对债：该期限利率低本身不改变长端定价 ⇒ 中性。
+         "impact": _impact("neg", "neu"),
          "pct": None, "scale": None, "highlight": False, "anchor": "mc-curve",
          "hint": "ON/1W/1M/3M 四个期限利率的标准差。与期限利差互补："
-                 "利差只看两端，离散度能看出中间期限有没有异常拐点"},
-    ]
+                 "利差只看两端，离散度能看出中间期限有没有异常拐点"}))
+    # 区块级口径声明：**必须在条件追加之后**（见上方顺序约束）。
+    kpis_scope = _scope_text(kpis, "本区口径")
+    # 外部约束区的同类声明（R8）：与结论区**同位置、同形态**（卡组上方一行），
+    # 且与外部卡片共用同一个列表 ⇒ 声明与卡片的口径必然一致（不会一处说全球、一处说美国）。
+    external_kpis = external["items"] + ([external["dxy"]] if external["dxy"] else [])
+    ext_scope = _scope_text(external_kpis, "本区口径")
 
     return {
         "as_of": data_as_of,
@@ -1729,7 +2409,7 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
         # （P2/P3 · 2026-09-26：原「不标 card_rank、卡片墙仍是 3 卡」的做法已由 D6=(a) 取代 ——
         #  四项中 cn_us_10y / us_10y / dxy 带 card_rank 上「外部约束」卡（q5），
         #  us_10y_2y 标 q5 但不带 rank（详情页完整呈现）。）
-        "external_kpis": external["items"] + ([external["dxy"]] if external["dxy"] else []),
+        "external_kpis": external_kpis,
         "external": external,
         # 数量维度（步骤 1，2026-09-26）：KPI 单独一组，跟着 `mc-quantity` 分区渲染。
         # （P2/P3 · 2026-09-26：原「不标 card_rank」的做法已由 D6=(a) 取代 —— 三经济体
@@ -1737,6 +2417,23 @@ def money_cost(as_of: str | None = None, trend_days: int = 500) -> dict:
         "quantity_kpis": quantity["items"],
         "quantity": quantity,
         "curve": curve,
+        # R8：两处区块级口径声明（由各卡的 region/market **聚合**生成，绝不手写字面量）
+        "scope_lines": {"kpis": kpis_scope, "external": ext_scope},
+        # R12 段定义（P2 · 2026-09-27）：五段的 **key / 标签 / 序 / 必需性 / 分组** 随响应下发，
+        # 前端**不内联词表**（与"窗口口径随响应下发"同一纪律，契约⑤）。
+        # 分组线由 `group` 驱动（前端认组、不认 key）⇒ 将来加段只改 `HINT_SEGMENTS`，前端零改动。
+        # ⚠️ 逐项 `dict(s)` 深拷一层：本字典对象是**模块级常量**，直接塞进响应会被 `ttl_cache`
+        #    连引用一起缓存，此后任何一处误改都会静默污染全站（且同进程自检发现不了）。
+        "hint_segments": [dict(s) for s in HINT_SEGMENTS],
+        # R14-4：四期限异常判据 ＋ 「期限离散度」移入明细后的**常驻读数**（移走 ≠ 删除）。
+        # 数值与说明一起下发 —— 它被移出结论区后前端没有别处能拿到；
+        # 若让前端自己算标准差，就等于又开了一处「判定/计算在前端」的口子。
+        "curve_anomaly": anom,
+        "dispersion": {
+            "value": r(std([c["cur"] for c in curve if c["cur"] is not None]), 4),
+            "unit": "%",
+            "note": _dispersion_note(curve, anom),
+        },
         "history": history,
         "lpr": lpr,
         "policy_vs_market": policy_market,

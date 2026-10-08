@@ -286,8 +286,8 @@ def _fx_word(pct: float | None) -> str:
 def _temperature(clues: list[dict]) -> dict:
     """④ 交叉印证：三条线索合成"资金温度"
 
-    每条线索按"对 A 股资金面是否顺风"记 1 分（口径写在各条自己的 reading 里）。
-    分数只用来定位档位；**真正的信息在"哪条不顺风"**，所以 reading 一律点名到具体线索。
+    每条线索按"对 A 股资金面是否构成正面影响"记 1 分（口径写在各条自己的 reading 里）。
+    分数只用来定位档位；**真正的信息在"哪条不构成正面影响"**，所以 reading 一律点名到具体线索。
     """
     ok = [c for c in clues if c["supportive"] is True]
     no = [c for c in clues if c["supportive"] is False]
@@ -301,14 +301,14 @@ def _temperature(clues: list[dict]) -> dict:
     else:
         level, tone = "偏冷", "caution"
 
-    parts = "、".join(f"{c['name']}{'顺风' if c['supportive'] else '不顺风'}" for c in clues)
+    parts = "、".join(f"{c['name']}{'正面影响' if c['supportive'] else '负面影响'}" for c in clues)
     if score == 3:
-        read = f"三条线索一致向好（{parts}）—— 外部环境、增量资金、产业资本同时顺风。"
+        read = f"三条线索一致向好（{parts}）—— 外部环境、增量资金、产业资本同时对资金面构成正面影响。"
     elif score == 0:
         read = f"三条线索一致偏弱（{parts}）—— 外部、增量、产业资本三个层面都没有支撑。"
     else:
-        read = (f"{score}/3 条顺风（{parts}）—— 线索不同向。"
-                + ("顺风的是外部环境与产业资本、不顺风的是增量资金：典型的"
+        read = (f"{score}/3 条构成正面影响（{parts}）—— 线索不同向。"
+                + ("构成正面影响的是外部环境与产业资本、构成负面影响的是增量资金：典型的"
                    "**内资托底、增量未至**，行情更可能是存量博弈。"
                    if {c["key"] for c in no} == {"fund"} and score == 2 else
                    "背离本身就是读数：此时任何单条线索都不该被独立采信。"))
@@ -338,7 +338,7 @@ def _card_verdict(fx: dict, fund: dict, rep: dict, temp: dict) -> dict:
 
 # ---- 三卡子判读（2026-09-19 拆卡）：每张卡只答一件事；底数与 _card_verdict 相同，零额外查询。
 # 单线索卡不用金色 —— 模块的金色只留给「整体偏暖」(temperature tone)，单线不点亮，
-# 否则三张卡常年有金、「亮」就失去筛选意义。单线不顺风（supportive=False）→ 琥珀提醒。
+# 否则三张卡常年有金、「亮」就失去筛选意义。单线构成负面影响（supportive=False）→ 琥珀提醒。
 #
 # 文案四判据 V1~V4 见 registry.py 卡片墙契约 ⑨（回归探针 _scratch/_probe_cardtext.py）。
 # 本模块 2026-09-25 踩过 V2：三条判读条原来都在念分位（「近一年 1.6% 分位」「近 36 个月
@@ -346,7 +346,7 @@ def _card_verdict(fx: dict, fund: dict, rep: dict, temp: dict) -> dict:
 # 刻度条与 status 里全都有 —— 判读条退化成了读数回声。现在只给判断与影响。
 
 def _verdict_fx(fx: dict) -> dict:
-    """q1 外面的钱在进还是在出 —— 人民币汇率分位（分位低 = 人民币强 = 顺风）
+    """q1 外面的钱在进还是在出 —— 人民币汇率分位（分位低 = 人民币强 = 构成正面影响）
 
     ⚠️ 2026-09-25 边界订正：原措辞「外部资金环境松不松」与「货币流动性 · 外部约束」
        撞名（那边才是钱的价格约束）。本卡读的是**跨境资金意愿的结果**，故改为「在进还是在出」。
@@ -364,13 +364,13 @@ def _verdict_fx(fx: dict) -> dict:
         head = "汇率中性，跨境资金进出不明"
     tone = "normal" if (pct is None or pct <= 40) else "caution"
     return {"headline": head,
-            "detail": "口径：分位越低 = 美元越便宜 = 人民币越强；这里只记资金面顺风，"
-                      "对出口链反而是逆风",
+            "detail": "口径：分位越低 = 美元越便宜 = 人民币越强；这里只记对资金面构成正面影响，"
+                      "对出口链反而构成负面影响",
             "tone": tone}
 
 
 def _verdict_fund(fund: dict) -> dict:
-    """q2 增量资金够不够 —— 新发基金份额分位（分位 ≥50 视为顺风）"""
+    """q2 增量资金够不够 —— 新发基金份额分位（分位 ≥50 视为构成正面影响）"""
     if fund.get("avg3") is None:
         return {"headline": "新发基金数据未就绪", "detail": "", "tone": "normal"}
     pct = fund.get("pct")
@@ -390,7 +390,7 @@ def _verdict_fund(fund: dict) -> dict:
 
 
 def _verdict_rep(rep: dict) -> dict:
-    """q3 产业资本在不在场 —— 回购计划数分位（分位 ≥50 视为顺风）"""
+    """q3 产业资本在不在场 —— 回购计划数分位（分位 ≥50 视为构成正面影响）"""
     if rep.get("last90") is None:
         return {"headline": "回购数据未就绪", "detail": "", "tone": "normal"}
     pct = rep.get("pct")
@@ -428,20 +428,20 @@ def funding_temperature(as_of: str | None = None) -> dict:
     clues = [
         {"key": "fx", "name": "外部环境（人民币汇率）",
          "value": fx.get("mid"), "pct": fx.get("pct"), "window": "近一年",
-         # 分位低 = 人民币强 → 对外资流入是顺风
+         # 分位低 = 人民币强 → 对外资流入构成正面影响
          "supportive": (None if fx.get("pct") is None else fx["pct"] <= 40),
          "label": "美元/人民币中间价",
          "reading": (f"{_fx_word(fx.get('pct'))}（近一年 {fx['pct']}% 分位，"
                      f"20 日 {'升值' if (fx.get('chg20') or 0) < 0 else '贬值'} "
                      f"{abs(fx.get('chg20') or 0)}%）。"
-                     "⚠️ 汇率分位低 = 美元便宜 = 人民币强；这里只把“人民币偏强”记为顺风，"
-                     "因为升值通常伴随外资流入意愿回升 —— 但它对出口链是逆风，"
-                     "故这是**资金面**口径的顺风，不是全市场的利好。"
+                     "⚠️ 汇率分位低 = 美元便宜 = 人民币强；这里只把“人民币偏强”记为构成正面影响，"
+                     "因为升值通常伴随外资流入意愿回升 —— 但它对出口链构成负面影响，"
+                     "故这是**资金面**口径的正面影响，不等于全市场层面都受益。"
                      if fx.get("pct") is not None else "汇率数据未就绪。")},
         {"key": "fund", "name": "增量资金（新发基金）",
          "value": fund.get("avg3"), "pct": fund.get("pct"),
          "window": f"近 {DEFAULT_MONTHS} 个月",
-         # 分位 >= 50 视为顺风（增量资金到位）
+         # 分位 >= 50 视为构成正面影响（增量资金到位）
          "supportive": (None if fund.get("pct") is None else fund["pct"] >= 50),
          "label": "近 3 完整月月均新发份额",
          "reading": (f"近 3 个完整月（{'、'.join(fund['last3']['months'])}）合计 "
@@ -454,7 +454,7 @@ def funding_temperature(as_of: str | None = None) -> dict:
         {"key": "rep", "name": "产业资本（上市公司回购）",
          "value": rep.get("last90"), "pct": rep.get("pct"),
          "window": f"近 {DEFAULT_MONTHS} 个月",
-         # 分位 >= 50 视为顺风（产业资本在托底）
+         # 分位 >= 50 视为构成正面影响（产业资本在托底）
          "supportive": (None if rep.get("pct") is None else rep["pct"] >= 50),
          "label": f"近 {ROLL_DAYS} 天新启动回购计划数",
          "reading": (f"近 {ROLL_DAYS} 天新启动回购计划 {rep['last90']} 个"

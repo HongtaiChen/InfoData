@@ -37,6 +37,7 @@ export const kpiHintTheme = {
  *    直出会把 `**` 原样显示 —— 必须走 RichText（本项目的既有漏点之一，详情页
  *    tooltip 此前正是漏的）。
  */
+import { computed } from 'vue'
 import { NTooltip } from 'naive-ui'
 import RichText from './RichText.vue'
 
@@ -44,8 +45,15 @@ const props = withDefaults(
   defineProps<{
     /** 浮窗标题（指标名）—— 卡片上的标签可能被省略号截断，浮窗里给全称 */
     label?: string
-    /** 口径说明正文（后端下发，含 `**强调**`） */
+    /** 口径说明正文（后端下发，含 `**强调**`）。⚠️ 有 `parts` 时它是**回落路径**，不是主路径 */
     hint?: string
+    /** R12 五段化的**有序段数组**（后端 `hint_parts`）。⑤ 缺省时后端**整键省略** ⇒ 此处
+     *  天然少一段，前端**不做任何补位**（无占位行、无灰字"无"、无禁用标签）。 */
+    parts?: { key: string; text: string }[]
+    /** R12 段定义（后端 `hint_segments`）：提供标签、顺序与**分组**。
+     *  🔴 前端**不内联词表**：标签按 `order` 排、分组线按 `group` 画，
+     *     一律从这份下发数据读 —— 将来加段/改序/改组，前端零改动。 */
+    segments?: { key: string; label: string; order: number; required: boolean; group?: string }[]
     /** 当前值文案（可选，与卡片上显示的一致，便于对着口径看数） */
     value?: string
     /** 附加说明（可选，如详情页的「风险调整」口径 ADJ_NOTE） */
@@ -58,6 +66,35 @@ const props = withDefaults(
   { placement: 'top', footer: '口径由后端随响应下发，前端只透传' },
 )
 
+/**
+ * 把 `parts` 与 `segments` 按 key 合并成有序渲染数组。
+ * - 顺序、标签、分组**全部来自 `segments`**；`parts` 只提供文本 ⇒ 单源。
+ * - `segments` 缺失（旧接口 / 另 4 个模块）时按数组本身顺序、标签回落成 key，仍可渲染。
+ */
+const rows = computed(() => {
+  const list = props.parts ?? []
+  if (!list.length) return []
+  const segMap = new Map((props.segments ?? []).map((s) => [s.key, s]))
+  return list
+    .map((p, i) => {
+      const s = segMap.get(p.key)
+      return {
+        key: p.key,
+        text: p.text,
+        label: s?.label ?? p.key,
+        order: s?.order ?? i + 1,
+        group: s?.group ?? '',
+      }
+    })
+    .sort((a, b) => a.order - b.order)
+})
+
+/** 分组线：某段的 `group` 与上一段不同时，段前插 1px 分隔线（D6-a：前端认 group、不认 key） */
+function isGroupBreak(i: number): boolean {
+  if (i === 0) return false
+  return rows.value[i].group !== rows.value[i - 1].group
+}
+
 // 白底主题复用导出的 kpiHintTheme（见文件顶部的普通 <script> 块）
 </script>
 
@@ -65,20 +102,34 @@ const props = withDefaults(
   <NTooltip
     trigger="hover"
     :placement="props.placement"
-    :disabled="!props.hint"
+    :disabled="!props.hint && !rows.length"
     :theme-overrides="kpiHintTheme"
     :delay="150"
   >
     <template #trigger>
       <slot name="trigger" />
     </template>
-    <!-- 无 hint 时 NTooltip 被 disabled，此内容不会渲染 -->
+    <!-- 无 hint 且无 parts 时 NTooltip 被 disabled，此内容不会渲染。
+         ⚠️ 判据必须带 `rows.length` —— 否则「有 parts、无 hint」的卡浮窗被**静默禁用**
+            （卡片上 ⓘ 还在、悬浮却什么都不弹，零报错）。另 4 个模块只有 hint，故旧路径不变。 -->
     <div class="kh">
       <div v-if="props.label || props.value" class="kh-hd">
         <span v-if="props.label" class="kh-name">{{ props.label }}</span>
         <span v-if="props.value" class="kh-val">{{ props.value }}</span>
       </div>
-      <div class="kh-bd"><RichText :text="props.hint" /></div>
+      <!-- R12 五段（P2）：有 parts 走**结构化段**渲染；无 parts 回落单段旧 `hint`（另 4 个模块）。
+           `v-if / v-else` 而非两个 v-if —— 二者必须**互斥**，否则双语料同时显示。 -->
+      <div v-if="rows.length" class="kh-segs">
+        <div
+          v-for="(p, i) in rows"
+          :key="p.key"
+          class="kh-seg"
+          :class="{ 'kh-seg--brk': isGroupBreak(i) }"
+        >
+          <span class="kh-seg-label">{{ p.label }}</span><RichText :text="p.text" />
+        </div>
+      </div>
+      <div v-else class="kh-bd"><RichText :text="props.hint" /></div>
       <div v-if="props.note" class="kh-note"><RichText :text="props.note" /></div>
       <div v-if="props.footer" class="kh-ft">{{ props.footer }}</div>
     </div>
@@ -96,6 +147,21 @@ const props = withDefaults(
 /* 值用主色蓝而非红绿：浮窗是「管理 UI」语境，红涨绿跌只属于行情数字与 K 线 */
 .kh-val { font-size: 12px; font-weight: 600; color: #185FA5; font-variant-numeric: tabular-nums; }
 .kh-bd { font-size: 12.5px; line-height: 1.65; color: #374151; word-break: break-word; }
+/* R12 五段（P2）：标签**段首行内加粗**（`是什么　3M Shibor…`），**不独立成行** ——
+   5 个标签各占一行会白吃约 100px 高度，而浮窗宽只有 320px（浮窗高度不做 max-height 是有意的，
+   但那是为了不压缩 ④⑤，不是给标签留的行高预算）。 */
+.kh-segs { font-size: 12.5px; line-height: 1.65; color: #374151; word-break: break-word; }
+.kh-seg + .kh-seg { margin-top: 4px; }
+.kh-seg-label {
+  font-weight: 600; color: #1F2937; margin-right: 6px;
+  /* 标签自身不参与断行：`异常情况` 被拆成两行会削弱"五段"这个结构感 */
+  white-space: nowrap;
+}
+/* 分组线（D6-a）：① ② ③ = understand（看懂它是什么）／ ④ ⑤ = operate（知道怎么用）。
+   由后端 `group` 驱动、前端不认 key ⇒ 将来重新分组不必改这里。 */
+.kh-seg--brk { border-top: 1px solid #EEF1F5; padding-top: 6px; }
+/* 必须放在上一行之后：与 `.kh-seg + .kh-seg` 同为 (0,2,0) 特异度，靠源码顺序覆盖其 4px */
+.kh-seg + .kh-seg--brk { margin-top: 6px; }
 .kh-note { font-size: 11.5px; line-height: 1.6; color: #6B7280; margin-top: 7px; }
 .kh-ft {
   font-size: 10.5px; color: #9CA3AF; margin-top: 7px; padding-top: 6px;

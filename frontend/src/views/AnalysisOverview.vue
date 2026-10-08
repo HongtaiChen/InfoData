@@ -67,6 +67,13 @@ interface CardKpi {
    */
   hint?: string
   /**
+   * R12 五段化口径（后端 `hint_parts`，2026-09-27 P2 补）。**必须与 `hint` 一起透传给 KpiHint**：
+   * `pickCardKpis` 不剥字段 ⇒ 详情接口里带 `hint_parts` 的项（如 `term_spread`）在墙上是**带着**的，
+   * 但本页原先只传 `:hint` ⇒ 同一指标在**详情页是五段、在卡片墙回落成单段**，静默不一致。
+   * 这与上面 `hint` 的坑同源：字段一直有，缺的是前端接线（实测 `card_kpis` 15 项中 `term_spread` 带该字段）。
+   */
+  hint_parts?: { key: string; text: string }[]
+  /**
    * 拆卡归属（后端下发，registry 契约 ⑦）：本 KPI 服务哪些「事」。一个 KPI 可属于多件
    * （如「行业中位」既是流向读数也是互证一腿）；卡片墙按本卡 question 过滤后再套 card_rank
    */
@@ -109,6 +116,9 @@ const cardVerdicts = ref<Record<string, CardVerdict>>({})
 const kpiLoading = ref<Record<string, boolean>>({})
 /** 各卡的数据截止日（后端响应里的 as_of，MM-DD）—— 右上角那一格本该放它，而不是重复的「跟踪」 */
 const cardAsOf = ref<Record<string, string>>({})
+/** 各模块的 R12 段定义（后端 `hint_segments`）。只有货币流动性下发；其余模块为空 ⇒ KpiHint 回落。
+ *  墙上的 KPI 可能来自 5 个不同模块，用**模块级 map** 存，避免把某模块的段定义串到别家卡上。 */
+const cardSegments = ref<Record<string, { key: string; label: string; order: number; required: boolean; group?: string }[]>>({})
 
 /**
  * 卡片放几个 KPI 由**卡片宽度档**决定：窄卡 1 个、半宽卡 3 个、整行卡 6 个。
@@ -233,9 +243,15 @@ onMounted(async () => {
             const v = (m.question ? r?.verdicts?.[m.question] : null) ?? r?.verdict
             if (v?.headline) cardVerdicts.value[m.module_id] = v
             else delete cardVerdicts.value[m.module_id]
+            // R12 段定义（2026-09-27 P2）：随响应下发，供 KpiHint 排段序 / 画分组线。
+            // 只有货币流动性有；其余模块取不到就删键 ⇒ 墙上的浮窗原地回落成单段 `hint`（零连带）。
+            const segs = r?.hint_segments
+            if (Array.isArray(segs) && segs.length) cardSegments.value[m.module_id] = segs
+            else delete cardSegments.value[m.module_id]
           } catch {
             cardKpis.value[m.module_id] = []
             delete cardVerdicts.value[m.module_id]
+            delete cardSegments.value[m.module_id]
           } finally {
             kpiLoading.value[m.module_id] = false
           }
@@ -456,7 +472,17 @@ function plain(t?: string | null): string {
                           否则冒泡到卡片 → 想看口径却被跳进详情页。 -->
                   <div class="ao-kpi-label">
                     <span class="ao-kpi-label-txt" :title="k.label">{{ k.label }}</span>
-                    <KpiHint v-if="k.hint" :label="k.label" :value="kpiText(k)" :hint="k.hint">
+                    <!-- R12（2026-09-27 P2）：`:v-if` 必须带 `hint_parts` —— 否则「有 parts、无 hint」
+                         的卡在墙上**连入口都不渲染**（详情页 KpiCards 用的是同一个放宽判据 hasHelp）。
+                         `:parts` 与 `:segments` 必须**同时**透传：只给 parts 会让标签回落成英文 key。 -->
+                    <KpiHint
+                      v-if="k.hint || k.hint_parts?.length"
+                      :label="k.label"
+                      :value="kpiText(k)"
+                      :hint="k.hint"
+                      :parts="k.hint_parts"
+                      :segments="cardSegments[m.module_id]"
+                    >
                       <template #trigger>
                         <span
                           class="ao-kpi-q"

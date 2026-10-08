@@ -7,7 +7,7 @@
  * 落的是设计规范 §1.0 的 ② **自身纵比**（3M 现在处于近一年什么位置）、
  * ① **同类横比**（ON→1W→1M→3M 的利率阶梯）、⑤ **结构分解**（曲线陡/平/倒挂 ——
  * 同一个 3M 利率，曲线形状不同含义完全不同），末尾做 ④ **交叉印证**
- * （政策利率按兵不动 ↔ 市场利率在动；资金价格 ↔ 权益位置）。
+ * （LPR 报价按兵不动 ↔ 市场利率在动；资金价格 ↔ 权益位置）。
  *
  * 2026-09-25 批次 1 新增第四面 **外部约束**（`mc-external`）：美债曲线 / 中美 10Y 利差 /
  * 美元指数 / 全球央行方向。落的是设计规范 §1.0 的 ④ **交叉印证**里最新的一对
@@ -18,8 +18,8 @@
  *    分位窗口文案由 `scale.label` 下发（见 registry.py 卡片墙契约第 ⑤ 条）。
  * 2. **LPR 与 Shibor 不同轴**：LPR 1Y 在 3.0% 而 Shibor 在 1.4% 附近，
  *    画在一张图里会把三条 Shibor 压成底部一坨 —— 故后端下发两条独立纵轴的序列
- *    （`history` 给 Shibor，`lpr.step` 给政策利率），本视图分两张图渲染。
- * 3. **政策利率与市场利率分属两个观察窗**，它们的差（政策不动而市场在动）本身就是信息，
+ *    （`history` 给 Shibor，`lpr.step` 给 LPR 报价），本视图分两张图渲染。
+ * 3. **LPR 报价与市场利率分属两个观察窗**，它们的差（政策不动而市场在动）本身就是信息，
  *    故单独做成一张"政策 vs 市场"面板，而不是把两个数并排放下就完事。
  * 4. **外部约束的时点与主模块不同轴**（批次 1 实测）：主数据截至日来自 `interbank_rate_daily`
  *    （同步 A 股交易日），而美债/中债走 `bond_profit_daily`（滞后 1~2 个交易日）、
@@ -36,11 +36,16 @@ import KpiCards from '../../components/analysis/KpiCards.vue'
 import DualLineTrend from '../../components/analysis/DualLineTrend.vue'
 import DrillLink from '../../components/analysis/DrillLink.vue'
 import RichText from '../../components/analysis/RichText.vue'
+import KpiHint from '../../components/analysis/KpiHint.vue'
+import TermTip from '../../components/analysis/TermTip.vue'
+import { GLOSSARY, KIND_LABEL } from '../../data/glossary'
 import api from '../../api'
 
 interface Kpi {
   key: string; label: string; value: number | null; unit?: string
   status?: string; hint?: string
+  /** R12 五段（P2）：后端 `hint_parts` —— 长度为 4 或 5（⑤「何时失效」缺省时整键省略） */
+  hint_parts?: { key: string; text: string }[]
   tone?: 'updown' | 'diff' | 'neutral'
   card_rank?: number | null
   scale?: { pct: number; label: string } | null
@@ -51,6 +56,11 @@ interface Kpi {
 interface CurveRow {
   term: string; cur: number | null; prev_year: number | null
   min_1y: number | null; max_1y: number | null; spread_bp: number | null
+  /** 后端下发的形状词（R14-1）：与结论区 `term_spread.status` 同源同算式 ⇒ 必然逐字一致。
+   *  ON 行为「锚位」（它自身就是锚，利差恒为 0，谈不上平陡）。 */
+  shape?: string
+  /** 形状词的着色档（后端下发，前端不映射、不内联词表）：na | warn | flat | ok */
+  shape_tone?: string
 }
 interface LprEvent { date: string; lpr_1y: number | null; lpr_5y: number | null }
 
@@ -59,6 +69,8 @@ interface ExtKpi {
   key: string; label: string; value: number | null; unit?: string
   tone?: 'updown' | 'diff' | 'neutral'
   status?: string; hint?: string
+  /** R12 五段（P2）：与主 KPI 同构 —— 同一后端注入点（`_tag()`），故字段形态必须一致 */
+  hint_parts?: { key: string; text: string }[]
   pct?: number | null; scale?: { pct: number; label: string } | null
   highlight?: boolean; anchor?: string
   as_of: string | null; prev_year: number | null
@@ -87,7 +99,9 @@ interface ExternalBlock {
   items: ExtKpi[]; dxy: ExtKpi | null; curve: UsCurveRow[]
   central_banks: CbRow[]; cb_note: string | null
   reading: { headline: string; detail: string; tone: string
-    tight_n: number; total_n: number; combo?: string | null } | null
+    tight_n: number; total_n: number; combo?: string | null
+    /** R12.4：合成规则声明（每项阈值 + 「记紧项数 → 定性」的合成规则），后端下发，前端不拼 */
+    rule?: string | null } | null
   as_of_bond: string | null; as_of_us: string | null; as_of_dxy: string | null
   note: string
 }
@@ -179,16 +193,10 @@ interface ModuleVerdict {
   tone?: 'normal' | 'opportunity' | 'caution' | 'mixed'
 }
 
-/** 页内锚点（P1 · F2）：四环 + 交叉印证。
- *  🔴 每个 id 必须真实存在于本模板 —— `getElementById(...)?.` 在 id 缺失时**静默无反应、零报错**，
- *     故新增/改名后必须重跑 `_scratch/_verify_anchors_dom.js`（P0 自检）。 */
-const SECTIONS: { id: string; label: string }[] = [
-  { id: 'mc-lpr', label: '① 央行操作' },
-  { id: 'mc-curve', label: '② 银行间定价' },
-  { id: 'mc-quantity', label: '③ 信用派生' },
-  { id: 'mc-external', label: '④ 对外与资产' },
-  { id: 'mc-cross', label: '交叉印证' },
-]
+/** 页内锚点清单：**已迁到后端 registry 的 `sections` 字段**（B 级 · 2026-09-27），由 shell 统一渲染。
+ *  本页不再持有该常量 —— 单源化后增删锚点只改 registry 一处，shell 渲染与断言脚本自动跟随。
+ *  （此前它在前端，`_scratch/_verify_anchors.py` 扫不到 ⇒ 这 5 个 id 长期没有自动断言覆盖。）
+ *  ⚠️ id 必须与本节各卡片的 DOM id 逐字一致：mc-lpr / mc-curve / mc-quantity / mc-external / mc-cross。 */
 
 const loading = ref(false)
 const asOf = ref('')
@@ -207,6 +215,17 @@ const policyMarket = ref<{ lpr_idle_months: number | null; lpr_since: string | n
 const equityCross = ref<{ bench_pos_pct: number | null; bench_date: string | null
   reading: string | null; level?: string } | null>(null)
 const median1y = ref<number | null>(null)
+
+/** ⓘ 括注（A 级页头瘦身 · 2026-09-27）：「一年前基准日 / 3M 近一年中位」原先常驻参数行，
+ *  改为悬浮可查。⚠️ 它**不是装饰文字** —— 分位是按「近一年」算的，不给出基准日，
+ *  读者无法复核这个分位是从哪天起算的（本项目多条口径纪律的前提）。
+ *  故用 KpiHint（与 KPI 卡口径同一个白底信息卡组件），而非直接删除。 */
+const asofHint = computed(() =>
+  `近一年分位以 **${baseDate1y.value || '--'}** 为基准日（数据截至日往前 365 天），`
+  + `该窗口内 3M 中位数为 **${median1y.value ?? '--'}%**。`
+  + '基准日随数据截至日每天滚动，故同一个分位值在不同日期的口径并不相同。'
+  + (isReplay.value ? '当前处于**历史回放**状态，以上按回放日计算。' : ''),
+)
 const note = ref('')
 const externalKpis = ref<ExtKpi[]>([])
 const external = ref<ExternalBlock | null>(null)
@@ -214,6 +233,28 @@ const quantityKpis = ref<QtyKpi[]>([])
 const quantity = ref<QuantityBlock | null>(null)
 /** 模块级结论（页头结论条，P1 · 2026-09-26）—— 后端早已下发 `verdict`，此前详情页未渲染 */
 const verdict = ref<ModuleVerdict | null>(null)
+
+/** R8 区块级口径声明（2026-09-27）—— 后端由各卡的 region/market **聚合**生成，前端只渲染、
+   绝不自己拼计数（计数会随当天卡数变：常态 4 张 / 异常日 5 张）。
+   两个出口（结论区 `mc-scope-kpis` / 外部约束区）**同形态、同位置**：卡组上方一行。 */
+interface ScopeLine {
+  region_counts: Record<string, number>
+  market_counts: Record<string, number>
+  text: string
+}
+const kpisScope = ref<ScopeLine | null>(null)
+const extScope = ref<ScopeLine | null>(null)
+/** R12 段定义（P2 · 2026-09-27）：五段的 **标签 / 序 / 必需性 / 分组** 全部由后端下发。
+ *  🔴 前端**不内联词表** —— KpiHint 按 `order` 排序、按 `group` 画分组线（D6-a：认组、不认 key）。
+ *     将来加段或重新分组，只改后端 `HINT_SEGMENTS`，本页零改动。
+ *  缺省为空数组 ⇒ KpiHint 收到空 `segments` 时按 `parts` 自身顺序 + key 当标签回落，仍可渲染。 */
+interface HintSegment {
+  key: string; label: string; order: number; required: boolean; group?: string
+}
+const segments = ref<HintSegment[]>([])
+/** R14-4：「期限离散度」移出结论区后的**常驻读数**（值 ＋ 说明句），后端下发 —— 移走 ≠ 删除。
+    ⚠️ 值也不在前端算：被移出 `kpis` 后它是明细区唯一的来源，前端自算等于又开一处"计算在前端"。 */
+const dispersion = ref<{ value: number | null; unit: string; note: string } | null>(null)
 
 const replayTs = ref<number | null>(null)
 const trendDays = ref(500)
@@ -251,6 +292,12 @@ async function load() {
     }))
     quantity.value = resp.quantity ?? null
     verdict.value = resp.verdict ?? null
+    // R8 区块级口径声明（两处）＋ R14-4 离散度常驻说明句
+    kpisScope.value = resp.scope_lines?.kpis ?? null
+    extScope.value = resp.scope_lines?.external ?? null
+    dispersion.value = resp.dispersion ?? null
+    // R12 段定义（P2）：原样透传给 KpiCards → KpiHint，本页不做任何加工
+    segments.value = resp.hint_segments ?? []
   } catch (e) {
     console.error('[money-cost]', e)
   } finally {
@@ -259,7 +306,7 @@ async function load() {
 }
 onMounted(load)
 
-/** LPR 阶梯图的单序列（政策利率是台阶状，画成折线天然呈阶梯） */
+/** LPR 阶梯图的单序列（LPR 报价是台阶状，画成折线天然呈阶梯） */
 const lprSeries = computed(() => {
   const st = lpr.value?.step
   if (!st) return []
@@ -277,13 +324,42 @@ function spreadWidth(v: number | null): string {
   if (v == null) return '0%'
   return `${Math.min(100, (Math.abs(v) / maxSpread.value) * 100)}%`
 }
-/** 期限结构形状的定性（倒挂是流动性紧张信号，必须在表格里立刻可见） */
-function shapeTag(v: number | null): { text: string; cls: string } {
-  if (v == null) return { text: '--', cls: 'mc-tag--na' }
-  if (v < 0) return { text: '倒挂', cls: 'mc-tag--warn' }
-  if (v <= 2) return { text: '极平', cls: 'mc-tag--flat' }
-  return { text: '正常', cls: 'mc-tag--ok' }
-}
+
+/* ---------------- R13｜图表参照（P4 · 2026-09-27）---------------- */
+
+/** R13-2 · 趋势图参考线：**值取自后端 `median_1y`** —— 需求 R13 纪律明确「用同一字段，
+ *  前端不得再算一遍中位数」。标签里的数字也来自同一字段 ⇒ 图上的线与文字不可能互相矛盾。
+ *  ⚠️ 与参数区「3M 近一年中位 1.509%」显示的是**同一个数**，故读者能把图上那根线与括注对上。 */
+const trendRefLines = computed(() => {
+  const m = median1y.value
+  if (m == null || !history.value.series.length) return []
+  return [{ value: m, label: `3M 近一年中位 ${m}%` }]
+})
+
+/** R13-3 · 截断纵轴下限：取三条 Shibor 序列的**实际最小非空值**，向下取整到 0.1。
+ *  🔴 这是前端唯一被允许"自己算"的数字，且它不是**指标**而是**轴范围** —— 后端不下发轴范围。
+ *     需求「不得前端再算一遍」针对的是中位数这类**指标**（必须走同一字段），不是绘图参数。
+ *     判据：它只影响**呈现**，不参与任何结论；改动它不会改变任何一张卡的判断词。 */
+const trendYMin = computed(() => {
+  const vals = history.value.series
+    .flatMap((s) => s.values)
+    .filter((v): v is number => v != null)
+  if (!vals.length) return null
+  return Math.floor(Math.min(...vals) * 10) / 10
+})
+
+/** R13-3 · 截断标注文案 —— 与 `yAxis.min` **同源**（同一个 trendYMin）。
+ *  非截断（下限 ≤ 0，0 仍在轴内）时整句不出现 —— 标"自 0 起"是废话，也会让断言失去意义。 */
+const trendAxisNote = computed(() => {
+  const m = trendYMin.value
+  return m != null && m > 0 ? `纵轴自 ${m}% 起（非 0 起，波动被放大）` : ''
+})
+/* ⚠️ 原 `shapeTag(v)` 已**删除**（R14-1 · 2026-09-27）：它曾是**前端的第二套形状判定**
+   （按绝对 bp 阈值：<0 倒挂、≤2 极平、否则正常），而后端 `_shape_word` 按**近一年分位**判
+   ⇒ 同一个 6.6bp 在结论区卡上显示「偏平坦」、在下方明细表却显示「正常」，
+   同一页上下相距百余像素给出两个结论（需求 §四 失败⑤）。
+   现在表格直接消费后端下发的 `c.shape`（用词）与 `c.shape_tone`（着色档），
+   判定、用词、颜色**只有一个来源**，两处一致性由构造保证而非人工对齐。 */
 const lprEventsDesc = computed(() => [...(lpr.value?.events ?? [])].reverse())
 
 /* ---------------- 外部约束（批次 1，2026-09-25）辅助 ---------------- */
@@ -411,15 +487,13 @@ const headToneClass = computed(() => {
       : 'mc-headline--blue'
 })
 
-/** 页内跳转：✅ 用 `scrollIntoView`。
- *  2026-09-26 实测：点击前目标 `top=3632` → 点击后 `top=0`，滚动宿主
- *  `.n-layout-scroll-container` 的 `scrollTop` 0→3632 ⇒ **完全有效**，且 `.mc-card` 上的
- *  `scroll-margin-top:12px` 顶栏补偿一并生效。
+/** 页内跳转函数：**已随导航迁到 shell**（`AnalysisModuleView.vue` 的 `goSection`）。
+ *  此处保留原因，避免后人重走已被推翻的结论：
+ *  ✅ `scrollIntoView` 对本页**完全有效**（2026-09-26 实测：点击前目标 `top=3632` → 点击后 `top=0`，
+ *     滚动宿主 `.n-layout-scroll-container` 的 `scrollTop` 0→3632），且 `.mc-card` 上的
+ *     `scroll-margin-top: 12px` 顶栏补偿一并生效。
  *  🔴 反面警示：早期工程附录写「`scrollIntoView()` 对它无效、必须自己算 `scrollTop`」是
  *     **被实测推翻的错结论**（已在该文档就地加勘误）—— 照做会丢掉顶栏补偿、标题被顶栏遮住。 */
-function goSection(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
 </script>
 
 <template>
@@ -437,23 +511,45 @@ function goSection(id: string) {
       </span>
     </div>
 
-    <!-- 页内锚点导航（P1 · F2）：5.5 屏的页面必须能直达某一环（使用场景 S2「按环节定位」）。
-         ⚠️ 每个 id 都必须真实存在 —— `getElementById(...)?.scrollIntoView(...)` 在 id 缺失时
-            静默无反应、零报错，故改动后必须重跑 `_scratch/_verify_anchors_dom.js`（P0 自检）。 -->
-    <nav class="mc-nav">
-      <span class="mc-nav-label">直达</span>
-      <button v-for="s in SECTIONS" :key="s.id" type="button" class="mc-nav-item"
-              @click="goSection(s.id)">{{ s.label }}</button>
-    </nav>
+    <!-- R13-1 读法引导（P4 · 2026-09-27）：L2 读者的首要障碍不是看不懂单个数字，而是**不知道先看哪**。
+         页头「直达」的 5 个入口（①央行操作 / ②银行间定价 …）本身就是专业词 ⇒ 对 L2 等于零信息量，
+         故在结论条**正下方**给一句顺序。
+         🔴 ≤30 字是硬判据（`_probe_p4_dom.js` 用 `innerText.length` 卡）—— 定稿 28 字，
+            与落地方案 §F6 逐字一致；改文案必须同步该断言与文档。
+         ⚠️ 无条件渲染（不挂 `v-if="verdict"`）：它是**静态读法**，与当日是否有结论无关，
+            挂条件会让断言随数据飘。 -->
+    <div class="mc-reading">
+      读法：先看结论 → 再看价格三张卡 → 异常时下钻四环。
+    </div>
 
-    <!-- ② 参数区 -->
+    <!-- 页内锚点导航：**已迁到 shell 统一渲染**（B 级 · 2026-09-27，此处不再有 nav）。
+         数据源 = registry 的 `sections` 字段；渲染位置 = shell 标题行右侧（`.am-head-row` 的 `.am-nav`）。
+         为什么不能让本页自己投递上去：shell 拿不到子页常量（子组件是 `<component :is>` 异步渲染的）；
+         而本页往 shell 投递的唯一手段 Teleport **已被实测否决** —— target 随 `v-if="moduleMeta"`
+         卸载，切模块时抛 `Cannot set properties of null (setting '__vnode')`，切回本页整页不渲染。
+         ⇒ 锚点 id ↔ DOM 的一致性由 `_scratch/_verify_anchors*.{py,js}` 守护。
+         ⚠️ 下列各卡片的 id 不得改名（mc-lpr / mc-curve / mc-quantity / mc-external / mc-cross），
+            否则 shell 导航点击会**静默无反应、零报错**（`getElementById(...)?.` 短路）。
+         ⚠️ 跳转用 `scrollIntoView`，它会自动找到最近的滚动祖先；`.mc-card` 上的
+            `scroll-margin-top: 12px` 顶栏补偿一并生效（2026-09-26 实测：点击前 top=3632 → 点击后 0）。
+            早期工程附录写「对它无效、必须自己算 scrollTop」是**被实测推翻的错结论**。 -->
+
+    <!-- ② 参数区（A 级页头瘦身 · 2026-09-27）：本行现在同时承载三件事 ——
+         数据截至（＋ ⓘ 收纳「一年前基准日 / 3M 近一年中位」括注）｜ 本区口径声明 ｜ 回放控件。
+         🔴 口径声明**保留可见**（2026-09-27 所有者决策）：它是 R8 的合规要求，收进浮窗会削弱其可见性，
+            故只从「独立占一行」降为「本行右段」—— 文本一字不删，省掉 28.6px 行高 + 12px 间距。
+         合并后实测行宽 789px ≤ 内容区 1174px（余 385px；含全量口径与全量截至括注时 1088px，余 86px）。
+         ⚠️ 括注收进 ⓘ：它解释「分位以哪一天为基准」，属**必须可查**的口径（不是装饰文字），
+            故用 KpiHint 白底信息卡承接而非删除。 -->
     <div class="mc-params">
       <span class="mc-asof">
         数据截至 <b>{{ asOf || '--' }}</b>
-        <span class="mc-sub">（一年前基准日 {{ baseDate1y || '--' }}，3M 近一年中位
-          <b>{{ median1y ?? '--' }}%</b>）</span>
+        <KpiHint label="数据截至与分位基准" :hint="asofHint" placement="bottom" footer="">
+          <template #trigger><span class="mc-i">i</span></template>
+        </KpiHint>
         <span v-if="isReplay" class="mc-replay">历史回放</span>
       </span>
+      <div v-if="kpisScope" class="mc-scope-inline"><RichText :text="kpisScope.text" /></div>
       <div class="mc-params-right">
         <NDatePicker v-model:value="replayTs" type="date" size="small" clearable
                      placeholder="回放某交易日" style="width: 148px" @update:value="load" />
@@ -463,7 +559,14 @@ function goSection(id: string) {
     </div>
 
     <!-- ③ 结论区 -->
-    <KpiCards :items="kpis" />
+    <!-- R8 区块级口径声明：文本逐字消费后端 `scope_lines.kpis.text`（由各卡 region/market **聚合**生成，
+         前端绝不自己拼计数 —— 计数随当天卡数变：常态 4 张、异常日 5 张）。
+         这一句替代了 R8 之前"整区一句笼统断言"的写法：那种写法在本区含 LPR（贷款报价）时
+         必然把整个区都说成"银行间市场"，是 E4 勘误记录的那类错误。
+         A 级页头瘦身（2026-09-27）：渲染点上移到**参数区同行右段**（`.mc-scope-inline`），
+         此处不再渲染 —— 同一句话在一屏里出现两次就是新的冗余。
+         ⚠️ 可见性未降级：仍是常驻可见文本，只是换到了与「数据截至」同一行（R8 合规要求不变）。 -->
+    <KpiCards :items="kpis" :segments="segments" />
 
     <!-- 口径与更新（P1 · 2026-09-26）：页头 `desc` 从 ~150 字功能清单瘦身为一句判断句后，
          完整口径**移到这里而非删除** —— 金融需求 R7 的硬要求是「瘦身但可查性不得丢失」，
@@ -493,6 +596,49 @@ function goSection(id: string) {
             （美债滞后 1~2 个交易日、美元指数滞后 1 日、BIS 为季度 T+1 季、M2 家族为月度）
             ⇒ 各区块自带截至日，<b>绝不套用页头「数据截至」</b>。
           </p>
+          <!-- R14-5d（P4 · 2026-09-27）：把「结论区当日常驻卡清单」与「卡片墙」的关系**写成可解释的一句**。
+               原现象：结论区第 5 张卡 `card_rank = None`（不进卡片墙）却常驻结论区 ⇒ 读者看到
+               「详情页有、卡片墙没有」的静默不一致。R14-4 已在**结构上**消解它（该卡改为条件显示），
+               本条再把**关系本身**说明白 —— 结构正确 ≠ 读者能自己推出结构。
+               ⚠️ 计数（3 格 / 第 1 格）与后端 `card_rank` 的实际取值绑定，改 card_rank 必须同步这句。 -->
+          <p>
+            <b>结论区与卡片墙的关系</b>：结论区<b>当日常驻 4 张</b>
+            （Shibor 3M / 期限利差 / Shibor 隔夜 / LPR 1Y）＝ 卡片墙上「货币流动性」四张卡里的
+            <b>价格卡前 3 格 ＋ 政策卡第 1 格</b>。其中<b>期限离散度</b>不占卡片墙的格子
+            （价格卡三格已由上面三张占满）；它常态与「期限利差」信息共线，故只在下方明细区常驻显示，
+            <b>仅当曲线出现中间凹陷</b>时才作为第 5 张进入结论区。
+            ⇒ 不会出现「在结论区、却不在卡片墙里」却无说明的情形（R14-4 / R14-5d）。
+          </p>
+        </div>
+      </NCollapseItem>
+      <!-- R9 ① 常驻段（P2 · 2026-09-27）：术语与量纲。
+           🔴 必须与上面那项**同级**（同一个 NCollapse 的第二个 item），**不能嵌套成二级折叠** ——
+              判据要求「默认折叠状态下入口标题可见」，二级折叠会把入口藏进第一层里面。
+           数据源 = `frontend/src/data/glossary.ts`（全站唯一一份，D7-a：术语不随数据变，故不进响应）。
+           ⚠️ 标题里的词条数用 `GLOSSARY.length` 动态取 —— 写死数字在词条增删后必然说谎。 -->
+      <NCollapseItem
+        :title="`术语与量纲（${GLOSSARY.length} 个口径词：bp / pp / 分位 / 缩写 / 两轴档名）`"
+        name="terms"
+      >
+        <!-- 🔴 类名一律 `mc-gloss-*`：**不得再用 `mc-term`** —— 本页表格的「口径名」列
+             （40 处 `<td class="mc-term">`，实测页面共 53 个）早就占用了这个类名，
+             相撞会连带吃到第 ~1530 行既有的 `.mc-term { font-weight:600; color:#185FA5 }`
+             ⇒ 术语条直接被染成蓝色粗体（类名撞车是**静默**的，不报错、只变样）。 -->
+        <div class="mc-gloss">
+          <p class="mc-gloss-lead">
+            下面这些词在页面里随处出现。凡带<b>虚线下划线</b>的词，<b>原地</b>就能看到定义
+            （不用离开本页、不用记忆）—— 卡片里的词点一下、表格表头里的词悬停即可。
+          </p>
+          <div class="mc-gloss-grid">
+            <div v-for="g in GLOSSARY" :key="g.kind + '|' + g.term" class="mc-gloss-item">
+              <div class="mc-gloss-hd">
+                <span class="mc-gloss-name">{{ g.term }}</span>
+                <span class="mc-gloss-kind">{{ KIND_LABEL[g.kind] }}</span>
+              </div>
+              <div class="mc-gloss-full"><RichText :text="g.full" /></div>
+              <div v-if="g.note" class="mc-gloss-note"><RichText :text="g.note" /></div>
+            </div>
+          </div>
         </div>
       </NCollapseItem>
     </NCollapse>
@@ -507,13 +653,29 @@ function goSection(id: string) {
         同样一个 3M 利率，曲线形状不同含义完全不同：陡说明短端资金充裕、机构愿意拉久期；
         极平说明市场预期资金持续宽松、短端没有溢价要求；倒挂（3M 比隔夜还便宜）是流动性紧张的信号。
       </div>
+      <!-- R14-5c（P4 · 2026-09-27）期限缩写**首次出现处展开**：ON / 1W / 1M / 3M 是 Shibor 报价期限的
+           行业缩写，而卡标题、明细表首列、离散度读数条**全用缩写** ⇒ 读者得先知道对应关系才看得懂行。
+           🔴 放**常驻可见**位置，不放进默认折叠的明细表里 —— 「折叠 ≠ 删除」成立，但把**必要解释**
+              降级成「要展开才能懂」就是缺陷（同 R14-4 常驻读数条的纪律）。 -->
+      <div class="mc-term-legend">
+        期限缩写：<b>ON</b> = 隔夜 · <b>1W</b> = 1 周 · <b>1M</b> = 1 个月 · <b>3M</b> = 3 个月
+      </div>
+      <!-- R14-4：离散度被移出结论区后的**常驻可见**落点（移走 ≠ 删除，需求附录 B #7）。
+           常态下说明"曲线单调、与期限利差共线（故结论区不再单列）"，异常日改说"哪个期限相对
+           两端拐了几 bp" —— 两种文案都由后端下发。读数与说明**都必须常驻**：折叠 ≠ 删除，
+           但也不该把"可见"降级成"要展开"（读者不会为了一个数点开折叠）。 -->
+      <div v-if="dispersion" class="mc-disp">
+        <span class="mc-disp-name">期限离散度（ON / 1W / 1M / 3M 标准差）</span>
+        <b class="mc-disp-val">{{ dispersion.value ?? '--' }}{{ dispersion.unit }}</b>
+        <span class="mc-disp-note">{{ dispersion.note }}</span>
+      </div>
       <details class="mc-fold">
         <summary>期限结构明细表 · ON / 1W / 1M / 3M 的当前值 · 一年前 · 近一年区间 · 相对隔夜利差</summary>
       <table class="mc-table">
         <thead>
           <tr>
             <th>期限</th><th>当前（%）</th><th>一年前（%）</th><th>近一年区间（%）</th>
-            <th>相对隔夜</th><th>形状</th>
+            <th>相对隔夜（<TermTip term="bp" />）</th><th>形状</th>
           </tr>
         </thead>
         <tbody>
@@ -531,7 +693,7 @@ function goSection(id: string) {
                 <span class="mc-bar-val">{{ c.spread_bp == null ? '--' : (c.spread_bp >= 0 ? '+' : '') + c.spread_bp + 'bp' }}</span>
               </div>
             </td>
-            <td><span class="mc-tag" :class="shapeTag(c.spread_bp).cls">{{ shapeTag(c.spread_bp).text }}</span></td>
+            <td><span class="mc-tag" :class="'mc-tag--' + (c.shape_tone ?? 'na')">{{ c.shape ?? '数据未就绪' }}</span></td>
           </tr>
         </tbody>
       </table>
@@ -544,17 +706,25 @@ function goSection(id: string) {
     <!-- 主时序：三条 Shibor（同轴可比，均为 %） -->
     <NCard id="mc-trend" size="small" class="mc-card"
            :title="`Shibor 期限利率走势（截至 ${asOf || '--'}）`">
-      <DualLineTrend :dates="history.dates" :series="history.series" height="300px" />
+      <!-- R13-3 截断纵轴标注（P4 · 2026-09-27）：**放在图之前** —— 截断提示必须在读者解读图形
+           **之前**看到，放在图下等于"先误导、再更正"。文案与 `yAxis.min` **同源**（都取 trendYMin），
+           故「标注说的」与「实际轴下限」不可能不一致（这正是 D8 选 (a) 显式 min 而非读实例的原因）。
+           利率水平类图的波动带很窄（实测 1.22~1.60%），不截断会被 0 起压平成一条直线。 -->
+      <div v-if="trendAxisNote" class="mc-axis-note">{{ trendAxisNote }}</div>
+      <!-- R13-2 参考线：值与标签文字**都来自后端 `median_1y`** 同一字段（前端不重算中位数）；
+           R13-3 截断轴：`y-min` 显式下发 ⇒ 轴下限可断言，不再依赖 echarts 的自动取整。 -->
+      <DualLineTrend :dates="history.dates" :series="history.series" height="300px"
+                     :ref-lines="trendRefLines" :y-min="trendYMin ?? undefined" />
       <div class="mc-foot">
         隔夜波动最大、3M 最稳。⚠️ 三条线都是<b>利率水平</b>而非涨跌，
         故不用红绿着色 —— 利率下行不等于"跌"，它意味着资金变便宜。
       </div>
     </NCard>
 
-    <!-- 政策利率：独立纵轴的阶梯图 + 变动点
-         原标题「政策利率阶梯（LPR 1Y 3.00% · 已连续 16 个月未动）」把两个读数写进标题，
+    <!-- LPR 报价：独立纵轴的阶梯图 + 变动点
+         原标题「报价利率阶梯（LPR 1Y 3.00% · 已连续 16 个月未动）」把两个读数写进标题，
          而卡内 mc-lpr-sum 一字不差地又显示了一遍 ⇒ 标题只留问题，数字归卡内。 -->
-    <NCard id="mc-lpr" size="small" class="mc-card" title="政策利率阶梯：政策动没动？">
+    <NCard id="mc-lpr" size="small" class="mc-card" title="报价利率阶梯：政策动没动？">
       <DualLineTrend v-if="lpr?.step" :dates="lpr.step.dates" :series="lprSeries" height="220px" />
       <div class="mc-lpr-sum">
         <span>当前 1Y <b class="mc-num-strong">{{ lpr?.lpr_1y ?? '--' }}%</b></span>
@@ -612,7 +782,16 @@ function goSection(id: string) {
         只盯 Shibor 会把「外部在收、国内在放」误读成纯宽松。
       </div>
 
-      <KpiCards v-if="externalKpis.length" :items="externalKpis" />
+      <!-- R8 区块级口径声明（外部约束区）：与结论区同形态、同位置 -->
+      <div v-if="extScope" class="mc-scope-line"><RichText :text="extScope.text" /></div>
+      <KpiCards v-if="externalKpis.length" :items="externalKpis" :segments="segments" />
+
+      <!-- R12.4 合成规则声明：读者看到「外部约束偏紧」应当**能自己复核** ——
+           每项的判紧方向与阈值、记紧项数与定性档的映射，全部写在区块上，
+           而不是只给一个不给依据的定性词（"偏紧"却不说什么算紧，读者只能选择相信）。 -->
+      <div v-if="external?.reading?.rule" class="mc-rule-line">
+        <RichText :text="external.reading.rule" />
+      </div>
 
       <!-- 美债曲线：四腿 + 各自在近一年区间里的位置
            D7=(b′)（2026-09-26）：F4 原文指定的「美债曲线全表」默认折叠。
@@ -801,7 +980,7 @@ function goSection(id: string) {
         跨区金额已<b>统一折美元</b>（换算集中在后端一处），前端只做格式化。
       </div>
 
-      <KpiCards v-if="quantityKpis.length" :items="quantityKpis" />
+      <KpiCards v-if="quantityKpis.length" :items="quantityKpis" :segments="segments" />
 
       <!-- 判读条：口径在后端生成，前端只透传（设计 §四「判读条给判断、KPI 给读数」） -->
       <div v-if="quantity?.reading" class="mc-cross" :class="qtyToneClass">
@@ -1266,7 +1445,7 @@ function goSection(id: string) {
           <span class="mc-dim">（中证全指位置 {{ equityCross.bench_pos_pct }}% 分位，{{ equityCross.bench_date }}）</span>
         </span>
       </div>
-      <div class="card-cap">对照的两组：政策利率 ↔ 市场资金价格 · 资金价格 ↔ 权益位置</div>
+      <div class="card-cap">对照的两组：报价利率 ↔ 市场资金价格 · 资金价格 ↔ 权益位置</div>
       <details class="mc-fold">
         <summary>交叉印证的数据来源与口径备注（原文）</summary>
       <div class="mc-note"><RichText :text="note" /></div>
@@ -1276,15 +1455,38 @@ function goSection(id: string) {
 </template>
 
 <style scoped>
-.mc-params { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.mc-asof { font-size: 13px; color: #6B7280; }
+/* A 级页头瘦身（2026-09-27）：本行由「左截至 / 右控件」两段式改为三段式
+   （数据截至 ＋ 本区口径声明 ＋ 回放控件），故去掉 space-between，改用 margin-left:auto 推右。
+   ⚠️ 刻意保留 flex-wrap 而**不设 nowrap + ellipsis**：后者等于静默截断 R8 的口径声明，
+      窄屏下宁可换到第二行（信息不丢），也不做省略号。 */
+.mc-params { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.mc-asof { flex: 0 0 auto; font-size: 13px; color: #6B7280; }
 .mc-asof b { color: #1F2937; }
 .mc-sub { color: #9CA3AF; }
 .mc-replay {
   margin-left: 6px; font-size: 11px; color: #185FA5;
   background: #E6F1FB; border-radius: 3px; padding: 1px 5px;
 }
-.mc-params-right { display: flex; gap: 8px; align-items: center; }
+.mc-params-right { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+/* 本区口径声明（A 级页头瘦身 · 2026-09-27）：从「独立一行」降为参数区右段。
+   视觉沿用原 .mc-scope-line 的蓝灰系（结构性说明 ⇒ 不用金色、不染红绿），
+   只去掉上下 margin、改为 flex 项 ⇒ 省掉 28.6px 行高 + 12px 间距。
+   🔴 仍是**常驻可见**文本：R8 的合规可见性未降级（2026-09-27 所有者决策）。 */
+.mc-scope-inline {
+  flex: 1 1 320px; min-width: 0;
+  padding: 3px 10px; font-size: 12px; line-height: 1.5;
+  color: #5A6675; background: #F5F8FC;
+  border-left: 3px solid #7FA9CD; border-radius: 2px;
+}
+/* ⓘ 口径入口：与 KpiCards 的 .kpi-q 同形态（描边圆圈 + 斜体 i），但必须在本组件独立定义
+   —— 那个类属于 KpiCards 的 scoped 样式，跨组件不生效。
+   触发元素就是这个圆圈本身（与 KPI 卡「整卡触发」不同：本行文本需要可选中，不宜整行触发）。 */
+.mc-i {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; margin-left: 4px; vertical-align: middle;
+  border: 1px solid #8D97A5; border-radius: 50%;
+  color: #6B7280; font-size: 10px; font-weight: 600; font-style: italic; cursor: help;
+}
 .mc-card { margin-bottom: 12px; scroll-margin-top: 12px; }
 
 /* ---------------- P1（2026-09-26）：页头结论条 + 页内锚点 + 口径折叠 ---------------- */
@@ -1305,15 +1507,20 @@ function goSection(id: string) {
 .mc-headline-title { font-size: 15px; color: #1F2937; line-height: 1.5; }
 .mc-headline--gold .mc-headline-title { color: #7A5E12; }
 .mc-headline--warn .mc-headline-title { color: #7C2D12; }
-.mc-headline-detail { display: block; font-size: 12px; color: #6B7280; margin-top: 3px; line-height: 1.6; }
-/* 锚点导航：一行 5 个（窄屏自动换行） */
-.mc-nav { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.mc-nav-label { font-size: 11px; color: #9CA3AF; }
-.mc-nav-item {
-  font-size: 12px; color: #185FA5; background: #F3F4F5; border: 1px solid #E5E7EB;
-  border-radius: 12px; padding: 2px 10px; cursor: pointer; font-family: inherit;
+/* A 级页头瘦身（2026-09-27）：detail 由 block 改 inline —— 原先它独占第二行（19.2px）。
+   实测 badge 36 + title 447.9 + detail 278.5 ≈ 782px ≤ 内容区 1174px，同排放得下；
+   文本更长时浏览器自然折行、高度回落两行，属合理降级而非破版。 */
+.mc-headline-detail { display: inline; font-size: 12px; color: #6B7280; margin-left: 8px; line-height: 1.6; }
+/* R13-1 读法引导（P4 · 2026-09-27）：结论条正下方的一句顺序。
+   视觉刻意**比结论条轻**（12px / 次级灰 / 无底色、左边一条浅蓝竖线作"与结论同源"的暗示）——
+   它是导航不是结论，不能抢结论条的视觉权重；也不给金色（金色只留 AI 洞察 / 亮点数字）。 */
+.mc-reading {
+  font-size: 12px; color: #6B7280; line-height: 1.7;
+  border-left: 2px solid #B5D4F4; padding: 1px 0 1px 8px; margin: 6px 0 12px 2px;
 }
-.mc-nav-item:hover { background: #EAF2FB; border-color: #C7DDF2; }
+/* 锚点导航样式 **已随导航迁到 shell**（`AnalysisModuleView.vue` 的 `.am-nav` / `.am-nav-label`
+   / `.am-nav-item` 三处，2026-09-27 B 级统一渲染）。本页不再有 `.mc-nav` 元素 —— 
+   此处不保留同名样式，避免后人误以为"本页还有一条导航"而重复实现。 */
 /* 「口径与更新」折叠区：承接被瘦身的页头 desc（不删除，只换位置） */
 .mc-scope { margin-bottom: 12px; }
 .mc-scope-body { font-size: 12px; color: #6B7280; line-height: 1.8; }
@@ -1323,6 +1530,29 @@ function goSection(id: string) {
 .mc-scope-body code {
   background: #F3F4F5; border-radius: 3px; padding: 0 4px; font-size: 11px; color: #185FA5;
 }
+/* 术语与量纲（R9 ① 常驻段 · P2 · 2026-09-27）：与「口径与更新」同一个 NCollapse 的第二个
+   item（**同级、非嵌套** —— 判据要求默认折叠时入口标题可见）。
+   两列栅格：词条多（40+）、单列会拉出很长一条；窄屏自动回落单列。
+   🔴 类名用 `mc-gloss-*` 前缀，**刻意避开 `mc-term`** —— 后者是表格「口径名」列
+      （`<td class="mc-term">`，实测 53 个），撞上会让术语条吃到 `.mc-term` 的
+      粗体主色蓝（第 ~1530 行），且**不报错**。 */
+.mc-gloss { font-size: 12px; color: #6B7280; }
+.mc-gloss-lead { margin: 0 0 10px; line-height: 1.7; }
+.mc-gloss-lead b { color: #1F2937; }
+.mc-gloss-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px;
+}
+@media (max-width: 900px) { .mc-gloss-grid { grid-template-columns: minmax(0, 1fr); } }
+/* 每条：名称 + 类型标签 + 定义（+ 可选补充）。不做卡片化 —— 40 个卡片会喧宾夺主，
+   这里的定位是"可查的清单"，不是展示墙。 */
+.mc-gloss-item { border-left: 2px solid #E5E7EB; padding-left: 8px; }
+.mc-gloss-hd { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.mc-gloss-name { font-size: 12px; font-weight: 600; color: #1F2937; }
+.mc-gloss-kind {
+  font-size: 10.5px; color: #8D97A5; background: #F3F4F5; border-radius: 3px; padding: 0 4px;
+}
+.mc-gloss-full { line-height: 1.6; color: #374151; }
+.mc-gloss-note { line-height: 1.6; color: #9CA3AF; font-size: 11.5px; }
 /* 四环标记（P4 · 2026-09-26）：给每个分组标出它服务四环的哪一环 ——
    把「按数据源分的块」重新锚到「按因果位置分的环」上（registry 契约⑩ 的页内应用）。
    ⚠️ 这只是**打标**，不搬区块（D2 = 保守方案 B），故风险远低于物理重排。 */
@@ -1344,7 +1574,49 @@ function goSection(id: string) {
 .mc-fold > summary::before { content: '▸ '; color: #9CA3AF; }
 .mc-fold[open] > summary::before { content: '▾ '; }
 .mc-fold > summary:hover { color: #1E6FFF; }
+/* ---- R8 / R12.4 / R14-4 新增元素（2026-09-27 · P1）---- */
+
+/* R8 区块级口径声明（结论区 / 外部约束区各一行，位置在卡组**上方**）：
+   提示「这一区的读数属于谁的地盘、取自哪类市场」，替换原先"整区一句笼统断言"的写法。
+   配色：蓝灰系 —— 口径提示是**结构性说明**，不是亮点数字，故不用金色（规范：金色 ≤10%、
+   只给 AI 洞察 / 策略收益 / 亮点数字），更不得染红绿（那会与"异常程度"语义打架）。 */
+.mc-scope-line {
+  margin: 0 0 8px; padding: 5px 10px; font-size: 12px; line-height: 1.55;
+  color: #5A6675; background: #F5F8FC;
+  border-left: 3px solid #7FA9CD; border-radius: 2px;
+}
+/* R12.4 合成规则声明：区块级的「复核依据」（每项判紧方向 + 阈值 + 记紧项数→定性档的映射） */
+.mc-rule-line {
+  margin: 8px 0 0; padding: 6px 10px; font-size: 11.5px; line-height: 1.55;
+  color: #6B7280; background: #FBFCFE;
+  border: 1px dashed #D8E2EE; border-radius: 2px;
+}
+/* R14-4「移走 ≠ 删除」的**常驻**读数条：离散度被移出结论区后仍在此可见，不需要展开折叠 */
+.mc-disp {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 10px; padding: 6px 10px;
+  font-size: 12px; line-height: 1.5;
+  color: #5A6675; background: #F7F9FC; border-radius: 2px;
+}
+.mc-disp-name { color: #5A6675; }
+.mc-disp-val { color: #1F2D3D; font-weight: 600; font-size: 13px; }
+.mc-disp-note { color: #8D97A5; }
+
 .mc-hint { font-size: 12px; color: #6B7280; line-height: 1.7; margin-bottom: 10px; }
+/* R13-3 截断纵轴标注（P4 · 2026-09-27）：提醒"波动被放大"，属**口径提醒**而非警告
+   ⇒ 用琥珀 `#B45309`（规范里的全站通用警告 token，与金色 `#C9A227` 明确区分：
+      金 = 正面亮点，琥珀 = 提醒注意）。不用红：本页管理 UI 禁用亮红。 */
+.mc-axis-note {
+  font-size: 11.5px; color: #B45309; background: #FAEEDA;
+  border: 1px solid #F0D6B8; border-radius: 3px;
+  padding: 2px 8px; margin-bottom: 8px; display: inline-block;
+}
+/* R14-5c 期限缩写展开（P4 · 2026-09-27）：常驻可见的对照说明。
+   措辞用「缩写」前缀点明它不是结论、只是符号表 ⇒ 视觉降到最轻（11.5px / 最浅灰）。 */
+.mc-term-legend {
+  font-size: 11.5px; color: #9CA3AF; line-height: 1.7; margin-bottom: 10px;
+}
+.mc-term-legend b { color: #6B7280; font-weight: 600; }
 .mc-hint :deep(strong) { color: #1F2937; }
 .mc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .mc-table th {

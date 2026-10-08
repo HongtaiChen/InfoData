@@ -132,8 +132,8 @@ function w(v: number | null, max: number): string {
 function part(v: number, total: number): string {
   return `${total > 0 ? (v / total) * 100 : 0}%`
 }
-/** 线索顺风与否的徽标：顺风=主色蓝、不顺风=琥珀。
- *  ⚠️ 刻意不用绿色表示"顺风"——绿色在本项目是「跌」的专用色（A 股铁律），
+/** 线索方向语义的徽标：正面影响=主色蓝、负面影响=琥珀。
+ *  ⚠️ 刻意不用绿色表示"正面影响"——绿色在本项目是「跌」的专用色（A 股铁律），
  *     管理 UI 里禁用绿作"成功"，否则会与行情语义冲突。 */
 function clueCls(c: Clue): string {
   if (c.supportive === null) return 'ft-clue--na'
@@ -141,7 +141,7 @@ function clueCls(c: Clue): string {
 }
 function clueText(c: Clue): string {
   if (c.supportive === null) return '数据未就绪'
-  return c.supportive ? '顺风' : '不顺风'
+  return c.supportive ? '正面影响' : '负面影响'
 }
 </script>
 
@@ -165,14 +165,14 @@ function clueText(c: Clue): string {
     <KpiCards :items="kpis" />
 
     <!-- ④ 交叉印证：三条线索
-         原标题「三条独立资金线索的交叉印证（顺风 2/3）」把计数写进标题（会随数据漂移），
-         且卡内每条线索本就带自己的顺风标签 ⇒ 标题只问问题，计数下沉为 caption。 -->
+         原标题把计数（如「2/3」）写进标题（会随数据漂移），
+         且卡内每条线索本就带自己的方向标签 ⇒ 标题只问问题，计数下沉为 caption。 -->
     <NCard id="ft-cross" size="small" class="ft-card" title="三条资金线索是否互相印证？">
       <div class="ft-temp" :class="`ft-temp--${temperature?.tone ?? 'normal'}`">
         <span class="ft-temp-badge">{{ temperature?.level ?? '--' }}</span>
         <span class="ft-temp-text"><RichText :text="temperature?.reading" /></span>
       </div>
-      <div class="card-cap">顺风 {{ temperature?.score ?? '--' }} / {{ temperature?.total ?? 3 }} 条线索</div>
+      <div class="card-cap">正面影响 {{ temperature?.score ?? '--' }} / {{ temperature?.total ?? 3 }} 条线索</div>
       <div class="ft-clues">
         <div v-for="c in clues" :key="c.key" class="ft-clue" :class="clueCls(c)">
           <div class="ft-clue-head">

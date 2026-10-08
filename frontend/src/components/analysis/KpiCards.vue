@@ -28,6 +28,7 @@
  * - 配色：adj 不是涨跌语义 → 用次要文字色，绝不走红绿。
  */
 import KpiHint from './KpiHint.vue'
+import TermTip from './TermTip.vue'
 
 interface Kpi {
   key: string
@@ -35,7 +36,19 @@ interface Kpi {
   value: number | null
   unit?: string
   status?: string
+  /** R11 影响句（P3）：后端下发的固定句式 `对权益：X · 对债：Y`（词表在后端一处定义）。
+   *  ⚠️ 后端**方向不明确时会整键不写**（返回 null ⇒ 该字段不存在）—— 那时本行自然不渲染，
+   *  不要在前端补 "对权益：中性"（那是"我们没判断"，与"判断为中性"是两件事）。 */
+  impact?: string
   hint?: string
+  /** R12 五段（P2）：后端 `hint_parts` 的有序段数组；存在时优先于 `hint`，缺省则回落后者。
+   *  ⚠️ 长度**随 ⑤ 有无而变**（4 或 5）—— 这是后端"缺省即整键省略"的结果，前端不补位。 */
+  hint_parts?: { key: string; text: string }[]
+  /** R8 两轴（后端唯一注入点 `_tag()` 写入）：口径分类器。
+   *  卡面**不直接渲染**这两个字段（前缀已由后端拼进 `label`）—— 在此登记是为了让
+   *  「卡片消费了哪套口径」在类型层面可见，避免将来有人用 `label` 去反推地区。 */
+  region?: string
+  market?: string
   // 后端必须显式给出 tone：updown=红正绿负（行情语义）/ diff=组间收益差（主色蓝+带符号）
   // / neutral=主色（分位、占比等非涨跌语义）。缺失时按 updown 兜底，避免老接口把涨跌指标渲染成主色
   tone?: 'updown' | 'diff' | 'neutral'
@@ -52,7 +65,38 @@ interface Kpi {
   adj?: number | null
 }
 
-const props = defineProps<{ items: Kpi[]; adjNote?: string }>()
+const props = defineProps<{
+  items: Kpi[]
+  adjNote?: string
+  /** R12 段定义（后端 `hint_segments`）——**原样透传**给 KpiHint。
+   *  不传（另 4 个模块）时 KpiHint 走旧单段路径 ⇒ 零视觉变化。 */
+  segments?: { key: string; label: string; order: number; required: boolean; group?: string }[]
+}>()
+
+/** 该卡是否有可看的口径说明 —— 有 `hint_parts`、无 `hint` 时入口也必须显示（否则浮窗被静默禁用） */
+function hasHelp(k: Kpi): boolean {
+  return !!(k.hint || k.hint_parts?.length)
+}
+
+/** 数值部分（不含单位）—— 单位要单独渲染，因为 `bp`/`pp` 需要包一层术语提示 */
+function numText(k: Kpi): string {
+  if (k.value == null) return '--'
+  // diff 保留正负号（方向是它的信息），neutral 不带号（分位/占比没有方向）
+  const sign = k.tone !== 'neutral' && k.value > 0 ? '+' : ''
+  const num = k.fmt_digits != null ? Number(k.value).toFixed(k.fmt_digits) : String(k.value)
+  return `${sign}${num}`
+}
+/** 单位原文（**保留前导空格**，如 ` 万亿美元`） */
+function unitRaw(k: Kpi): string {
+  return k.value == null ? '' : (k.unit ?? '')
+}
+/** 需要挂术语提示的量纲。⚠️ 只列 `glossary.ts` 里**已定义**的词 ——
+ *  塞进一个未定义的词会被 TermTip 渲染成 `.tt-miss`，由断言抓出（不静默）。 */
+const TIP_UNITS = new Set(['bp', 'pp'])
+function unitTip(k: Kpi): string | null {
+  const u = (k.unit ?? '').trim()
+  return TIP_UNITS.has(u) ? u : null
+}
 
 /** 只有 tone='updown' 才是行情涨跌语义；diff（组间收益差）与 neutral 一律主色蓝 */
 function valueClass(k: Kpi): string {
@@ -95,6 +139,8 @@ function goAnchor(k: Kpi) {
       :label="k.label"
       :value="fmt(k)"
       :hint="k.hint"
+      :parts="k.hint_parts"
+      :segments="props.segments"
       :note="k.adj != null ? props.adjNote : undefined"
       placement="top"
     >
@@ -106,10 +152,18 @@ function goAnchor(k: Kpi) {
         >
           <div class="kpi-label">
             <span class="kpi-label-txt" :title="k.label">{{ k.label }}</span>
-            <span v-if="k.hint" class="kpi-q">i</span>
+            <!-- 入口标记（P2 · 2026-09-27）：由纯斜体 `i` 改为带文字标签「口径」——
+                 圆圈 i 的通用语义是"求助"，而这里的意思是"此读数有权重解释与异常阈值"；
+                 且不悬浮时也要看得出"这里能点"（需求 R12.4 纪律）。
+                 ⚠️ 判据含 `hint_parts`：有 parts 无 hint 的卡若不显示入口，浮窗虽在却无从发现。 -->
+            <span v-if="hasHelp(k)" class="kpi-q">口径</span>
           </div>
-          <div class="kpi-value" :class="valueClass(k)">{{ fmt(k) }}</div>
+          <div class="kpi-value" :class="valueClass(k)">{{ numText(k) }}<TermTip v-if="unitTip(k)" :term="unitTip(k)!" trigger="click" /><template v-else>{{ unitRaw(k) }}</template></div>
           <div class="kpi-status" v-if="k.status">{{ k.status }}</div>
+          <!-- R11 影响句（P3）：**不与 status 合并** —— 合并会让 status 变成两义字段
+               （判断词 + 资产含义），且卡片墙 V4 判据「status 不得与判读条逐字相同」会被搅浑。
+               因果由口径浮窗的 ③「为什么」段承载（同源同方向），卡面只留标签。 -->
+          <div class="kpi-impact" v-if="k.impact">{{ k.impact }}</div>
           <!-- 分位刻度条（2026-09-19）：把「这个数在窗口里排第几」直接画出来。
                窗口口径 label 由后端下发 —— ERP 是「近 250 个月末」，写死「近一年」就是口径错误 -->
           <div v-if="k.scale" class="kpi-scale">
@@ -117,7 +171,7 @@ function goAnchor(k: Kpi) {
               <span class="kpi-dot" :class="{ hl: k.highlight }" :style="{ left: dotLeft(k.scale.pct) }" />
             </span>
             <div class="kpi-scale-text" :class="{ hl: k.highlight }">
-              {{ k.scale.label }} {{ k.scale.pct }}% 分位
+              {{ k.scale.label }} {{ k.scale.pct }}% <TermTip term="分位" trigger="click" />
             </div>
           </div>
           <div v-if="k.adj != null" class="kpi-adj">风险调整 {{ fmtAdj(k.adj) }}</div>
@@ -144,17 +198,20 @@ function goAnchor(k: Kpi) {
 /* 文字包一层 span：label 行里同时有文字与 ⓘ 时，文字需可收缩但不被逐字挤压
    （CJK 可在任意字符处断行 —— 本项目踩过同类坑，窄卡片下会渲染成竖排） */
 .kpi-label-txt { flex: 1 1 auto; min-width: 0; }
-/* ⓘ 描边款：与总览页卡片墙统一（设计原型 v0.1 的推荐形态）。
-   此前详情页用浅蓝底「?」—— 两页两套符号表达同一件事；
-   且「?」的通用语义是「求助」，而这里的意思是「此指标有权重解释」。
-   描边取 #8D97A5：实测 #B8BEC9 在 14px 下过淡、缩略图里几乎不可见。 */
+/* 口径入口（P2 · 2026-09-27）：由纯斜体 `i` 圆标改为**带文字标签**「口径」。两个理由：
+   ① `i` / `?` 的通用语义是"求助"，而这里要说的是"该读数有权重解释与异常阈值"；
+   ② 需求 R12.4 纪律要求"不悬浮也要有入口" —— 一个 14px 的 `i` 在正常视距下看不出可点。
+   描边取 #8D97A5：实测 #B8BEC9 在这个字号下过淡、缩略图里几乎不可见。
+   ⚠️ 本类被 5 个分析模块共用 ⇒ 这是一次**跨模块统一**（有意为之，不是副作用）；
+      将来若要按模块区分形态，只能靠 props 而不是改这里。 */
 .kpi-q {
-  width: 14px; height: 14px; line-height: 12px; text-align: center; border-radius: 50%;
-  border: 1px solid #8D97A5; color: #6B7280; font-size: 10px; font-weight: 600;
-  font-style: italic; flex: none;
+  font-size: 11px; line-height: 1; color: #8D97A5; border: 1px solid #DDE3EA;
+  border-radius: 3px; padding: 2px 4px; flex: none; white-space: nowrap;
 }
 .kpi-value { font-size: 26px; font-weight: 700; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
 .kpi-status { font-size: 12px; color: #6B7280; }
+/* R11 影响句：比 status 再轻一档（11.5px / #6B7280 同色但更小），避免与判断词抢注意力 */
+.kpi-impact { font-size: 11.5px; color: #6B7280; margin-top: 2px; }
 /* 分位刻度条：轨道 + 圆点 + 窗口文字（竖排，窗口文字较长时不挤压轨道） */
 .kpi-scale { margin-top: 6px; }
 .kpi-track { position: relative; display: block; height: 4px; border-radius: 2px; background: #E3E8EF; }
