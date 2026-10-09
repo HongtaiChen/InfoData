@@ -2,6 +2,12 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 pymysql>=1.1
 pandas>=2.0
+# numpy / pydantic / requests 实际被 app/ 直接 import（见下），
+# 虽然可由 pandas / fastapi 传递装上，但**显式声明**才能避免
+# 「换个环境、上游改了依赖树」时静默缺失。2026-10-09 补。
+numpy>=1.26
+pydantic>=2.7
+requests>=2.31
 akshare>=1.14
 # baostock 必需：stock_status_sync（采集器）/ backfill_stock_status（脚本）**顶层** import，
 #          缺失会导致后端直接启动失败（Application startup failed）。

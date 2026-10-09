@@ -1,0 +1,67 @@
+# ============================================================
+#  行尾规范化（保证跨平台 clone 后脚本仍能跑）
+#
+#  为什么需要这个文件：
+#    · Windows 批处理（.bat / .cmd）与 VBScript 在多行重定向、goto/label
+#      等结构下对行尾敏感，LF 结尾有解析风险；
+#    · 反过来，.sh 若在 Windows 上被检出成 CRLF，Linux 下会报
+#      "/bin/bash^M: bad interpreter"。
+#    用本文件按文件类型固定行尾，**不依赖各人本机的 core.autocrlf 设置**，
+#    这样「别人 clone 下来能不能跑」才不受他的 Git 配置影响。
+#
+#  注意：本文件只管「今后的检出」，不会改写仓库里已有文件的历史行尾。
+# ============================================================
+
+# ---------- Windows 脚本：必须 CRLF ----------
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.vbs   text eol=crlf
+*.ps1   text eol=crlf
+
+# ---------- Unix 脚本：必须 LF ----------
+*.sh    text eol=lf
+*.bash  text eol=lf
+
+# ---------- 源码与文本：LF ----------
+*.py    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.vue   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.jsonc text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+*.conf  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.scss  text eol=lf
+*.csv   text eol=lf
+*.env*  text eol=lf
+*.npmrc text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+
+# ---------- 二进制：不做任何转换 ----------
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.webp  binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.eot   binary
+*.xlsx  binary
+*.xls   binary
+*.docx  binary

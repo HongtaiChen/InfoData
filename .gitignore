@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 
+# ===== 本机私有的 Python 解释器路径（绝不入库） =====
+# start-dev.bat / backend/scripts/start_backend.bat 会读取此文件（只写一行完整路径）。
+# 这样启动脚本本身保持「零绝对路径」可移植，而各人本机用这个文件指定自己的解释器。
+# 解析优先级：INFO_DATA_PYTHON 环境变量 → 本文件 → backend/.venv → PATH 中的 python
+.python-path
+
 # ===== Python =====
 __pycache__/
 *.pyc
@@ -17,7 +23,12 @@ dist/
 # ===== 日志与数据 =====
 logs/
 *.log
+
+# 备份与迁移产物（可能几 GB，绝不入库）
 scripts/backup/
+scripts/adata_migrate.sql
+scripts/*_migrate*.sql
+
 dq_runs.err
 
 # ===== 本地调试/验收产物（不入库） =====

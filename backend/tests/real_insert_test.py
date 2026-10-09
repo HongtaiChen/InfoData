@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 """真实落库测试：拉取 5 只缺口股票并写入 stock_market_daily"""
 import sys, os
-sys.path.insert(0, r"D:\Project\InfoData\backend")
+# 允许从任意位置运行本脚本：把 backend/ 目录加入 sys.path
+# （原实现写死 r"D:\Project\InfoData\backend"，换机器即失败）
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
