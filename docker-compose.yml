@@ -11,7 +11,7 @@
 # 模式 B：全部容器化（含 MySQL 8.0，生产推荐）
 #   docker compose --profile docker-mysql up -d --build
 #   - 启动 mysql + backend + frontend 三服务
-#   - 首次需先迁移数据（见 scripts/migrate-local-to-docker.md）
+#   - 首次需先迁移数据（见 scripts/migrate-local-to-docker.bat）
 #
 # 访问：
 #   前端 http://127.0.0.1:8080
@@ -28,10 +28,11 @@ services:
     restart: unless-stopped
     profiles: ["docker-mysql"]
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      # 口令一律从 .env 插值，此处不留任何真实默认值
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_strong_password}
       MYSQL_DATABASE: adata
       MYSQL_USER: infodata
-      MYSQL_PASSWORD: ${INFO_DATA_DB_PASSWORD:-infodata123}
+      MYSQL_PASSWORD: ${INFO_DATA_DB_PASSWORD:-change_me_strong_password}
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
