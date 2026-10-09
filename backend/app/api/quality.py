@@ -14,6 +14,8 @@ InvestBuddy 数据质量 API（数据质量栏目后端）
   故统一改为 **「每条规则各自最近一次结果」**（JOIN dq_rules 限定在册规则），
   并让 run_at 仅作为"最近一次体检轮次"的展示字段。
 """
+import json
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
@@ -327,3 +329,60 @@ def dq_recon(
         "gap_summary": gaps[0] if gaps else {},
         "top_gaps": top_gaps,
     }
+
+
+@router.get("/converge")
+def dq_converge(limit: int = Query(5, ge=1, le=20)):
+    """启动收敛报告（自愈闭环 ·「启动即收敛」）—— 最近 N 次启动都修了什么
+
+    数据源：task_runs 里 `task_name='startup_converge'` 的记录，其 run_detail 即完整报告
+    （由 app/selfheal.py 的 build_report 生成）。前端「数据质量」栏目顶部摘要条消费本接口。
+
+    与 /summary 的分工：/summary 回答「现在哪些规则不合格」；
+    本接口回答「**上次启动时，系统自己修好了哪些、还剩哪些需要我处理**」。
+    """
+    rows = query_all(
+        """
+        SELECT id, status, started_at, finished_at, records_written, error_message, run_detail
+        FROM task_runs WHERE task_name = 'startup_converge'
+        ORDER BY id DESC LIMIT %s
+        """,
+        (limit,),
+    )
+    latest: dict | None = None
+    history: list[dict] = []
+    for r in rows:
+        detail = r.get("run_detail")
+        if isinstance(detail, (str, bytes)):
+            try:
+                detail = json.loads(detail)
+            except (json.JSONDecodeError, TypeError):
+                detail = {}
+        detail = detail or {}
+        item = {
+            "id": r["id"],
+            "status": r["status"],
+            "started_at": str(r["started_at"])[:19] if r["started_at"] else None,
+            "finished_at": str(r["finished_at"])[:19] if r["finished_at"] else None,
+            "duration_sec": detail.get("converge_duration_sec"),
+            "issues_total": detail.get("issues_total"),
+            "before_counts": detail.get("before_counts"),
+            "after_counts": detail.get("after_counts"),
+            "plan_count": len(detail.get("plan") or []),
+            "healed_count": detail.get("healed_count"),
+            "still_failing_count": detail.get("still_failing_count"),
+            # ⚠️ 本 dict 是**白名单**：报告里新增的计数必须在这里显式列出，否则接口返回
+            #    None、前端 `?? still_failing_count` 兜底会静默生效，改进白做。
+            #    （2026-10-08 实测踩到：字段已写进 run_detail，接口却没透出。）
+            "still_failing_attempted_count": detail.get("still_failing_attempted_count"),
+            "still_failing_unattempted_count": detail.get("still_failing_unattempted_count"),
+            # 「待发布」= 写入任务当日末次班次还没到点（当日数据还没发出来），
+            # 既不是故障也不是需人工。透出来是为了让前端把「不合格 N 条」拆开读。
+            "pending_count": detail.get("pending_count"),
+            "needs_human_count": detail.get("needs_human_count"),
+            "error_message": (str(r.get("error_message") or "")[:300]) or None,
+        }
+        history.append(item)
+        if latest is None:
+            latest = {**item, "detail": detail}
+    return {"latest": latest, "history": history}

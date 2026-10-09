@@ -215,6 +215,13 @@ TASKS = [
      {"limit": 20, "days_back": 30}),
     ("daily_backfill", 1, "手动",                                    # 手动触发
      {"source": "dq_gap", "risk": "all", "max_codes": 0, "adjust": "qfq"}),
+    # 2026-10-08 启动收敛（自愈闭环 ·「启动即收敛」）—— 由 scheduler._boot_pipeline
+    #   在**每次进程启动**时自动执行一次；此处登记为手动任务，供前端按需再触发全量收敛。
+    #   为什么触发点是「启动」而非「每小时」：本机服务实测在线率仅 32%（断线 41 次/38 天），
+    #   按墙上时钟触发的机制只在在线的那几小时有效。设计见 docs/design/自愈能力设计_2026-10-08.md
+    #   params.max_repairs 只约束「由 DQ 缺口触发的额外修复」个数；时间维度的启动补偿不限额。
+    ("startup_converge", 1, "手动",
+     {"max_repairs": 10, "verify": True, "dry_run": False}),
 ]
 
 

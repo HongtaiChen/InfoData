@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch, h } from 'vue'
 import {
   NCard, NGrid, NGi, NStatistic, NButton, NDataTable, NTag, NSelect,
-  NInput, NSpace, NEmpty, NTabs, NTabPane, NProgress, NSwitch, NSpin, useMessage,
+  NInput, NSpace, NEmpty, NTabs, NTabPane, NProgress, NSwitch, NSpin, NModal, useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { useRoute, useRouter } from 'vue-router'
@@ -417,9 +417,63 @@ async function triggerNow() {
 }
 
 // ---------- 加载 ----------
+// ---------- 启动收敛（自愈闭环 ·「启动即收敛」） ----------
+// 服务是间歇运行的（实测在线率 32%），所以「启动」是唯一对齐使用习惯的自愈时机：
+// 每次开机系统自动巡检 → 按 table_meta.writers 重跑缺数据的采集任务 → 复检 → 出报告。
+// 这里只负责把「上次开机它自己修了什么」摆到用户眼前 —— 即自愈闭环第 7 层「交代」。
+const converge = ref<any>(null)
+const convergeLoading = ref(false)
+const convergeDetail = ref(false)
+async function loadConverge() {
+  convergeLoading.value = true
+  try {
+    // silent：这是「补充说明」型卡片，不是主查询。后端未升级（404）或该任务尚未跑过一次时，
+    // 卡片本就会自行隐藏，不该再弹全局错误 toast —— 自愈功能自己制造告警疲劳就本末倒置了。
+    const resp: any = await api.get('/dq/converge?limit=5', { silent: true } as any)
+    converge.value = resp
+  } catch (e) {
+    console.error('[dq converge]', e)
+  } finally {
+    convergeLoading.value = false
+  }
+}
+const convergeLatest = computed(() => converge.value?.latest || null)
+
+// 详情弹窗的五个清单：把报告结构拍平成「标题 + 文本行」，避免模板里堆重复结构
+const convergeSections = computed(() => {
+  const d = convergeLatest.value?.detail || {}
+  const plan = (d.plan || []).map((p: any) => `${p.task}  ← ${p.reason || ''}`)
+  const healed = (d.verify?.healed || []).map(
+    (h: any) => `✓ ${h.table_name}.${h.rule_name}：${h.before} → pass`,
+  )
+  const still = (d.verify?.still_failing || []).map(
+    // attempted===false 的是本轮压根没重跑过的（多为 manual 类）——标出来，
+    // 免得看报告的人以为「自愈试了但没修好」。
+    (h: any) =>
+      `${h.attempted === false ? '（未尝试·归人工）' : ''}${h.table_name}.${h.rule_name}：${h.before} → ${h.after ?? '未复检'}`,
+  )
+  // 「待发布」：写入任务当日末次班次还没到点 ⇒ 当日数据还没发出来。
+  // 既不是故障也不是需人工，单列一栏是为了别让人把「不合格 N 条」误读成「N 个问题」。
+  const pending = (d.pending_todo || []).map(
+    (p: any) => `${p.table_name}.${p.rule_name} —— 等 ${p.task}（当日末次 ${p.release_at}）`,
+  )
+  const manual = [
+    ...(d.manual_todo || []).map((m: any) => `[规则] ${m.table_name}.${m.rule_name} —— ${m.why}`),
+    ...(d.unmapped || []).map((m: any) => `[定位] ${m.table_name}.${m.rule_name} —— ${m.why}`),
+    ...(((d.repair || {}).deferred) || []).map((m: any) => `[超限] ${m.task} —— ${m.why}`),
+  ]
+  return [
+    { title: '重跑的采集任务', items: plan },
+    { title: '已自动修复', items: healed },
+    { title: '复检仍不合格', items: still },
+    { title: '待发布', items: pending },
+    { title: '需人工处理', items: manual },
+  ]
+})
+
 const lastUpdate = ref('')
 async function refreshAll() {
-  await Promise.all([loadSummary(), loadReport(), loadRules(), loadHistory(), loadRecon()])
+  await Promise.all([loadSummary(), loadReport(), loadRules(), loadHistory(), loadRecon(), loadConverge()])
   lastUpdate.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
 }
 
@@ -453,6 +507,65 @@ watch(tableFilter, (v) => {
         <NButton size="small" type="primary" :loading="triggering" @click="triggerNow">立即体检</NButton>
       </NSpace>
     </div>
+
+    <!-- 启动收敛（自愈闭环）：上次开机时系统自己修了什么 —— 闭环第 7 层「交代」 -->
+    <NCard v-if="convergeLatest" size="small" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <NTag size="small" type="info" :bordered="false">启动自愈</NTag>
+        <span style="font-size:13px;color:#6b7280">
+          上次开机 {{ fmtTime(convergeLatest.started_at) }} 巡检出
+          <b style="color:#791F1F">{{ convergeLatest.issues_total ?? 0 }}</b> 项不合格
+        </span>
+        <NTag size="small" :type="(convergeLatest.healed_count || 0) > 0 ? 'success' : 'default'" :bordered="false">
+          已自动修复 {{ convergeLatest.healed_count ?? 0 }} 项
+        </NTag>
+        <!-- 「待发布」：写入任务当日末次班次还没到点 ⇒ 当日数据还没发出来。
+             不算故障、不需人工，单列是为了把「不合格 N 项」拆开读。 -->
+        <NTag v-if="convergeLatest.pending_count > 0" size="small" type="default" :bordered="false">
+          <span style="opacity:.75">待发布 {{ convergeLatest.pending_count }} 项（等它自己的班次）</span>
+        </NTag>
+        <NTag v-if="convergeLatest.still_failing_count > 0" size="small" type="warning" :bordered="false">
+          仍未解决 {{ convergeLatest.still_failing_attempted_count ?? convergeLatest.still_failing_count }} 项
+          <template v-if="convergeLatest.still_failing_unattempted_count > 0">
+            <span style="opacity:.7">（另有 {{ convergeLatest.still_failing_unattempted_count }} 项未尝试，属人工）</span>
+          </template>
+        </NTag>
+        <NTag v-if="convergeLatest.needs_human_count > 0" size="small" type="error" :bordered="false">
+          需人工 {{ convergeLatest.needs_human_count }} 项
+        </NTag>
+        <span v-if="convergeLatest.plan_count" style="font-size:12px;color:#999">
+          重跑 {{ convergeLatest.plan_count }} 个采集任务
+        </span>
+        <NButton size="tiny" quaternary type="primary" @click="convergeDetail = true">详情</NButton>
+      </div>
+    </NCard>
+
+    <NModal
+      v-model:show="convergeDetail"
+      preset="card"
+      title="启动收敛详情（自愈闭环）"
+      style="width:840px;max-width:94vw"
+    >
+      <div v-if="convergeLatest" style="max-height:66vh;overflow:auto">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:4px">
+          {{ fmtTime(convergeLatest.started_at) }} 起 · 耗时 {{ convergeLatest.duration_sec ?? '--' }} 秒 ·
+          巡检 fail {{ convergeLatest.before_counts?.fail ?? 0 }} / warning {{ convergeLatest.before_counts?.warning ?? 0 }}
+          <template v-if="convergeLatest.after_counts">
+            → 复检 fail {{ convergeLatest.after_counts.fail ?? 0 }} / warning {{ convergeLatest.after_counts.warning ?? 0 }}
+          </template>
+        </div>
+        <div v-for="sec in convergeSections" :key="sec.title" style="margin-top:14px">
+          <div style="font-size:13px;font-weight:500;margin-bottom:6px">{{ sec.title }}（{{ sec.items.length }}）</div>
+          <div v-if="!sec.items.length" style="font-size:12px;color:#999">无</div>
+          <div
+            v-for="(it, i) in sec.items"
+            :key="i"
+            style="font-size:12px;color:#374151;padding:3px 0;border-bottom:1px dashed #f0f0f0"
+          >{{ it }}</div>
+        </div>
+      </div>
+      <div v-else style="font-size:13px;color:#999">暂无收敛记录 —— 服务每次启动会自动巡检并修复。</div>
+    </NModal>
 
     <!-- 无数据兜底 -->
     <NCard v-if="!summary?.run_at" style="margin-bottom:12px">

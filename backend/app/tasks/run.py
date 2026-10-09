@@ -16,7 +16,7 @@ import threading
 import traceback
 from datetime import datetime
 
-from ..db import get_db_config
+from ..db import get_db_config, query_all
 from ..task_recorder import TaskRecorder
 from ..collectors.stock_daily_incr import StockDailyIncrementalCollector
 from ..collectors.market_current_sync import MarketCurrentSyncCollector
@@ -362,6 +362,151 @@ def run_data_quality_check_weekly(params: dict) -> int:
     if result["error_count"] > 0:
         logger.warning(f"⚠️ DQ(weekly) {result['error_count']} 条规则执行异常: {result['errors'][:5]}")
     return result["records_written"]
+
+
+# ============ 启动收敛（自愈闭环 ·「启动即收敛」2026-10-08） ============
+
+def _weekly_scan_due(min_interval_days: float) -> bool:
+    """weekly 体检是否到期（距上次成功 >= min_interval_days 天）
+
+    为什么必须节流：`data_quality_check_weekly` 是全史窗口扫描，实测 808~2318 秒。
+    若每次启动都跑、而用户一天启动若干次，启动窗口会被反复占用十几分钟 ——
+    而它的 8 条规则全部属**不可自愈类**（gap_scan / factor_link / pct_limit /
+    where_count / source_handoff / per_key_coverage），重跑不解决任何问题。
+    故按周节流（默认 6 天，与 weekly 的自然周期一致）。
+    `min_interval_days <= 0` 表示不节流（每次都跑）。
+    """
+    if min_interval_days <= 0:
+        return True
+    rows = query_all(
+        "SELECT MAX(finished_at) AS m FROM task_runs "
+        "WHERE task_name = 'data_quality_check_weekly' AND status = 'success'"
+    )
+    last = rows[0].get("m") if rows else None
+    if last is None:
+        return True                       # 从未跑过 → 该跑
+    return (datetime.now() - last).total_seconds() >= min_interval_days * 86400
+
+
+def run_startup_converge(params: dict) -> int:
+    """启动收敛：巡检 → 分诊 → 合并补偿队列 → 串行修复 → 复检 → 报告
+
+    这是「自愈能力」的编排入口，设计依据与三条铁律见 `app/selfheal.py` 文件头。
+    由 SchedulerManager 在**每次进程启动时**自动调用（见 `scheduler._boot_pipeline`），
+    也可在前端手动触发做一次全量收敛（task_config.cron='手动'）。
+
+    ⚠️ 为什么触发点是「启动」而不是「每小时」：本机服务是间歇运行的
+    （实测近 38 天在线率 32%、断线 41 次、最长离线 260 小时），任何按墙上时钟
+    触发的机制都只在「在线的那几小时」有效，而 90% 的问题发生在离线期间。
+
+    params:
+      max_repairs : 单次最多额外重跑几个任务（默认 10）。**只约束由 DQ 缺口触发的
+                    修复**；时间维度的启动补偿不受此限（那是原有语义，补齐关机
+                    期间错过的班次）
+      max_seconds : 单次修复的**时间预算**（默认 900s）。与 max_repairs 是**两个维度**，
+                    任一触发即停 —— 单任务耗时实测跨度 1s~1722s，光卡个数防不住
+                    「10 个任务跑了 5 小时」
+      groups      : 启动巡检纳入**分诊视野**的规则组（默认 ["daily", "weekly"]）
+      rescan_weekly : 是否**重跑** weekly 体检（默认 False = 只读最近一轮结果）。
+                    ⚠️ 实测依据（2026-10-08）：`data_quality_check_weekly` 耗时
+                    **808~2318 秒**，而它的 8 条规则（全指向 stock_market_daily）
+                    check_type 是 gap_scan / factor_link / pct_limit / where_count /
+                    source_handoff / per_key_coverage —— **全部属不可自愈类**，
+                    重跑一条都修不了。故默认只读、不重跑；确需重跑请显式打开。
+      weekly_min_interval_days : rescan_weekly=True 时的节流天数（默认 6，与 weekly
+                    的自然周期一致，避免每次重启都白烧十几分钟）
+      verify      : 修复后是否复检（默认 True）
+      dry_run     : 只分诊不执行（默认 False，排障用）
+    """
+    from .. import selfheal  # noqa: PLC0415 - 延迟 import，避免与 scheduler 循环
+    from ..scheduler import manager as sm  # noqa: PLC0415
+
+    p = _task_params(params, {
+        "max_repairs": selfheal.DEFAULT_MAX_REPAIRS,
+        "max_seconds": selfheal.DEFAULT_MAX_SECONDS,
+        "groups": ["daily", "weekly"],
+        "rescan_weekly": False,
+        "weekly_min_interval_days": 6,
+        "verify": True,
+        "dry_run": False,
+    })
+    started = datetime.now()
+    conv = selfheal.StartupConverger(
+        max_repairs=int(p.get("max_repairs") or 0),
+        max_seconds=int(p.get("max_seconds") or 0),
+        groups=tuple(p.get("groups") or ["daily"]),
+        dry_run=bool(p.get("dry_run")),
+    )
+
+    # ① 感知：跑一轮体检（失败**不阻断** —— 沿用最近一轮结果继续收敛）
+    #   · daily  必跑（199 条，秒级）
+    #   · weekly 默认只读不重跑（实测十几分钟且修不了任何一条，见 docstring）
+    scan_tasks = ["data_quality_check"]
+    if p.get("rescan_weekly"):
+        if _weekly_scan_due(float(p.get("weekly_min_interval_days") or 0)):
+            scan_tasks.append("data_quality_check_weekly")
+        else:
+            logger.info("启动收敛：weekly 体检未到节流间隔，跳过重跑（沿用最近一轮结果）")
+    written = 0
+    for t in scan_tasks:
+        try:
+            res = sm._execute(t)
+            if res.get("started"):
+                written += int(res.get("records_written") or 0)
+            else:
+                logger.info(f"启动收敛：{t} 未重跑（{res.get('reason')}），沿用最近一轮结果")
+        except Exception as e:
+            logger.exception(f"启动收敛：{t} 执行异常，沿用最近一轮结果: {e}")
+
+    before = conv.scan()
+    # ②③ 定位 + 分诊（表 → writers → 可自愈 / 待发布 / 需人工判定）
+    plan = conv.plan(before)
+    # 合并「时间遗漏班次」（原有启动补偿语义）与「DQ 缺口」（本次新增的按水位修复）
+    try:
+        # ⚠️ 必须解包：_find_missed() 返回 (清单, 被检查任务数) 二元组。
+        # 漏写 `, _` 会让 missed 变成整个元组，merge_todo 里 `for m in missed`
+        # 首个元素就是那个 list ⇒ `'list' object has no attribute 'get'`
+        # （2026-10-08 首次端到端启动时真实踩到，34 项离线验收未覆盖此集成路径）。
+        missed, _checked = sm._find_missed()
+    except Exception as e:
+        logger.warning(f"启动收敛：遗漏班次判定异常，本次仅按 DQ 缺口修复: {e}")
+        missed = []
+    todo = conv.merge_todo(missed, plan)
+    # ④⑤ 串行执行（预算只约束 source='dq' 的额外修复）
+    repair_result = conv.repair(todo, execute=sm._execute)
+
+    # ⑥ 验证：复检一轮（与首轮同一批扫描任务）并逐规则 diff
+    after = None
+    if p.get("verify", True) and not p.get("dry_run"):
+        try:
+            for t in scan_tasks:
+                res2 = sm._execute(t)
+                if res2.get("started"):
+                    written += int(res2.get("records_written") or 0)
+            after = conv.scan()
+        except Exception as e:
+            logger.exception(f"启动收敛：复检异常: {e}")
+
+    # ⑦ 交代：报告落 task_runs.run_detail（前端「作业监控」自动可见）
+    report = conv.build_report(
+        before=before, plan=plan, repair_result=repair_result, after=after,
+        missed=missed, started_at=started, finished_at=datetime.now(),
+    )
+    _set_run_detail(report)
+    logger.info(
+        f"🩺 启动收敛完成：可自愈 {len(plan.targets)} 个任务 → 实际执行 "
+        f"{repair_result['repaired_tasks']} 个；待发布 {report['pending_count']} 条；"
+        f"复检已修复 {report['healed_count']} 条 / 仍不合格 {report['still_failing_count']} 条"
+        f"（其中尝试后未修好 {report['still_failing_attempted_count']} 条）；"
+        f"需人工 {report['needs_human_count']} 项"
+    )
+    # ⑦b 对外交代：只推「需要人动手/需要人知道」的结论，无结论则静默
+    try:
+        from ..notifier import notify_converge  # noqa: PLC0415
+        notify_converge(report)
+    except Exception as e:  # noqa: BLE001 - 推送失败绝不能影响收敛本身
+        logger.warning(f"启动收敛：外部告警推送异常（不影响本次收敛）: {e}")
+    return written or report["issues_total"]
 
 
 # ============ L3 修复闭环：日线定向回补（2026-09-10） ============
@@ -1056,6 +1201,9 @@ TASKS = {
     "global_liquidity_sync": run_global_liquidity_sync,
     # 2026-09-26 货币流动性补源 v2.1 批次 C2（中国层·央行对外资产：外储/黄金）
     "cn_reserve_sync": run_cn_reserve_sync,
+    # 2026-10-08 启动收敛（自愈闭环 ·「启动即收敛」）—— 由 scheduler._boot_pipeline
+    # 在每次进程启动时自动调用，也可前端手动触发一次全量收敛
+    "startup_converge": run_startup_converge,
 }
 
 

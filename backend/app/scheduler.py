@@ -253,11 +253,24 @@ class SchedulerManager:
         except Exception:
             logger.exception("启动自愈（僵尸 running 回收）异常")
         self.sync_from_db()
-        # 启动补偿：电脑关机/睡眠期间错过的 cron 班次，开机后自动补跑
+        # 启动收敛（自愈闭环 ·「启动即收敛」2026-10-08）：巡检 → 分诊 → 合并补偿队列
+        # → 串行修复 → 复检 → 报告。设计依据见 app/selfheal.py 文件头。
+        #
+        # 为什么取代了直接调 catchup_missed：两者的目标高度重叠（DQ 报 fail 的表，
+        # 其 writers 往往正是 catchup 要补的任务）。若各起一条后台队列，会互相抢任务
+        # （靠 _execute 的锁不至于双跑，但会产生大量 skip 与日志噪音），也会白跑一轮。
+        # 现在合并成**一条串行队列**（selfheal.merge_todo 按任务名去重）。
+        #
+        # ⚠️ 兜底：收敛流水线自身异常时回退到基础启动补偿 —— 保证「至少能把班次补上」，
+        #    不让新增的自愈能力成为启动补偿的单点故障。
         try:
-            self.catchup_missed()
+            self._spawn_boot_pipeline()
         except Exception:
-            logger.exception("启动补偿执行异常")
+            logger.exception("启动收敛流水线启动异常，回退基础启动补偿")
+            try:
+                self.catchup_missed()
+            except Exception:
+                logger.exception("回退基础启动补偿也失败")
         logger.info("🕒 调度器已启动")
 
     def reap_orphan_runs(self) -> int:
@@ -582,17 +595,23 @@ class SchedulerManager:
         finally:
             conn.close()
 
-    def catchup_missed(self) -> dict:
-        """启动补偿：cron 最近应触发点已过去、且晚于上次成功时间 → 该班次遗漏，补跑一次。
+    def _find_missed(self) -> tuple[list[dict], int]:
+        """纯计算：返回 (遗漏班次清单, 被检查的任务数) —— 不执行、不起线程。
+
+        为什么要把「算」与「跑」拆开（2026-10-08）：启动收敛流水线需要**先拿到
+        清单**，再与 DQ 缺口合并成一条串行队列。若沿用 catchup_missed，它会立刻起
+        后台线程，于是两条队列并行抢任务（靠 _execute 的锁不至于双跑，但会产生大量
+        skip 与日志噪音，也会白跑一轮）。判定逻辑与 catchup_missed 完全一致。
 
         判定天然防重复/防堆积：
         - 只补「最近一个未覆盖的触发点」，多天关机也只补一次（不会逐天堆积）
         - 周末/长假：非当日触发点的任务（如交易日任务）的最近触发点若已被覆盖则跳过
         - 高频任务（触发间隔 < CATCHUP_MIN_INTERVAL）不参与
-        - 执行走 _execute（带同任务 running 保护），与 cron 并发也安全
+        - **兜底班次任务按「当日是否跑成」判，而不是按「班次时刻之后是否有 success」判**
+          （见下方 CHAIN_FALLBACK_TASKS 分支的说明）
         """
         if self._scheduler is None or not self._scheduler.running:
-            return {"checked": 0, "todo": []}
+            return [], 0
         now = datetime.now(TZ)  # 上海时区，与 CronTrigger(Asia/Shanghai) 及 DB 时间一致
         now_naive = now.replace(tzinfo=None)
         jobs = self._scheduler.get_jobs()
@@ -612,20 +631,72 @@ class SchedulerManager:
             last_naive = last.astimezone(TZ).replace(tzinfo=None)
             if last_naive > now_naive:
                 continue  # 应触发点在未来，还没到点
+            # ------------------------------------------------------------------
+            # 兜底班次任务：链式已把它跑成 → 固定时刻的班次会被 `_run_scheduled`
+            # 打印「⏭ 兜底班次跳过」后直接 return，**不写 task_runs**。
+            # 于是「该班次时刻之后没有 success」⇒ 这里会误判为遗漏，**每次重启都
+            # 白补跑一次**（实测 market_style_sync / market_current_sync /
+            # data_quality_check 三个各一次，合计约 90 秒，幂等、无数据影响）。
+            #
+            # 判据必须与 `_run_scheduled` 里那处**完全一致**（当日有 success 即算跑成），
+            # 否则同一件事在两个地方有两套结论 —— 那才是真正的坏味道。
+            if name in CHAIN_FALLBACK_TASKS and self._succeeded_today(name):
+                continue
+            # ------------------------------------------------------------------
             last_ok = self._last_success_at(name)
             if last_ok is not None and last_ok >= last_naive:
                 continue  # 该班次已有 success 覆盖
             todo.append({"task": name, "missed_at": last_naive.strftime("%Y-%m-%d %H:%M")})
-        if not todo:
-            logger.info(f"启动补偿：检查 {len(jobs)} 个任务，无遗漏班次")
-            self._spawn_boot_news_review()
-            return {"checked": len(jobs), "todo": []}
         todo.sort(key=lambda x: x["missed_at"])
+        return todo, len(jobs)
+
+    def catchup_missed(self) -> dict:
+        """启动补偿：cron 最近应触发点已过去、且晚于上次成功时间 → 该班次遗漏，补跑一次。
+
+        ⚠️ 2026-10-08 起，正常启动路径已由**启动收敛流水线**接管（见 _boot_pipeline），
+        本方法保留为两个用途：① 收敛流水线异常时的**兜底回退**；
+        ② 外部/历史的兼容入口。执行走 _execute（带同任务 running 保护），与 cron 并发也安全。
+        """
+        todo, checked = self._find_missed()
+        if checked == 0:
+            return {"checked": 0, "todo": []}
+        if not todo:
+            logger.info(f"启动补偿：检查 {checked} 个任务，无遗漏班次")
+            self._spawn_boot_news_review()
+            return {"checked": checked, "todo": []}
         logger.info(
             f"启动补偿：发现 {len(todo)} 个遗漏班次 → {[t['task'] for t in todo]}，已排队补跑"
         )
         threading.Thread(target=self._run_catchup, args=(todo,), daemon=True).start()
-        return {"checked": len(jobs), "todo": todo}
+        return {"checked": checked, "todo": todo}
+
+    # ---------- 启动收敛流水线（自愈闭环 ·「启动即收敛」） ----------
+
+    def _spawn_boot_pipeline(self):
+        """后台线程执行启动收敛（不阻塞 uvicorn 启动，start() 立即返回）"""
+        threading.Thread(target=self._boot_pipeline, daemon=True).start()
+
+    def _boot_pipeline(self):
+        """启动收敛：巡检 → 分诊 → 合并补偿队列 → 串行修复 → 复检 → 报告
+
+        走 `_execute("startup_converge")` 而不是直接调函数，有两个好处：
+          · 整轮收敛留下一份 task_runs 记录（task_name='startup_converge'），
+            run_detail 即完整报告 —— 前端「作业监控」直接可见
+          · 获得 per-task 锁与 running 保护（手动触发与启动触发不会双跑）
+        """
+        try:
+            res = self._execute("startup_converge")
+            logger.info(f"🩺 启动收敛流水线结束：{res}")
+        except Exception:
+            logger.exception("启动收敛失败，回退到基础启动补偿")
+            try:
+                self.catchup_missed()
+                return  # catchup_missed 末尾已 spawn 资讯回看
+            except Exception:
+                logger.exception("回退基础启动补偿也失败")
+        # 资讯回看：保持原有语义 —— 始终排在最后
+        # （资讯是唯一不可回补的通道，优先级的表达方式是「保证它一定会跑」）
+        self._spawn_boot_news_review()
 
     def _spawn_boot_news_review(self):
         """后台线程执行开机资讯回看（不阻塞 start()）"""
