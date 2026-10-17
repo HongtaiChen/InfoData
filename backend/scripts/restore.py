@@ -153,6 +153,57 @@ def _conn():
     return pymysql.connect(**get_db_config().to_dict(), autocommit=True)
 
 
+def ensure_database(create: bool = True) -> dict:
+    """确保目标库存在；不存在则创建。
+
+    新机器上 MySQL 刚装好时 `adata` 库并不存在，而 `pymysql.connect(database=...)`
+    会直接抛 1049，导致 S0 就失败 —— `schema.sql` 里那句
+    `CREATE DATABASE IF NOT EXISTS adata` 永远执行不到。所以必须在这里先补一步。
+
+    `CREATE DATABASE` 不能在被选中的库内执行，故库不存在时要改用**不带 database**
+    的连接来建。排序规则跟随生产库的 `utf8mb4_unicode_ci`：业务表是
+    `utf8mb4_0900_ai_ci`，两者混用会在自建临时表 JOIN 时报 1267。
+    """
+    sys.path.insert(0, str(BACKEND))
+    import pymysql
+    from app.db import get_db_config
+
+    cfg = get_db_config().to_dict()
+    name = cfg.get("database") or "adata"
+    # 库名要拼进 DDL，用白名单挡住反引号
+    if not re.fullmatch(r"[A-Za-z0-9_]{1,64}", name):
+        return {"ok": False, "created": False, "name": name,
+                "error": f"库名 {name!r} 非法（只允许字母、数字、下划线）"}
+
+    try:
+        _conn().close()
+        return {"ok": True, "created": False, "name": name, "error": None}
+    except pymysql.err.OperationalError as exc:
+        if not exc.args or exc.args[0] != 1049:      # 1049 = Unknown database
+            return {"ok": False, "created": False, "name": name, "error": str(exc)}
+    except Exception as exc:
+        return {"ok": False, "created": False, "name": name, "error": str(exc)}
+
+    if not create:
+        return {"ok": False, "created": False, "name": name,
+                "error": f"库 `{name}` 不存在（预演模式不建库，去掉 --dry-run 后重跑即可创建）"}
+
+    bare = {k: v for k, v in cfg.items() if k != "database"}
+    try:
+        c = pymysql.connect(**bare, autocommit=True)
+        with c.cursor() as cur:
+            cur.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{name}` "
+                "DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+        c.close()
+        _conn().close()
+        return {"ok": True, "created": True, "name": name, "error": None}
+    except Exception as exc:
+        return {"ok": False, "created": False, "name": name,
+                "error": f"建库失败：{type(exc).__name__}: {exc}"}
+
+
 def _schema_tables() -> list:
     if not SCHEMA_SQL.is_file():
         return []
@@ -236,26 +287,65 @@ def _split_sql(sql: str) -> list[str]:
 
 
 def apply_schema() -> dict:
-    """执行 schema.sql。返回 {'executed': n, 'expected': n, 'error': str|None}"""
-    if not SCHEMA_SQL.is_file():
-        return {"executed": 0, "expected": 0, "error": f"找不到 {SCHEMA_SQL}"}
-    expected = len(_schema_tables())
+    """执行 schema.sql，并**核对表实际建在了哪个库**。
 
-    statements = _split_sql(SCHEMA_SQL.read_text(encoding="utf-8", errors="replace"))
+    ⚠️ 必须剔除 schema.sql 里的 `CREATE DATABASE adata` / `USE adata`
+    （2026-10-17 空库实测踩到）：那两句会把连接切回**硬编码的 adata**，
+    于是 `INFO_DATA_DB_NAME=别的库` 时 56 张表全建到生产库上，而脚本照样
+    报「✅ 56/56」—— 典型假绿。库由 ensure_database() 负责创建、目标库由
+    连接选定，这两条库级语句必须跳过。
+
+    返回 {'executed','expected','present','target','skipped','error'}
+    """
+    if not SCHEMA_SQL.is_file():
+        return {"executed": 0, "expected": 0, "present": 0, "target": None,
+                "skipped": [], "error": f"找不到 {SCHEMA_SQL}"}
+
+    tables = _schema_tables()
+    expected = len(tables)
+
+    statements, skipped = [], []
+    for stmt in _split_sql(SCHEMA_SQL.read_text(encoding="utf-8", errors="replace")):
+        if re.match(r"^\s*USE\b", stmt, re.I):
+            skipped.append(f"USE {stmt.split(None, 1)[1].strip().strip('`')}"
+                           if len(stmt.split(None, 1)) > 1 else "USE")
+        elif re.match(r"^\s*CREATE\s+DATABASE\b", stmt, re.I):
+            skipped.append("CREATE DATABASE")
+        else:
+            statements.append(stmt)
 
     conn = _conn()
-    executed = 0
+    executed, present, target = 0, 0, None
     try:
         with conn.cursor() as cur:
+            cur.execute("SELECT DATABASE()")
+            target = cur.fetchone()[0]
             for stmt in statements:
                 cur.execute(stmt)
                 if re.match(r"CREATE\s+TABLE", stmt, re.I):
                     executed += 1
+            # 真校验：表到底在不在**当前库**里、数量够不够
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                "WHERE table_schema=DATABASE() AND table_name IN ("
+                + ",".join(["%s"] * len(tables)) + ")",
+                tables,
+            )
+            present = int(cur.fetchone()[0] or 0)
     except Exception as exc:
-        return {"executed": executed, "expected": expected, "error": f"{type(exc).__name__}: {exc}"}
+        return {"executed": executed, "expected": expected, "present": present,
+                "target": target, "skipped": skipped,
+                "error": f"{type(exc).__name__}: {exc}"}
     finally:
         conn.close()
-    return {"executed": executed, "expected": expected, "error": None}
+
+    if present != expected:
+        return {"executed": executed, "expected": expected, "present": present,
+                "target": target, "skipped": skipped,
+                "error": f"表数不符：`{target}` 库中只找到 {present}/{expected} 张，"
+                         f"schema.sql 可能有不兼容语句"}
+    return {"executed": executed, "expected": expected, "present": present,
+            "target": target, "skipped": skipped, "error": None}
 
 
 # ---------------------------------------------------------------------------
@@ -452,6 +542,8 @@ def main() -> int:
     ap.add_argument("--data-only", action="store_true", help="只采数据")
     ap.add_argument("--verify-only", action="store_true", help="只核对")
     ap.add_argument("--skip-seeds", action="store_true")
+    ap.add_argument("--no-data", action="store_true",
+                    help="只建表+灌配置+核对，不采数据（新机器先让空壳跑起来时用）")
     ap.add_argument("--no-verify", action="store_true")
     ap.add_argument("--fast-verify", action="store_true", help="用估算行数核对（快，但有容差）")
     ap.add_argument("--no-report", action="store_true", help="不写 JSON 报告文件")
@@ -469,7 +561,7 @@ def main() -> int:
 
     do_schema = not (args.seeds_only or args.data_only or args.verify_only)
     do_seeds = not (args.schema_only or args.data_only or args.verify_only or args.skip_seeds)
-    do_data = not (args.schema_only or args.seeds_only or args.verify_only)
+    do_data = not (args.schema_only or args.seeds_only or args.verify_only or args.no_data)
     do_verify = not args.no_verify
 
     if args.list or args.dry_run:
@@ -519,25 +611,31 @@ def main() -> int:
     started = datetime.datetime.now()
     report: dict = {"started_at": started.isoformat(timespec="seconds"), "steps": {}}
 
-    # ---- S0 前置：连库 ----
+    # ---- S0 前置：连库（库不存在则自动创建）----
     print("\n[S0] 检查数据库连通性…")
-    try:
-        c = _conn(); c.close()
-        print("     ✅ 可连接")
-    except Exception as exc:
-        print(f"     ❌ 连不上：{exc}", file=sys.stderr)
+    db = ensure_database(create=not args.dry_run)
+    if not db["ok"]:
+        print(f"     ❌ {db['error']}", file=sys.stderr)
         print("        先跑 python scripts/preflight.py 看详细修法。", file=sys.stderr)
         return 2
+    if db["created"]:
+        print(f"     ✅ 库 `{db['name']}` 原本不存在，已自动创建（utf8mb4_unicode_ci）")
+    else:
+        print(f"     ✅ 可连接（库 `{db['name']}`）")
 
     # ---- S1 建表 ----
     if do_schema:
         print("\n[S1] 导入 schema.sql（幂等）…")
         r = apply_schema()
         report["steps"]["schema"] = r
+        if r["skipped"]:
+            print(f"     跳过库级语句 {', '.join(r['skipped'])}"
+                  f"（目标库由连接决定：`{r['target']}`）")
         if r["error"]:
             print(f"     ❌ {r['error']}", file=sys.stderr)
             return 2
-        print(f"     ✅ 执行 {r['executed']}/{r['expected']} 条 CREATE TABLE")
+        print(f"     ✅ 执行 {r['executed']}/{r['expected']} 条 CREATE TABLE；"
+              f"核实 `{r['target']}` 库内 {r['present']}/{r['expected']} 张齐全")
 
     # ---- S2 配置 ----
     if do_seeds:

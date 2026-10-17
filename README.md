@@ -76,9 +76,10 @@ backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 > cd backend
 > ".venv\Scripts\python.exe" scripts\restore.py --yes --no-data
 > ```
-> 它按正确顺序完成「建表 → 灌 6 个 seed（自动带 `--apply`）→ 逐表核对 → 输出报告」。
+> 它按正确顺序完成「建库 → 建表 → 灌 6 个 seed（自动带 `--apply`）→ 逐表核对 → 输出报告」。
+> **库不存在会自动创建**（`utf8mb4_unicode_ci`），不必先手动 `CREATE DATABASE`。
 > `--no-data` = 只做结构 + 配置，数据留到第 5 步；去掉它则连数据一起回补。
-> 先看计划不执行：`scripts\restore.py --list`；预演：`--dry-run`。
+> 先看计划不执行：`scripts\restore.py --list`；预演：`--dry-run`（预演**不会**建库）。
 >
 > 为什么值得用：手工步骤里有 3 个**静默失败**点（见下方 ⚠️），漏了不报错、只悄悄不对。
 > 下面的手工步骤保留，作为原理说明与故障时的兜底。

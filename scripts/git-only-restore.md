@@ -106,6 +106,12 @@ start_date='20180101', end_date='20181231')` 返回 243 行）。
 > 只想要结构 + 配置、数据稍后再说：`python scripts/restore.py --yes --no-data`。
 > 只重建某一段：`--data-only --stages core,daily`。
 >
+> **库不存在会自动创建**（`utf8mb4_unicode_ci`）——新机器不必先手动 `CREATE DATABASE`，
+> 也不必手动建表：`schema.sql` 自带 `CREATE DATABASE` / `USE adata`，脚本会把这两条
+> **库级语句跳过**，改由连接决定目标库（否则 `INFO_DATA_DB_NAME=测试库` 时表会全建到
+> `adata` 上，还报「56/56 成功」——2026-10-17 空库实测踩到并已修）。
+> 建表后会**回查 `information_schema` 核实 56 张表真的在当前库**，不是只数语句条数。
+>
 > 为什么要有这个脚本：下面 S3/S4/S6 的手工步骤里至少 3 处会**静默失败**
 > （`--apply` 漏写、概念行情只补 400 天、增量采集器不传 `full_sweep`）。
 > **手工步骤保留在下面** —— 它们是原理说明，也是脚本失灵时的兜底。
