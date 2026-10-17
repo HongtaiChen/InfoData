@@ -128,8 +128,10 @@ scripts\migrate-machine.bat load "D:\path\to\adata_migrate_20261010_074352.sql"
 ```
 
 > ⭐ 迁移**不需要**再跑 `schema.sql` / `seed_*` —— dump 里已经含全部表结构与配置，导入完直接启动。
-> 为什么必须迁移而不能重新采集：本库有 1600 万行的 `stock_market_daily_ex`
-> **冻结归档表、没有任何采集器**，重新采集永远拿不回来。
+> 为什么必须迁移而不能重新采集：本库有几张大表**没有采集器**（`table_meta.writers=[]`），
+> 其中最重的 `stock_market_daily_ex`（1690 万行）重新采集要自己补采集器、并长跑数小时以上。
+> （**2026-10-17 勘误**：原文「重新采集永远拿不回来」已被实测推翻 —— 该表是标准不复权日K，
+> 数据可重建，仅缺落表采集器，见 [git-only-restore.md](scripts/git-only-restore.md) §4.3）
 > 实测体积 dump ≈5.3 GB（gzip 后 ≈1.1 GB）、导入 10~30 分钟。
 > 详见 **[scripts/data-bootstrap.md](scripts/data-bootstrap.md)「路径 0」**。
 
@@ -141,6 +143,10 @@ scripts\migrate-machine.bat load "D:\path\to\adata_migrate_20261010_074352.sql"
 > 🧭 **「原机没了到底能恢复到什么程度」**——全库按可再生性分五类、每类配哪种手段、
 > 耗时总账、人工资产（仅 **9.4 KB**）的 seed 方案，见
 > **[scripts/data-restore-plan.md](scripts/data-restore-plan.md)**。
+>
+> 🆘 **「什么都没有了，只有 GitHub 上的仓库」**——本机损毁、备份也没了时的兜底路径：
+> 新机器 clone → 30 分钟服务可用 → 1~2 天数据补到约 99.99%，逐条命令与耗时总账见
+> **[scripts/git-only-restore.md](scripts/git-only-restore.md)**。
 
 **情况 2 · 全新环境 / 给对方干净副本 → 从上游重新采集**
 
@@ -344,6 +350,7 @@ InvestBuddy/
 │   ├── schema.sql           # ⭐ 全库建表语句（56 张表，幂等，不含数据）
 │   ├── data-bootstrap.md    # ⭐ 业务数据准备指南（新环境 / 换机必读）
 │   ├── data-restore-plan.md # ⭐ 整体还原方案（五类可再生性 + 手段 + 耗时总账）
+│   ├── git-only-restore.md  # ⭐ 纯代码仓库重建（只剩 git 时的兜底路径，含逐条命令）
 │   ├── migrate-machine.bat  # ⭐ 换机整库迁移（dump 源机 / load 目标机）
 │   ├── docker-deploy-guide.md
 │   ├── migrate-local-to-docker.bat

@@ -4,6 +4,7 @@
 >
 > 配套文档：
 > - `scripts/data-bootstrap.md` —— 逐表补数**操作手册**（怎么点、怎么触发）
+> - `scripts/git-only-restore.md` —— **只有 git 仓库、没有备份文件**时的兜底重建路径（含逐条命令）
 > - `backend/scripts/backup_assets.py` —— 冷备**工具**（导出 / 校验 / 还原）
 >
 > 版本：2026-10-17（基于当天的实测调研，非文档推演）
@@ -92,7 +93,7 @@
 |---|---|---|---|---|
 | L3-1 | `stock_market_daily_ex` | **16,891,313 行** | ✅ 实测「就是标准不复权日K」：2024-06-28 单日 5,330 只中 **5,096 只 close 与主表完全一致、0 处差异**；新浪接口支持任意区间 | 优先**补采集器**（`daily` 已能拉，换个落表即可）；成本高，可先靠备份 |
 | L3-2 | `stock_hold_by_fund` | 113,147 行（38 个报告期） | ✅ 实测 `stock_report_fund_hold(date)` 可逐期拉（2015-12-31 已验证） | 优先**补采集器** `fund_hold_sync`；注意数值会被上游修正 |
-| L3-3 | `ths_concept_market` 15 天外 | 580,681 行 | ✅ 实测同源接口 `stock_board_concept_index_ths` 可任意区间、数值吻合 | 优先**改造** `concept_market_sync`：`days_back` 参数化 + 支持全史回补 |
+| L3-3 | `ths_concept_market` | 580,681 行（2018-04-12 ~ 现在，2,066 个交易日） | ✅ 实测同源接口 `stock_board_concept_index_ths` 可任意区间、数值吻合 | 🟢 **无需改造**：采集器本就是水位线续跑（停跑后能自动补齐），且接口支持回溯到 2018-04-02（比本地还早 24 天） |
 | L3-4 | 老三板 234 只（430xxx） | 含在 L3-1 内 | 🟡 源存在（ex 表 `data_source='AKSHARE'`），但本机东财 kline 路径 `HTTP=000` 无法验证 | **换网络环境实测**；通了则 L3-1 可完全自愈 |
 | L3-5 | 两张审计明细表 | `dq_close_nonpositive_detail` 4,140 + `dq_pct_anomaly_detail` 4,489 | 🔴 **产出脚本已不在仓库**（只在 `seed_table_meta.py` 登记了元数据） | 补脚本，或纳入冷备（合计仅 3.8 MB） |
 
@@ -253,7 +254,7 @@ backend/scripts/seed_manual_assets.py
 | 1 | **个股资金流 2023-08-14 ~ 2026-04-19** | 🔴 免费源确认无解：东财硬限 120 条且拒绝更大请求；akshare 无同花顺个股资金流历史封装 | 付费源（Tushare `moneyflow` / 聚宽 / JQData），或放弃该段 |
 | 2 | 老三板 234 只 | 🟡 本机东财 kline 全阻断，无法判定 | 换网络环境实测；通了则 `stock_market_daily_ex` 可完全自愈 |
 | 3 | 两张审计明细表的产出脚本 | 🔴 已丢失（仅元数据在册） | 补脚本或纳入冷备（3.8 MB） |
-| 4 | `concept_market_sync` 的 `days_back=15` | ⚠️ 每天漏跑就可能永久缺口 | `days_back` 参数化 + 全史回补入口 |
+| 4 | `concept_market_sync` 的 `days_back=15` | 🟢 **2026-10-17 复核推翻原「停采 15 天就永久缺口」的判断**：代码实为**水位线续跑**（`concept_market_sync.py:173-178`，起点 = `MAX(trade_date)+1 天`），`days_back` 仅在「库中查无此概念」时兜底 ⇒ **停跑 N 天后重跑能自动补回 N 天**，且接口支持回溯到 2018-04-02。**无需改造** | 仅需注意：新增概念首次入库只能回溯 15 天（可传 `start_date` 覆盖） |
 
 ---
 
