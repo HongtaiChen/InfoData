@@ -145,6 +145,116 @@ def normalize(ddl: str) -> str:
     return ddl.rstrip() + ";\n"
 
 
+def parse_schema_columns(schema_text: str) -> dict:
+    """从已导出的 schema.sql 里解析 {表名: [列名, ...]}。
+
+    为什么不用正则一把梭：列定义里可能出现 CHECK(...) / 生成列等**嵌套括号**，
+    按「配对括号」扫描才不会把 DDL 切在半截。
+    只认「行首是 `列名`」的行 —— KEY / UNIQUE KEY / PRIMARY KEY 行都以关键字开头，自然被排除。
+    """
+    out: dict = {}
+    pat = re.compile(
+        r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`([A-Za-z0-9_]+)`\s*\(",
+        re.I,
+    )
+    for m in pat.finditer(schema_text):
+        name = m.group(1)
+        i = m.end()
+        depth = 1
+        while i < len(schema_text) and depth > 0:
+            ch = schema_text[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            i += 1
+        body = schema_text[m.end():i - 1]
+        cols = []
+        for line in body.splitlines():
+            cm = re.match(r"\s*`([A-Za-z0-9_]+)`\s", line)
+            if cm:
+                cols.append(cm.group(1))
+        out[name] = cols
+    return out
+
+
+def db_columns(conn, db: str) -> dict:
+    """库中实际列：{表名: [列名, ...]}（按定义顺序）"""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT TABLE_NAME AS t, COLUMN_NAME AS c FROM information_schema.COLUMNS "
+            "WHERE TABLE_SCHEMA=%s ORDER BY TABLE_NAME, ORDINAL_POSITION",
+            (db,),
+        )
+        out: dict = {}
+        for r in cur.fetchall():
+            out.setdefault(r["t"], []).append(r["c"])
+        return out
+
+
+def run_check(conn, db: str, schema_path: str) -> int:
+    """比对 schema.sql 与现库，有漂移返回 1。供 CI / 提交前钩子使用。"""
+    if not os.path.isfile(schema_path):
+        print(f"❌ 找不到 {schema_path}", file=sys.stderr)
+        return 2
+
+    with open(schema_path, encoding="utf-8") as f:
+        text = f.read()
+    file_cols = parse_schema_columns(text)
+    if not file_cols:
+        print(f"❌ {schema_path} 里没解析出任何 CREATE TABLE，文件可能损坏", file=sys.stderr)
+        return 2
+
+    live_cols = db_columns(conn, db)
+    # 备份表是**有意**排除在 schema.sql 之外的，比对时必须同样排除，否则每次都是「多了表」
+    live_cols = {t: c for t, c in live_cols.items() if not any(p.search(t) for p in EXCLUDE)}
+
+    only_live = sorted(set(live_cols) - set(file_cols))
+    only_file = sorted(set(file_cols) - set(live_cols))
+    common = sorted(set(live_cols) & set(file_cols))
+
+    col_drift = []
+    for t in common:
+        a, b = set(file_cols[t]), set(live_cols[t])
+        added, removed = sorted(b - a), sorted(a - b)
+        if added or removed:
+            col_drift.append((t, added, removed))
+
+    drift = bool(only_live or only_file or col_drift)
+
+    print(f"schema.sql : {len(file_cols)} 张表  （{schema_path}）")
+    print(f"当前库     : {len(live_cols)} 张表  （{db}，已排除备份表）")
+    print()
+
+    if not drift:
+        print("✅ 无漂移：schema.sql 与当前库一致。")
+        return 0
+
+    print("❌ 检测到漂移（schema.sql 需要重新导出）：")
+    if only_live:
+        print(f"\n  ▸ 库里多出 {len(only_live)} 张表 —— 新表**没有**被写进 schema.sql，"
+              f"新机器重建时会缺表：")
+        for t in only_live:
+            print(f"      + {t}")
+    if only_file:
+        print(f"\n  ▸ schema.sql 里有 {len(only_file)} 张表在库中不存在（可能已删）：")
+        for t in only_file:
+            print(f"      - {t}")
+    if col_drift:
+        print(f"\n  ▸ {len(col_drift)} 张表字段不一致：")
+        for t, added, removed in col_drift:
+            bits = []
+            if added:
+                bits.append("库中多出 " + ", ".join(added))
+            if removed:
+                bits.append("schema 多出 " + ", ".join(removed))
+            print(f"      ~ {t}: " + "；".join(bits))
+
+    print("\n修法：确认这些变化是有意的之后，重新导出并提交：")
+    print("    python scripts/dump_schema.py")
+    return 1
+
+
 def main():
     # 保证 print 中文在任何终端都不炸（Windows GBK 控制台尤其需要）
     try:
@@ -158,12 +268,23 @@ def main():
 
     ap = argparse.ArgumentParser(description="导出当前库完整表结构为 schema.sql")
     ap.add_argument("-o", "--out", default=default_out, help="输出文件路径")
+    ap.add_argument(
+        "--check", action="store_true",
+        help="只比对不写入：检查 schema.sql 相对当前库是否有漂移（有漂移退出码 1）",
+    )
     args = ap.parse_args()
 
     conn = get_conn()
     db = os.getenv("INFO_DATA_DB_NAME", "adata")
     host = os.getenv("INFO_DATA_DB_HOST", "127.0.0.1")
     port = os.getenv("INFO_DATA_DB_PORT", "3306")
+
+    # --check：只读比对，绝不写文件
+    if args.check:
+        try:
+            return run_check(conn, db, args.out)
+        finally:
+            conn.close()
 
     all_tabs = list_tables(conn, db)
     keep, skipped = [], []
@@ -200,7 +321,8 @@ def main():
     print(f"   文件大小 = {size/1024:.1f} KB")
     if skipped:
         print(f"   已排除 {len(skipped)} 张备份表：{skipped}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
