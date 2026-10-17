@@ -109,6 +109,12 @@ NOT_RESTORED: dict[str, str] = {
 }
 
 # 空库下**必须显式传参**才能补全史的覆盖项（默认参数只补一个短窗口）
+#
+# 🔴 与 table_meta.rebuild 的联动约定（2026-10-17 定）：
+#    rebuild 标 `param` 表示「任务默认参数只补短窗口」，它**不是**给使用者看的提示，
+#    而是**本表缺覆盖项的缺陷标记**。凡出现 param，正确处置是往这里加一条覆盖，
+#    然后把 rebuild 升为 full —— 使用者不该被要求记住「跑这张表要传什么参」。
+#    改完务必实测源侧真实起点，别照抄上一次的日期（本例 2018 就是错的，实际 2010）。
 TASK_OVERRIDES: dict[str, dict] = {
     # 归档行情：auto 模式按水位线走，空库等于「每只票只补最近一段」；source=all 才全量重拉
     "stock_market_daily_ex_sync": {"source": "all", "max_codes": 0},
@@ -116,9 +122,14 @@ TASK_OVERRIDES: dict[str, dict] = {
     "stock_shares_sync": {"full_sweep": True, "max_stocks": 0},
     # 财务摘要：full_sweep=True 才全量
     "financial_abstract_sync": {"full_sweep": True, "max_stocks": 0},
-    # 概念行情：空库走 FALLBACK_DAYS=400 兜底（只补 1 年）；给 start_date 才补全史
-    # 实测源侧提供 2018 年以来数据（stock_board_concept_index_ths 2018 年返回 243 行）
-    "concept_market_sync": {"start_date": "20180101"},
+    # 概念行情：collector 只在「库内该概念无历史」时才用 start_date，
+    # 否则一律走 last_date+1 增量 —— 所以空库恢复时这条覆盖是**唯一**的全史入口。
+    # 2026-10-17 实测源侧可回溯远比 2018 早（akshare stock_board_concept_index_ths）：
+    #   物联网   start=20050101 → 最早 2010-01-04 / 3,591 行（真起点，非过滤边界）
+    #   智能电网 start=20050101 → 最早 2016-01-04（概念成立晚）
+    #   负对照   start=20260101 → 最早 2026-01-05（确认确按 start_date 过滤）
+    # 故取 20050101：足够早、靠源侧自然返回起点；实测耗时不随起点提前增加（7.3s vs 11.1s）。
+    "concept_market_sync": {"start_date": "20050101"},
     # 分红：max_stocks=0 表示不限只数
     "ths_dividend_sync": {"max_stocks": 0},
 }

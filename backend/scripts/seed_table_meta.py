@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS table_meta (
   writers json NULL COMMENT '维护该表的采集任务名数组（对应 task_config.task_name，无任务为空）',
   writer_cols json NULL COMMENT '列级血缘：{任务名:{source,cols,derived,note,col_notes}} 该任务主要负责写哪些列',
   note varchar(255) NULL COMMENT '备注（停更/备份/缺口）',
-  rebuild varchar(16) NULL COMMENT '换机可恢复性：full/param/partial/window/derived/none',
+  rebuild varchar(16) NULL COMMENT '换机可恢复性：full/param/partial/window/derived/none/archive',
   rebuild_note varchar(255) NULL COMMENT '可恢复性依据与缺口规模（换机器时看这条）',
   update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '元数据维护时间',
   PRIMARY KEY (table_name)
@@ -1345,15 +1345,23 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
 # 换机可恢复性标签（2026-10-17 新增，配合 git-only-restore.md）
 # ---------------------------------------------------------------------------
 # 判据**不是**「有没有采集器」——有采集器也可能空库只补近 N 天。
-# 唯一判据是：**空库跑一遍默认参数，能不能把这张表的全部历史拿回来**。
-# 所以标注时必须区分 full（自动全史）/ param（要显式给起点）/ window（源侧滑走即失）。
+# 判据是：**换机后按 restore.py 跑一遍，能不能把这张表的全部历史拿回来**。
+#
+# 口径要点（2026-10-17 修正）：
+#   ✅ 以**恢复脚本实际传入的参数**为判据，不以任务的裸默认参数为判据。
+#      因为使用者换机时跑的是 restore.py，而不是 hand-run 单个任务。
+#   🔴 `param` 不是「给使用者看的提示」，而是**缺陷标记**：它意味着 restore.py
+#      缺一条 TASK_OVERRIDES。处置方式是补覆盖项 → 升 full，而不是让使用者记参数。
+#      故本次把仅剩的 1 张 param 修掉后，该档应为 0 张；再出现即表示有表漏配。
+#   `archive` = 备份留档快照，本就不需要重建，**不计入**「换机会丢」筛选。
 REBUILD_LEVELS: dict[str, str] = {
-    "full":    "可重建 —— 有采集器且空库能自动补全史",
-    "param":   "需传参 —— 默认只补近 N 天，必须显式给起点",
+    "full":    "可重建 —— 有采集器，换机跑恢复脚本能自动补全史",
+    "param":   "⚠️待修 —— 恢复脚本缺参数覆盖（缺陷标记，不应展示给使用者）",
     "partial": "部分缺失 —— 能补大部分，但源侧不再提供某类标的",
     "window":  "窗口受限 —— 源侧只留最近 N 天，停跑超期即永久缺口",
     "derived": "可重算 —— 由其它表派生，重跑任务即可再生",
     "none":    "不可重建 —— 无采集器 / 源无历史 / 纯运营态数据",
+    "archive": "归档留档 —— 备份快照，无需重建（不计入换机风险）",
 }
 
 # table_name -> (level, 依据或缺口规模)
@@ -1369,7 +1377,11 @@ _REBUILD: dict[str, tuple[str, str]] = {
     "index_valuation_daily": ("full", "指数估值全史"),
     "ths_concept_info": ("full", "概念列表快照，一次全量"),
     "ths_stock_concepts": ("full", "概念成分当前快照，一次全量"),
-    "ths_concept_market": ("param", "FALLBACK_DAYS=400 默认只补约 1 年；传 start_date=20180101 可全补（源侧已验证有 2018 数据）"),
+    # 2026-10-17 实测更正：源侧可回溯远早于 2018 —— 物联网 start=20050101 返回最早
+    # 2010-01-04（3,591 行，是真起点而非过滤边界）；智能电网最早 2016-01-04（概念成立晚）。
+    # 原标注 20180101 既低估了源侧，也让恢复脚本只补到 2018 → restore.py 已改 20050101。
+    # collector 仅在「库内该概念无任何历史」时才用 start_date，故空库恢复可全量回溯。
+    "ths_concept_market": ("full", "空库经 restore.py 固定传 start_date=20050101 全量回溯；源侧实测最早 2010-01-04（物联网）"),
     # ---- 资料 / 日历 / 行业 ----
     "stock_info": ("full", "名册快照单次全量（实测 5,577 行 / 14s）"),
     "stock_info_ex": ("full", "名册快照，stock_info_sync + bj_stock_sync 全量覆盖"),
@@ -1425,10 +1437,10 @@ _REBUILD: dict[str, tuple[str, str]] = {
     "market_style_daily": ("derived", "由日线派生，重跑 market_style_sync 可再生"),
     # ---- AI 产出 ----
     "finance_concept_analysis": ("derived", "AI 概念分析产出，重跑 ai_concept_analysis 可再生（需 ARK API Key）"),
-    # ---- 备份留档（不参与重建）----
-    "stock_market_daily_bak_20250802": ("none", "备份表，仅作留档；正表可由采集器重建"),
-    "stock_company_profile_bak_20260905": ("none", "备份表，仅作留档"),
-    "dq_pct_fix_backup_20260922": ("none", "口径修正前的备份快照，仅作留档"),
+    # ---- 备份留档（不参与重建；单列 archive，避免混进「换机会丢」筛选里制造噪音）----
+    "stock_market_daily_bak_20250802": ("archive", "备份表，仅作留档；正表可由采集器重建"),
+    "stock_company_profile_bak_20260905": ("archive", "备份表，仅作留档"),
+    "dq_pct_fix_backup_20260922": ("archive", "口径修正前的备份快照，仅作留档"),
 }
 
 
@@ -1531,6 +1543,15 @@ def main() -> None:
                 print("== 换机时需要留意 ==")
                 for n, lv, why in risky:
                     print(f"  [{lv:<7}] {n:<34} {why or ''}")
+
+            # param 是「恢复脚本缺覆盖」的缺陷标记，不是给使用者看的档位。
+            # 出现即报警，处置方式是往 restore.py 的 TASK_OVERRIDES 补一条后升 full。
+            cur.execute("SELECT table_name FROM table_meta WHERE rebuild='param' ORDER BY table_name")
+            pend = [r[0] for r in cur.fetchall()]
+            if pend:
+                print(f"  🔴 param 档 {len(pend)} 张 —— restore.py 缺参数覆盖，应补 TASK_OVERRIDES 并升 full：{pend}")
+            else:
+                print("  ✅ param 档已清空（所有需传参的表都由恢复脚本自动传参）")
 
             cur.execute("SELECT table_name, category FROM table_meta ORDER BY table_name")
             print("== table_meta 清单 ==")

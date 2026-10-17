@@ -288,18 +288,20 @@ const DATE_TYPES = ['date', 'datetime', 'timestamp', 'time']
 const CHANGE_RE = /(pct|chg|change|涨跌幅|涨跌)/
 
 // ---------- 换机可恢复性标签（table_meta.rebuild，2026-10-17） ----------
-// 判据不是「有没有采集器」，而是「空库跑默认参数能不能把历史拿回来」。
-// 列表里只显示会出问题的四档：41 张 full 表全挂标签会变成噪音；详情卡里显示全档。
+// 判据：换机后按 restore.py 跑一遍，能不能把这张表的全部历史拿回来。
+// 列表里只显示会出问题的档位（full 表全挂标签会变成噪音）；详情卡里显示全档。
+// param 不是「使用者须知」，而是「恢复脚本缺参数覆盖」的缺陷标记 —— 正常应为 0 张。
 const REBUILD_META: Record<
   string,
   { label: string; color: string; bg: string; border: string; hint: string }
 > = {
-  full: { label: '可重建', color: '#185FA5', bg: '#EAF2FB', border: '#C5DBF2', hint: '有采集器，空库能自动补全史' },
-  param: { label: '需传参', color: '#8A6D1F', bg: '#FDF7E6', border: '#E8D6A4', hint: '默认只补近 N 天，换机须显式给起点' },
+  full: { label: '可重建', color: '#185FA5', bg: '#EAF2FB', border: '#C5DBF2', hint: '有采集器，换机跑恢复脚本能自动补全史' },
+  param: { label: '待修', color: '#791F1F', bg: '#FBECEC', border: '#E9C9C9', hint: '恢复脚本缺参数覆盖（缺陷标记，不应长期存在）' },
   partial: { label: '部分缺失', color: '#B45309', bg: '#FEF4E8', border: '#F0D3AE', hint: '能补大部分，源侧不再提供某类标的' },
   window: { label: '窗口受限', color: '#791F1F', bg: '#FBECEC', border: '#E9C9C9', hint: '源侧只留最近 N 天，停跑超期即永久缺口' },
   derived: { label: '可重算', color: '#4B5563', bg: '#F4F5F7', border: '#DDE0E4', hint: '由其它表派生，重跑任务可再生' },
   none: { label: '不重建', color: '#6B7280', bg: '#F4F5F7', border: '#DDE0E4', hint: '无采集器 / 源无历史 / 纯运营态数据' },
+  archive: { label: '留档', color: '#6B7280', bg: '#F4F5F7', border: '#DDE0E4', hint: '备份快照，本就不需要重建（不计入换机风险）' },
 }
 const RISK_LEVELS = new Set(['param', 'partial', 'window', 'none'])
 const riskOnly = ref(false)
