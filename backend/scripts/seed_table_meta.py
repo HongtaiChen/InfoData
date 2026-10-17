@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS table_meta (
   writers json NULL COMMENT '维护该表的采集任务名数组（对应 task_config.task_name，无任务为空）',
   writer_cols json NULL COMMENT '列级血缘：{任务名:{source,cols,derived,note,col_notes}} 该任务主要负责写哪些列',
   note varchar(255) NULL COMMENT '备注（停更/备份/缺口）',
+  rebuild varchar(16) NULL COMMENT '换机可恢复性：full/param/partial/window/derived/none',
+  rebuild_note varchar(255) NULL COMMENT '可恢复性依据与缺口规模（换机器时看这条）',
   update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '元数据维护时间',
   PRIMARY KEY (table_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='数据中心表级元数据：数据源/清洗口径/维护任务（数据流卡数据源）'
@@ -1339,6 +1341,116 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# 换机可恢复性标签（2026-10-17 新增，配合 git-only-restore.md）
+# ---------------------------------------------------------------------------
+# 判据**不是**「有没有采集器」——有采集器也可能空库只补近 N 天。
+# 唯一判据是：**空库跑一遍默认参数，能不能把这张表的全部历史拿回来**。
+# 所以标注时必须区分 full（自动全史）/ param（要显式给起点）/ window（源侧滑走即失）。
+REBUILD_LEVELS: dict[str, str] = {
+    "full":    "可重建 —— 有采集器且空库能自动补全史",
+    "param":   "需传参 —— 默认只补近 N 天，必须显式给起点",
+    "partial": "部分缺失 —— 能补大部分，但源侧不再提供某类标的",
+    "window":  "窗口受限 —— 源侧只留最近 N 天，停跑超期即永久缺口",
+    "derived": "可重算 —— 由其它表派生，重跑任务即可再生",
+    "none":    "不可重建 —— 无采集器 / 源无历史 / 纯运营态数据",
+}
+
+# table_name -> (level, 依据或缺口规模)
+_REBUILD: dict[str, tuple[str, str]] = {
+    # ---- 行情 ----
+    "stock_market_daily": ("full", "空库按 list_date 起拉，自动全史（2026-09-24 已修；存量 1,849 万行）"),
+    "stock_market_daily_ex": ("partial", "可重建 92.52%：退市股 292 只 101.3 万行 + 老北交所 245 只 25.0 万行，新浪任何区间均返回空"),
+    "stock_market_current": ("window", "当日行情快照，只能取当日；历史快照不可回补"),
+    # ---- 指数 / 概念 ----
+    "dc_index_market": ("full", "东财指数行情全史"),
+    "index_profile": ("full", "指数档案快照，一次全量"),
+    "index_constituents": ("full", "指数成分快照，一次全量"),
+    "index_valuation_daily": ("full", "指数估值全史"),
+    "ths_concept_info": ("full", "概念列表快照，一次全量"),
+    "ths_stock_concepts": ("full", "概念成分当前快照，一次全量"),
+    "ths_concept_market": ("param", "FALLBACK_DAYS=400 默认只补约 1 年；传 start_date=20180101 可全补（源侧已验证有 2018 数据）"),
+    # ---- 资料 / 日历 / 行业 ----
+    "stock_info": ("full", "名册快照单次全量（实测 5,577 行 / 14s）"),
+    "stock_info_ex": ("full", "名册快照，stock_info_sync + bj_stock_sync 全量覆盖"),
+    "stock_code_mapping": ("full", "旧→新代码映射，可按 new_code 反查重建"),
+    "stock_industry_sw": ("full", "申万行业分类快照"),
+    "trade_calendar": ("full", "交易日历可一次拉全（实测 242 行 / 0s）"),
+    "finance_calendar": ("full", "财经日历，可向前拉取"),
+    # ---- 财务 / 分红 / 调研 / 回购 / 股本 ----
+    "stock_financial_abstract_ths": ("full", "财务摘要全史"),
+    "ths_stock_dividend": ("full", "分红全史（含约 9.5 万历史重复行，粒度待专项确认）"),
+    "stock_jgdy_detail": ("full", "机构调研明细，可回溯"),
+    "stock_repurchase": ("full", "回购公告全史"),
+    "stock_shares": ("full", "股本 start_date 硬编码 19900101，空库自动全史"),
+    # ---- 基金 ----
+    "fund_info": ("full", "基金名录快照"),
+    "fund_new_issue": ("full", "新发基金全史"),
+    "stock_hold_by_fund": ("full", "实测 58 期全量 0 失败（45 天披露缓冲，2012Q1 起）"),
+    # ---- 资金 ----
+    "securities_margin": ("full", "两融全史"),
+    "stock_capital_flow": ("window", "东财硬限最近 120 交易日；2025-09-19 前 74.8 万行已永久缺失，任务已冻结"),
+    # ---- 宏观 / 汇率 / 海外 / 商品 / 利率 / 债券 ----
+    "cb_policy_rate": ("full", "央行政策利率全史"),
+    "cn_cb_balance_monthly": ("full", "央行资产负债表全史"),
+    "cn_liquidity_monthly": ("full", "货币流动性全史"),
+    "cn_omo_daily": ("full", "公开市场操作全史"),
+    "cn_reserve_monthly": ("full", "存款准备金全史"),
+    "eu_money_supply_monthly": ("full", "DBnomics（ECB）提供全史"),
+    "global_liquidity_bis": ("full", "BIS GLI 提供全史"),
+    "us_fed_balance_weekly": ("full", "美联储 H.4.1 提供全史"),
+    "us_money_market_daily": ("full", "美国货币市场全史"),
+    "us_money_supply_monthly": ("full", "美国货币供应全史"),
+    "currency_boc_daily": ("full", "中行汇率全史"),
+    "global_usd_index_daily": ("full", "DXY 全史（dxy_sina 主源）"),
+    "overseas_index_daily": ("full", "海外指数全史"),
+    "futures_spot_price": ("full", "期货现货价全史"),
+    "interbank_rate_daily": ("full", "拆借利率全史"),
+    "bond_profit_daily": ("full", "债券收益率全史"),
+    # ---- 资讯 ----
+    "news": ("window", "资讯只能从现在起积累，源不回溯历史；存量换机即失"),
+    # ---- 系统（可 seed 重建）----
+    "table_meta": ("full", "seed_table_meta.py 可完整重建（实测空库 0s）"),
+    "task_config": ("full", "seed_task_config.py 可完整重建（51 条任务）"),
+    "dq_rules": ("full", "seed_dq_rules.py 可完整重建（209 条规则）"),
+    "task_runs": ("none", "任务运行日志，属过程记录，重建无意义"),
+    "user_prefs": ("none", "用户偏好为运营态数据，seed 只建默认 1 行；自定义配置换机即失"),
+    # ---- 质量（体检/核对产出，可重跑再生）----
+    "dq_report": ("derived", "体检产出，重跑 data_quality_check 可再生"),
+    "dq_gap_detail": ("derived", "缺口体检产出，重跑 data_quality_check_weekly 可再生"),
+    "dq_recon_detail": ("derived", "双源核对明细，重跑 daily_recon_window 可再生"),
+    "dq_close_nonpositive_detail": ("derived", "体检审计明细，重跑体检可再生成（无独立产出脚本）"),
+    "dq_pct_anomaly_detail": ("derived", "体检审计明细，重跑体检可再生成（无独立产出脚本）"),
+    "market_xcheck_daily": ("derived", "双源核对产出，重跑 xcheck_sync 可再生"),
+    "market_style_daily": ("derived", "由日线派生，重跑 market_style_sync 可再生"),
+    # ---- AI 产出 ----
+    "finance_concept_analysis": ("derived", "AI 概念分析产出，重跑 ai_concept_analysis 可再生（需 ARK API Key）"),
+    # ---- 备份留档（不参与重建）----
+    "stock_market_daily_bak_20250802": ("none", "备份表，仅作留档；正表可由采集器重建"),
+    "stock_company_profile_bak_20260905": ("none", "备份表，仅作留档"),
+    "dq_pct_fix_backup_20260922": ("none", "口径修正前的备份快照，仅作留档"),
+}
+
+
+def _ensure_rebuild_columns(conn) -> None:
+    """老库 table_meta 缺 rebuild / rebuild_note 列时补 ALTER（幂等）。"""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema=DATABASE() AND table_name='table_meta' AND column_name='rebuild'"
+        )
+        if cur.fetchone()[0] == 0:
+            cur.execute(
+                "ALTER TABLE table_meta "
+                "ADD COLUMN rebuild varchar(16) NULL "
+                "COMMENT '换机可恢复性：full/param/partial/window/derived/none' AFTER note, "
+                "ADD COLUMN rebuild_note varchar(255) NULL "
+                "COMMENT '可恢复性依据与缺口规模（换机器时看这条）' AFTER rebuild"
+            )
+            conn.commit()
+            logger.info("table_meta 已补 rebuild / rebuild_note 列")
+
+
 def _ensure_writer_cols_column(conn) -> None:
     """老库 table_meta 表可能缺 writer_cols 列，补 ALTER（幂等）。"""
     with conn.cursor() as cur:
@@ -1362,6 +1474,7 @@ def main() -> None:
             cur.execute(_DDL)
             logger.info("table_meta 表就绪")
             _ensure_writer_cols_column(conn)
+            _ensure_rebuild_columns(conn)
             import json as _json
 
             cur.execute("SELECT table_name FROM table_meta")
@@ -1379,10 +1492,46 @@ def main() -> None:
                      _json.dumps(wc, ensure_ascii=False) if wc else None, note),
                 )
                 upserted += cur.rowcount
+
+            # 可恢复性标签：独立维度，单独 UPDATE（不动上面 UPSERT 的字段集）
+            tagged = 0
+            for tname, (level, why) in _REBUILD.items():
+                cur.execute(
+                    "UPDATE table_meta SET rebuild=%s, rebuild_note=%s WHERE table_name=%s",
+                    (level, why or None, tname),
+                )
+                tagged += cur.rowcount
             conn.commit()
             cur.execute("SELECT COUNT(*) FROM table_meta")
             total = cur.fetchone()[0]
             print(f"播种完成：upsert {upserted} 行（先有 {len(exist)} → 现有 {total} 行）")
+            print(f"可恢复性标签：标注 {tagged} 行")
+
+            cur.execute("SELECT rebuild, COUNT(*) FROM table_meta GROUP BY rebuild ORDER BY rebuild")
+            dist = {r[0]: r[1] for r in cur.fetchall()}
+            print("== 可恢复性分布 ==")
+            for k, desc in REBUILD_LEVELS.items():
+                print(f"  {k:<8}{dist.get(k, 0):>3} 张   {desc}")
+
+            cur.execute("SELECT table_name FROM table_meta WHERE rebuild IS NULL ORDER BY table_name")
+            unlabeled = [r[0] for r in cur.fetchall()]
+            if unlabeled:
+                print(f"  ⚠️ 未标注 {len(unlabeled)} 张：{unlabeled}")
+                print("     （新增表时请补 _REBUILD 条目，否则换机时会漏掉判定）")
+            else:
+                print("  ✅ 全部表均已标注")
+
+            # 换机时真正会丢的，单独列出来 —— 这是本标签的主要用途
+            cur.execute(
+                "SELECT table_name, rebuild, rebuild_note FROM table_meta "
+                "WHERE rebuild IN ('window','partial','param','none') ORDER BY rebuild, table_name"
+            )
+            risky = cur.fetchall()
+            if risky:
+                print("== 换机时需要留意 ==")
+                for n, lv, why in risky:
+                    print(f"  [{lv:<7}] {n:<34} {why or ''}")
+
             cur.execute("SELECT table_name, category FROM table_meta ORDER BY table_name")
             print("== table_meta 清单 ==")
             for r in cur.fetchall():

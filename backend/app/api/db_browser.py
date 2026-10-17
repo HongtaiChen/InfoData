@@ -318,7 +318,8 @@ def tables_flow():
     # 1. 静态元数据
     metas = _norm(
         query_all(
-            "SELECT table_name, category, source_desc, flow_desc, writers, writer_cols, note "
+            "SELECT table_name, category, source_desc, flow_desc, writers, writer_cols, note, "
+            "rebuild, rebuild_note "
             "FROM table_meta"
         )
     )
@@ -342,6 +343,9 @@ def tables_flow():
             "source_desc": r.get("source_desc"),
             "flow_desc": r.get("flow_desc"),
             "note": r.get("note"),
+            # 换机可恢复性（2026-10-17）：full/param/partial/window/derived/none
+            "rebuild": r.get("rebuild"),
+            "rebuild_note": r.get("rebuild_note"),
             "writers": writers or [],
             "writer_cols": writer_cols or {},
             "jobs": [],
