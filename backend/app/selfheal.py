@@ -404,8 +404,10 @@ class StartupConverger:
             writers = self.writers_of(table)
             if not writers:
                 # 两类都会落到这里，且都不该被"猜"着修：
-                #   ① 历史导入 / 自产 / 已停更的表（如实测的 stock_hold_by_fund、
-                #      stock_market_daily_ex、task_runs）—— 根本没有采集任务可重跑
+                #   ① 历史导入 / 自产 / 已停更的表（如实测的 dq_pct_anomaly_detail、
+                #      task_runs、user_prefs）—— 根本没有采集任务可重跑
+                #      （注：stock_hold_by_fund / stock_market_daily_ex 于 2026-10-17
+                #        补上了采集器，已不再属于这一类）
                 #   ② 元数据漏配 —— 属于要修的配置问题，不是要跑的任务
                 unmapped.append({**base, "why": (
                     "table_meta.writers 为空：该表没有可重跑的采集任务"

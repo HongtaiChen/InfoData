@@ -19,6 +19,8 @@ from datetime import datetime
 from ..db import get_db_config, query_all
 from ..task_recorder import TaskRecorder
 from ..collectors.stock_daily_incr import StockDailyIncrementalCollector
+from ..collectors.stock_market_daily_ex_sync import StockDailyExCollector
+from ..collectors.fund_hold_sync import FundHoldCollector
 from ..collectors.market_current_sync import MarketCurrentSyncCollector
 from ..collectors.trade_calendar_sync import TradeCalendarSyncCollector
 from ..collectors.news_fetch import NewsFetchCollector
@@ -216,6 +218,71 @@ def run_concept_market_sync(params: dict) -> int:
     result = _collector_run(collector)
     if result["error_count"] > 0:
         logger.warning(f"⚠️ 概念行情 {result['error_count']} 个失败（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_stock_market_daily_ex_sync(params: dict) -> int:
+    """归档扩展行情同步（stock_market_daily_ex，不复权原始价）
+
+    2026-10-17 新增：该表此前 `table_meta.writers=[]`（1690 万行无写入方），
+    属「本机损毁 + 无备份即永久丢失」的最大单点风险。补上后 clone 可重建其 98.52%。
+
+    params:
+      source    : "auto"（默认，逐票 MAX(trade_date)+1 → 今天）
+                  | "all"（无本地数据者从 list_date 起，即空库全史自举）
+      max_codes : 0 = 本轮不限；>0 = 只处理前 N 只（分批推进，幂等可重跑）
+      start_date: 显式回补起点（YYYYMMDD，可选）
+      end_date  : 截止日（默认今天）
+      workers   : 并发数（默认 4；V8 预热失败会自动退回 1）
+
+    ⚠️ 已知不可重建域：老北交所代码（430/83x/87x）新浪返回空响应，
+    共 245 只 / 249,999 行，采集器会自动跳过并计入 skipped_old_bj。
+    """
+    p = _task_params(params, {"source": "auto", "max_codes": 0})
+    source = (p.get("source") or "auto").lower()
+    collector = StockDailyExCollector(
+        max_codes=int(p.get("max_codes") or 0),
+        ranges=p.get("ranges") or None,
+        start_date=p.get("start_date"),
+        end_date=p.get("end_date"),
+        workers=int(p.get("workers") or 4),
+        # source=all：无视库内水位线，一律从 list_date 全量重拉（UPSERT 幂等，慢但彻底）
+        full_sweep=(source == "all"),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(
+            f"⚠️ 归档行情 {result['error_count']} 只失败（其余正常）: {result['errors'][:3]}"
+        )
+    return result["records_written"]
+
+
+def run_fund_hold_sync(params: dict) -> int:
+    """基金持仓同步（stock_hold_by_fund，按报告期全市场一次拉齐）
+
+    2026-10-17 新增：该表此前 `table_meta.writers=[]`，11.3 万行无写入方。
+    接口实测可回溯到 2012-03-31（比本地最早的 2016-03-31 更早），故重建可向前补齐 16 个报告期。
+
+    params:
+      periods    : 显式报告期列表 ["20250630", ...]（给定时忽略 start/end）
+      start_period: 起始报告期（默认 20120331）
+      end_period : 截止报告期（默认今天）
+      overwrite  : True = UPSERT（会把历史快照改写成当前修订值，**慎用**）
+
+    ⚠️ 默认 INSERT IGNORE：基金季报会被持续修订，同一报告期「当年存的」与「现在查的」
+    行数和数值都不同（实测 2025-06-30：本地 2,943 行 vs 接口 5,216 行），
+    UPSERT 会静默改写历史结论。
+    """
+    p = _task_params(params, {})
+    collector = FundHoldCollector(
+        periods=p.get("periods") or None,
+        start_period=p.get("start_period"),
+        end_period=p.get("end_period"),
+        overwrite=bool(p.get("overwrite", False)),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 基金持仓 {result['error_count']} 期失败: {result['errors'][:3]}")
     return result["records_written"]
 
 
@@ -1227,6 +1294,10 @@ TASKS = {
     "trade_calendar_sync": run_trade_calendar_sync,
     "news_fetch": run_news_fetch,
     "concept_market_sync": run_concept_market_sync,
+    # 2026-10-17 归档扩展行情（stock_market_daily_ex 原无写入方，1690 万行）
+    "stock_market_daily_ex_sync": run_stock_market_daily_ex_sync,
+    # 2026-10-17 基金持仓（stock_hold_by_fund 原无写入方，11.3 万行）
+    "fund_hold_sync": run_fund_hold_sync,
     # 2026-09-05 补齐的 6 个作业（原“有配置无实现”，调度器此前静默跳过）
     "stock_info_sync": run_stock_info_sync,
     "concept_sync": run_concept_sync,
