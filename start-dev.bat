@@ -73,34 +73,47 @@ if not defined PY (
 )
 echo [OK] Python  = %PY%
 
-REM ---------------- backend :8000 ----------------
-netstat -ano | findstr ":8000 " | findstr "LISTENING" >nul 2>&1
+REM ---------------- resolve ports (overridable via env) ----------------
+REM  Same variable names as frontend/vite.config.ts, so the two never drift.
+REM  Default 8000 / 5173 preserves the old behaviour when nothing is set.
+set "API_PORT=%INFO_DATA_API_PORT%"
+if not defined API_PORT set "API_PORT=8000"
+set "WEB_PORT=%INFO_DATA_WEB_PORT%"
+if not defined WEB_PORT set "WEB_PORT=5173"
+echo [OK] Ports   = backend :%API_PORT%  frontend :%WEB_PORT%
+
+REM ---------------- backend :%API_PORT% ----------------
+netstat -ano | findstr ":%API_PORT% " | findstr "LISTENING" >nul 2>&1
 if %errorlevel%==0 (
-  echo [SKIP] backend already running on :8000
+  echo [SKIP] backend already running on :%API_PORT%
 ) else (
-  echo [START] backend API ...  http://127.0.0.1:8000/docs
-  start "InvestBuddy-Backend" /D "%BACKEND%" cmd /k ""%PY%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+  echo [START] backend API ...  http://127.0.0.1:%API_PORT%/docs
+  start "InvestBuddy-Backend" /D "%BACKEND%" cmd /k ""%PY%" -m uvicorn app.main:app --host 127.0.0.1 --port %API_PORT%"
 )
 
-REM ---------------- frontend :5173 ----------------
+REM ---------------- frontend :%WEB_PORT% ----------------
 where npm >nul 2>&1
 if errorlevel 1 (
   echo [WARN] npm not found on PATH - skipping frontend. Install Node.js 18+ and retry.
 ) else (
-  netstat -ano | findstr ":5173 " | findstr "LISTENING" >nul 2>&1
-  if %errorlevel%==0 (
-    echo [SKIP] frontend already running on :5173
-  ) else (
+  REM  if errorlevel 1 means "not listening" -> start.
+  REM  Do NOT use %errorlevel% inside this block: it is expanded when the block is
+  REM  parsed, so it would still hold the 0 from "where npm" above and the frontend
+  REM  would be reported as "already running" on every launch and never started.
+  netstat -ano | findstr ":%WEB_PORT% " | findstr "LISTENING" >nul 2>&1
+  if errorlevel 1 (
     if not exist "%FRONTEND%\node_modules" (
       echo [INFO] first run: installing frontend deps ^(npm install^) ...
       pushd "%FRONTEND%"
       call npm install
       popd
     )
-    echo [START] frontend dev server ...
+    echo [START] frontend dev server ...  http://127.0.0.1:%WEB_PORT%
     start "InvestBuddy-Frontend" /D "%FRONTEND%" cmd /k "npm run dev"
+  ) else (
+    echo [SKIP] frontend already running on :%WEB_PORT%
   )
 )
 
 echo.
-echo All services started. Open http://127.0.0.1:5173
+echo All services started. Open http://127.0.0.1:%WEB_PORT%

@@ -155,6 +155,19 @@ start-dev.bat
 - 前端 http://127.0.0.1:5173 （Vite dev server）
 - 后端 http://127.0.0.1:8000 （FastAPI，接口文档 `/docs`）
 
+> 🔧 **端口被占时不用改代码**，设环境变量即可（不设仍是默认的 8000 / 5173）：
+>
+> ```bat
+> set INFO_DATA_API_PORT=8010
+> set INFO_DATA_WEB_PORT=5180
+> start-dev.bat
+> ```
+>
+> - 一键启动（`start-dev.bat`）只认**系统环境变量**——它是 cmd 脚本，**不读** `frontend/.env.local`。
+> - 直接 `npm run dev` 时才会读 `frontend/.env.local`（模板见 `frontend/.env.example`，该文件不入库）。
+> - 两边用的是**同一组变量名**，不会各自漂移。前端设了 `strictPort`：端口被占会直接报错，
+>   而不是悄悄换到 5174 却仍提示 5173。
+
 ---
 
 ## 常见问题（部署排障速查）
@@ -183,7 +196,7 @@ start-dev.bat
 ## 日常启动（环境已就绪）
 
 ```bat
-start-dev.bat          :: 启动后端 :8000 + 前端 :5173（已在跑的会自动跳过）
+start-dev.bat          :: 启动后端 :8000 + 前端 :5173（已在跑的会自动跳过；端口可用 INFO_DATA_API_PORT / INFO_DATA_WEB_PORT 覆盖）
 ```
 
 单独启动后端（开机自启也用这个）：
@@ -251,6 +264,10 @@ setx INFO_DATA_DB_PASSWORD "你的密码"
 | `TUSHARE_TOKEN` | 空 | 可选 | Tushare 备源 token（不装 `tushare` 包也能跑，它是函数内惰性导入） |
 | `NO_PROXY` | 空 | 可选 | 建议 `*` 避免本地代理干扰采集 |
 | `INFO_DATA_PYTHON` | 空 | 可选 | 启动脚本用的 Python 解释器路径 |
+| `INFO_DATA_API_PORT` | `8000` | 可选 | 后端端口：`start-dev.bat` 用它起后端并检测占用，`vite` 代理目标也由它拼出 |
+| `INFO_DATA_WEB_PORT` | `5173` | 可选 | 前端 dev server 端口（被占时改这里，不用改 `vite.config.ts`） |
+| `INFO_DATA_WEB_HOST` | `127.0.0.1` | 可选 | 前端监听地址；需要局域网内其他设备访问时设 `0.0.0.0` |
+| `INFO_DATA_API_TARGET` | 空 | 可选 | 完整后端地址（如 `http://192.168.1.9:8000`），**优先于** `API_PORT`；指向远程 / 容器后端时用 |
 | `INFO_DATA_NOTIFY_PROVIDER` | 空 | 可选 | 告警通道（见下） |
 
 ### 告警通知（可选）
