@@ -73,16 +73,29 @@ backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 
 ```bat
 :: 4.1 建库 + 建全部 56 张表（幂等，可重复执行，不含 DROP）
+::
+::     ⚠️ Windows 版 MySQL 的安装程序**默认不把 bin 加进 PATH**，
+::        所以「MySQL 已装好、服务也在跑」时，直接敲 mysql 仍会报
+::        『mysql 不是内部或外部命令』。此时用全路径（版本号按你的实际改）：
+::        "C:\Program Files\MySQL\MySQL Server 8.2\bin\mysql.exe" -u root -p < scripts\schema.sql
+::
+::     ⚠️ 本文件把库名写死为 adata（第 31 行 CREATE DATABASE + 第 35 行 USE）。
+::        要用别的库名，先改这两行，再同步设 INFO_DATA_DB_NAME，否则后端会连到空库。
 mysql -u root -p < scripts\schema.sql
 
 :: 4.2 灌入配置（任务 / DQ 规则 / 表元数据 / 索引）
+::
+::     ⚠️ 必须用第 3 步装过依赖的**同一个解释器**。不要用 PATH 上的裸 python：
+::        它没有 pymysql，会直接 ModuleNotFoundError 中断（干净克隆实测必踩）。
+::        用方式 b/c 指定的解释器时，把 PY 换成那个全路径即可。
 cd backend
-python scripts\seed_task_config.py --apply
-python scripts\seed_dq_rules.py
-python scripts\seed_table_meta.py
-python scripts\seed_indexes.py --apply
-python scripts\seed_market_style.py
-python scripts\seed_recovered_tasks.py
+set "PY=.venv\Scripts\python.exe"
+"%PY%" scripts\seed_task_config.py --apply
+"%PY%" scripts\seed_dq_rules.py
+"%PY%" scripts\seed_table_meta.py
+"%PY%" scripts\seed_indexes.py --apply
+"%PY%" scripts\seed_market_style.py
+"%PY%" scripts\seed_recovered_tasks.py
 cd ..
 ```
 
@@ -93,6 +106,11 @@ cd ..
 >
 > ⚠️ `--apply` 不能少：`seed_task_config.py` / `seed_indexes.py` / `setup_v3_tables.py`
 > 默认只做**只读预览**，不加 `--apply` 不会写入任何东西。
+>
+> 🔎 **2026-10-17 干净克隆实测**：把仓库 clone 到一个空目录后按本节逐条执行，
+> 56 张表零报错建成、6 个 `seed_*` 全绿（49 任务 / 209 条 DQ 规则 / 59 张表元数据），
+> 后端起来后 `/api/health` **首次探测即 200**，启动自愈随即补数据（`fund_info_sync` 写入 28086 条）。
+> 上面 4.1 / 4.2 的两条 ⚠️ 正是这次实测中**真的卡住过**的位置，不是预防性提醒。
 
 ### 第 5 步 · 准备业务数据
 
@@ -145,6 +163,8 @@ start-dev.bat
 
 | 现象 | 根因 | 处置 |
 |---|---|---|
+| `mysql: command not found` / 『mysql 不是内部或外部命令』 | MySQL 已安装但 **bin 目录不在 PATH**（Windows 安装程序默认不写） | 用全路径 `"C:\Program Files\MySQL\MySQL Server 8.2\bin\mysql.exe" -u root -p < scripts\schema.sql`，或把 `...\MySQL Server 8.2\bin` 加进 PATH |
+| 跑 `seed_*.py` 报 `ModuleNotFoundError: No module named 'pymysql'` | 用了 **PATH 上的裸 python**（没装项目依赖），多见于「建了 venv 但没激活」 | 用第 3 步那个解释器：`cd backend` 后 `.venv\Scripts\python.exe scripts\seed_task_config.py --apply` |
 | `Application startup failed` + `ModuleNotFoundError: No module named 'fastapi'` | 依赖没装，或启动用了**没有项目依赖的解释器** | 用第 2 步选定的解释器重装 `backend\requirements.txt`；确认脚本打印的 `[OK] Python = ...` 正是你要的那个 |
 | `Application startup failed` + `Table 'adata.task_config' doesn't exist` | **漏做第 4 步**（数据库未初始化） | 导入 `scripts\schema.sql` 并跑那 6 个 `seed_*` 脚本 |
 | `Table '<某张表>' doesn't exist`（只缺个别表） | `schema.sql` 是较早版本导出的 | 重新 `python scripts\dump_schema.py` 导出后再导入（幂等，可重复） |
