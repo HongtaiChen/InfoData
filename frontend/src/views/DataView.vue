@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import {
-  NButton, NEmpty, NInput, NModal, NPopconfirm, NSelect, NSpin, NTable, NTag,
+  NButton, NCheckbox, NEmpty, NInput, NModal, NPopconfirm, NSelect, NSpin, NTable, NTag,
   type SelectOption,
 } from 'naive-ui'
 import api from '../api'
@@ -102,6 +102,10 @@ interface FlowInfo {
   source_desc: string | null
   flow_desc: string | null
   note: string | null
+  /** 换机可恢复性：full/param/partial/window/derived/none（table_meta.rebuild） */
+  rebuild: string | null
+  /** 可恢复性依据与缺口规模（table_meta.rebuild_note） */
+  rebuild_note: string | null
   writers: string[]
   jobs: FlowJob[]
 }
@@ -283,10 +287,58 @@ const NUM_TYPES = ['int', 'bigint', 'smallint', 'tinyint', 'decimal', 'float', '
 const DATE_TYPES = ['date', 'datetime', 'timestamp', 'time']
 const CHANGE_RE = /(pct|chg|change|涨跌幅|涨跌)/
 
+// ---------- 换机可恢复性标签（table_meta.rebuild，2026-10-17） ----------
+// 判据不是「有没有采集器」，而是「空库跑默认参数能不能把历史拿回来」。
+// 列表里只显示会出问题的四档：41 张 full 表全挂标签会变成噪音；详情卡里显示全档。
+const REBUILD_META: Record<
+  string,
+  { label: string; color: string; bg: string; border: string; hint: string }
+> = {
+  full: { label: '可重建', color: '#185FA5', bg: '#EAF2FB', border: '#C5DBF2', hint: '有采集器，空库能自动补全史' },
+  param: { label: '需传参', color: '#8A6D1F', bg: '#FDF7E6', border: '#E8D6A4', hint: '默认只补近 N 天，换机须显式给起点' },
+  partial: { label: '部分缺失', color: '#B45309', bg: '#FEF4E8', border: '#F0D3AE', hint: '能补大部分，源侧不再提供某类标的' },
+  window: { label: '窗口受限', color: '#791F1F', bg: '#FBECEC', border: '#E9C9C9', hint: '源侧只留最近 N 天，停跑超期即永久缺口' },
+  derived: { label: '可重算', color: '#4B5563', bg: '#F4F5F7', border: '#DDE0E4', hint: '由其它表派生，重跑任务可再生' },
+  none: { label: '不重建', color: '#6B7280', bg: '#F4F5F7', border: '#DDE0E4', hint: '无采集器 / 源无历史 / 纯运营态数据' },
+}
+const RISK_LEVELS = new Set(['param', 'partial', 'window', 'none'])
+const riskOnly = ref(false)
+
+function rebuildOf(name: string): string | null {
+  return flowMap.value.get(name)?.rebuild ?? null
+}
+function rebuildMeta(name: string) {
+  const lv = rebuildOf(name)
+  return lv ? (REBUILD_META[lv] ?? null) : null
+}
+function isRiskTable(name: string): boolean {
+  const lv = rebuildOf(name)
+  return !!lv && RISK_LEVELS.has(lv)
+}
+function rebuildTagStyle(name: string) {
+  const m = rebuildMeta(name)
+  return m ? { color: m.color, background: m.bg, borderColor: m.border } : {}
+}
+function rebuildTip(name: string): string {
+  const m = rebuildMeta(name)
+  if (!m) return ''
+  const note = flowMap.value.get(name)?.rebuild_note || ''
+  return `${m.label}｜${m.hint}${note ? '\n' + note : ''}`
+}
+function rebuildLabel(lv: string | null): string {
+  return lv ? (REBUILD_META[lv]?.label ?? '') : ''
+}
+function rebuildTagStyleRaw(lv: string | null) {
+  const m = lv ? REBUILD_META[lv] : null
+  return m ? { color: m.color, background: m.bg, border: `1px solid ${m.border}` } : {}
+}
+
 const filteredTables = computed(() => {
+  let list = tables.value
+  if (riskOnly.value) list = list.filter((t) => isRiskTable(t.name))
   const kw = tableKeyword.value.trim().toLowerCase()
-  if (!kw) return tables.value
-  return tables.value.filter(
+  if (!kw) return list
+  return list.filter(
     (t) => t.name.toLowerCase().includes(kw) || t.comment.toLowerCase().includes(kw),
   )
 })
@@ -651,6 +703,17 @@ function hintClass(container: string, index: number, len: number): Record<string
 const _kw = computed(() => tableKeyword.value.trim())
 watch(_kw, (kw) => {
   if (kw) {
+    expandedGroups.value = new Set(GROUPS.map((g) => g.key))
+    expandedCategories.value = new Set(
+      groupedTables.value.flatMap((g) => g.categories.map((c) => `${g.key}::${c.key}`)),
+    )
+  }
+})
+
+// 勾选「仅看换机会丢的表」时同样强制展开 —— 否则命中的表会藏在折叠组里，
+// 界面显示「9 张」却只看得见 5 张，比不加筛选更让人困惑。
+watch(riskOnly, (on) => {
+  if (on) {
     expandedGroups.value = new Set(GROUPS.map((g) => g.key))
     expandedCategories.value = new Set(
       groupedTables.value.flatMap((g) => g.categories.map((c) => `${g.key}::${c.key}`)),
@@ -1211,6 +1274,12 @@ onMounted(async () => {
           <span style="color:#999;font-weight:400;font-size:12px;">{{ tables.length }} 张表</span>
         </div>
         <NInput v-model:value="tableKeyword" size="small" placeholder="搜索表名 / 注释" clearable style="margin-top:8px" />
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
+          <NCheckbox v-model:checked="riskOnly" size="small" data-testid="chk-risk-only">
+            <span style="font-size:11.5px;color:#555;">仅看换机会丢的表</span>
+          </NCheckbox>
+          <span v-if="riskOnly" style="font-size:10.5px;color:#B45309;">{{ filteredTables.length }} 张</span>
+        </div>
         <div v-if="hasCustomOrder" style="margin-top:6px;display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:11px;color:#C9A227;">已自定义排序</span>
           <NPopconfirm positive-text="确定" negative-text="取消" @positive-click="resetSidebarOrder">
@@ -1325,11 +1394,21 @@ onMounted(async () => {
                   ></span>
                   <div style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;overflow:hidden;">
                     <span style="font-family:Consolas,Menlo,monospace;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.name }}</span>
-                    <span
-                      v-if="t.comment"
-                      style="font-size:11px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-                      :style="current === t.name ? 'color:#7BA7D4;font-weight:400;' : 'color:#999;font-weight:400;'"
-                    >{{ t.comment }}</span>
+                    <span style="display:flex;align-items:center;gap:4px;min-width:0;">
+                      <span
+                        v-if="t.comment"
+                        style="font-size:11px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                        :style="current === t.name ? 'color:#7BA7D4;font-weight:400;' : 'color:#999;font-weight:400;'"
+                      >{{ t.comment }}</span>
+                      <!-- 换机可恢复性：只显示会出问题的档位，且放在第二行，不挤占表名 -->
+                      <span
+                        v-if="isRiskTable(t.name)"
+                        :data-testid="`rebuild-${t.name}`"
+                        :title="rebuildTip(t.name)"
+                        style="flex-shrink:0;font-size:10px;line-height:1.4;padding:0 4px;border-radius:4px;border:1px solid #ddd;white-space:nowrap;font-weight:500;"
+                        :style="rebuildTagStyle(t.name)"
+                      >{{ rebuildMeta(t.name)?.label }}</span>
+                    </span>
                   </div>
                   <span class="row-move">
                     <button
@@ -1447,6 +1526,13 @@ onMounted(async () => {
           >
             <span style="font-size:12px;font-weight:600;color:#185FA5;">数据流</span>
             <NTag v-if="flowOf.category" size="tiny" :bordered="false" type="info">{{ flowOf.category }}</NTag>
+            <NTag
+              v-if="flowOf.rebuild"
+              size="tiny" :bordered="false"
+              :style="rebuildTagStyleRaw(flowOf.rebuild)"
+              :title="rebuildTip(current)"
+              :data-testid="`rebuild-detail-${current}`"
+            >{{ rebuildLabel(flowOf.rebuild) }}</NTag>
             <span style="font-size:11.5px;color:#888;">
               {{ flowOf.writers.length ? `${flowOf.writers.length} 个维护任务` : '无采集任务' }}
             </span>
