@@ -213,6 +213,12 @@ TASKS = [
     # 写入目标 finance_concept_analysis 已为「占位降级态」（无 Key 时写占位结果）。
     ("ai_concept_analysis", 0, "手动",                                # 手动触发（禁用：涉费用+密钥待闭环）
      {"limit": 20, "days_back": 30}),
+    # 日线定向回补 / 全史自举（2026-10-17 扩 source 取值）
+    #   source=dq_gap    读 dq_gap_detail 的 open 缺口（默认，适合「已跑起来、只差几段」）
+    #   source=all_stocks 按 list_date→今天 生成全市场区间，幂等分批（空库/残库补全史用这个）
+    #   source=ranges    自己给 [[code,start,end], ...]
+    # 注意：dq_gap 在**空库**上必然无区间（缺口靠 LAG 在已有行之间算），此时任务内部
+    # 会自动降级为 all_stocks；max_codes 在 all_stocks 下就是「本轮批次大小」。
     ("daily_backfill", 1, "手动",                                    # 手动触发
      {"source": "dq_gap", "risk": "all", "max_codes": 0, "adjust": "qfq"}),
     # 2026-10-08 启动收敛（自愈闭环 ·「启动即收敛」）—— 由 scheduler._boot_pipeline

@@ -154,6 +154,10 @@ def run_stock_daily_incr(params: dict) -> int:
         # 2026-09-20 由 False 改为 True：实测新浪对 bj920xxx 完全可用，
         # 原先「四级源均不支持北交所」的结论已不成立；继续跳过会让北交所行情再次停更。
         include_bj=bool(params.get("include_bj", True)),
+        # 2026-10-17：单票回看上限由硬编码 500 抽出。默认 500 保持原行为；
+        # 想要空库直出全史请用 daily_backfill 的 source=all_stocks，而不是把它调成 0
+        # （增量路径没有分批概念，一次拉全史会让上游单次响应过大且无法断点续跑）。
+        max_history_days=int(params.get("max_history_days", 500)),
     )
     result = _collector_run(collector)
     if result["error_count"] > 0 and result["records_written"] == 0:
@@ -539,18 +543,92 @@ def _gap_ranges_from_dq(p: dict) -> list[tuple]:
         conn.close()
 
 
+def _market_is_empty() -> bool:
+    """stock_market_daily 是否为零行（全新环境 / 刚跑完 schema.sql 的特征）"""
+    import pymysql
+    from ..db import get_db_config
+
+    conn = pymysql.connect(**get_db_config().to_dict())
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM stock_market_daily LIMIT 1")
+            return cur.fetchone() is None
+    finally:
+        conn.close()
+
+
+def _bootstrap_ranges(p: dict) -> list[tuple]:
+    """全史自举区间：[(code, 上市日, 截止日)]，只返回「起点尚未覆盖上市日」的股票
+
+    为什么需要它（2026-10-17 新增）
+    ------------------------------
+    `source=dq_gap` 依赖 `dq_gap_detail`，而缺口是 `gap_scan` 用 `LAG()` 在**已有行之间**
+    算出来的 —— **空表零行 ⇒ 零缺口 ⇒ 定向回补永远 return 0**。也就是说 L3 回补闭环
+    无法自举历史，全新环境想补齐全史，原先只能手工拼 6000 多个区间（data-bootstrap.md
+    路径 C 的写法），实际没人会那么干。
+
+    **幂等 & 可轮次推进**：`NOT EXISTS` 只挑「日线最早日 > 上市日 + 5 天」的票，
+    跑完一轮后这批自然不再入选，下一轮自动推进到下一批。所以 `max_codes` 可以当
+    「本轮批次大小」安全使用，反复触发即可把全市场推完，不会每次都重拉同一批。
+
+    口径：B 股（200/900 段）排除，与 `StockDailyIncrementalCollector.get_stock_list` 一致
+    （数据源不支持）；退市股**保留**——它们的历史同样不可再生，能补一只是一只。
+    """
+    import pymysql
+    from datetime import datetime as _dt
+    from ..db import get_db_config
+
+    p = p or {}
+    end = str(p.get("end_date") or _dt.now().strftime("%Y%m%d"))
+    max_codes = int(p.get("max_codes", 0))
+
+    # 刻意不用 LIKE：带参数的 SQL 会走 pymysql 的 `query % args`，'200%' 里的 % 会被
+    # 当成格式符抛 ValueError（本项目 2026-09 踩过），LEFT(...) 无此问题。
+    sql = (
+        "SELECT a.stock_code, a.list_date FROM stock_info a "
+        "WHERE LEFT(a.stock_code, 3) NOT IN ('200', '900') "
+        "  AND NOT EXISTS ("
+        "      SELECT 1 FROM stock_market_daily b "
+        "      WHERE b.stock_code = a.stock_code "
+        "        AND b.trade_date <= DATE_ADD(COALESCE(a.list_date, '1990-12-19'), INTERVAL 5 DAY)"
+        "  ) "
+        "ORDER BY a.stock_code"
+    )
+    args: list = []
+    if max_codes > 0:
+        sql += " LIMIT %s"
+        args.append(max_codes)
+
+    conn = pymysql.connect(**get_db_config().to_dict())
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    return [(r[0], r[1].strftime("%Y%m%d") if r[1] else "19901219", end) for r in rows]
+
+
 def run_daily_backfill(params: dict) -> int:
-    """日线定向回补（L3 修复闭环）
+    """日线定向回补 / 全史自举
 
     params:
       source   : "dq_gap"（默认，读 dq_gap_detail 中 status='open' 的疑似缺口）
-                 | "ranges"（显式区间）
+                 | "ranges"（显式区间，自己给）
+                 | "all_stocks"（全市场全史自举：按上市日→今天，自动分批、幂等推进）
       ranges   : [["600519","20010827","20011231"], ...]（source=ranges 时必填）
-      risk     : "all"（默认）| "high"（只补 ≥365 天高危缺口）
-      max_codes: 0（0=不限；调试可用小值）
+      risk     : "all"（默认）| "high"（只补 ≥365 天高危缺口；仅对 dq_gap 生效）
+      max_codes: 0（0=不限；all_stocks 下即「本轮批次大小」，反复触发可持续推进）
+      end_date : all_stocks 的截止日（默认今天）
       adjust   : "qfq"（默认，与主表口径一致）
+
     回补成功后将该票缺口明细置 status='fixed'；n=0 的保持 open 待人工判定
     （可能是停牌/退市等合理缺失，应人工置 ignored）。
+
+    ⚠️ 空库自动自举（2026-10-17）：`source=dq_gap` 在 `stock_market_daily` 为空时
+    **必然无区间** —— 缺口靠 `gap_scan` 的 `LAG()` 在已有行之间算，空表零缺口。
+    若不自动切换，全新环境跑这个任务永远是「无待补区间，return 0」，历史永远长不出来。
+    故此处判定：日线空表 + dq_gap_detail 无 open 缺口 ⇒ 自动改走 all_stocks。
     """
     from datetime import datetime as _dt
     import pymysql
@@ -560,8 +638,15 @@ def run_daily_backfill(params: dict) -> int:
     source = p.get("source", "dq_gap")
     if source == "ranges":
         ranges = [tuple(x) for x in (p.get("ranges") or [])]
+    elif source == "all_stocks":
+        ranges = _bootstrap_ranges(p)
+        logger.info(f"全史自举：本轮 {len(ranges)} 个区间（max_codes={p.get('max_codes', 0)}）")
     else:
         ranges = _gap_ranges_from_dq(p)
+        if not ranges and _market_is_empty():
+            # 全新环境：日线空表 + 无缺口明细 ⇒ dq_gap 永远补不动，自动降级为全史自举
+            logger.warning("定向回补：日线表为空且无缺口明细，自动切换为 all_stocks 全史自举")
+            ranges = _bootstrap_ranges(p)
     if not ranges:
         logger.info("定向回补：无待补区间（dq_gap_detail 无 open 缺口，或未提供 ranges）")
         return 0

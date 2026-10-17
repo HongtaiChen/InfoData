@@ -84,6 +84,11 @@ REQUEST_DELAY_MAX = 1.2
 RETRY_TIMES = 2
 # 疑似退市/长期停牌判定：最后数据日期距今超过该天数则默认跳过
 STALE_DAYS = 730  # 2 年
+# 单只股票单次最多往回拉多少天（0 = 不限）。2026-10-17 由硬编码 500 抽出为参数。
+# 为什么保留 500 作为默认值：日频增量只需「本地最新日 ⟶ 今天」，500 天只是防呆上限；
+# 一次性放开会让上游单次返回过大、且与「缺口扫描」的设计前提冲突。
+# 真正需要全史时不要调这里，用 daily_backfill 的 source=all_stocks（显式区间，无截断）。
+DEFAULT_MAX_HISTORY_DAYS = 500
 # 因子口径基准源：命中其他源时不写 adj_factor（各源 hfq 基准不同，混写会断阶）
 FACTOR_SOURCE = "sina"
 
@@ -126,8 +131,11 @@ class StockDailyIncrementalCollector:
 
     def __init__(self, days_back: int = DEFAULT_DAYS_BACK, adjust: str = "",
                  max_stocks: int = 0, include_stale: bool = False, include_bj: bool = True,
-                 backfill_ranges: list | None = None):
+                 backfill_ranges: list | None = None,
+                 max_history_days: int = DEFAULT_MAX_HISTORY_DAYS):
         self.days_back = days_back
+        # 单票单次回看上限（天），0 = 不限。见 DEFAULT_MAX_HISTORY_DAYS 处的说明。
+        self.max_history_days = int(max_history_days)
         # adjust 参数**已废弃**：口径固定为「实际价 + 后复权因子列」，不再按调用方切换
         # 复权。保留参数仅为兼容既有调用方（daily_recon / tasks.run）不破坏签名。
         self.adjust = adjust
@@ -359,6 +367,9 @@ class StockDailyIncrementalCollector:
           2. 本地无数据但有上市日 → **从上市日拉全史**。这是新增分支：原实现落到
              第 3 档的 15 天窗口，会让新股上市初期的历史永久空洞。
           3. 连上市日也没有 → 回退近 days_back 天窗口（保守兜底）。
+
+        ⚠️ 上面任何一档算出的区间跨度都会再被 `max_history_days` 截断（默认 500 天）——
+        所以「空库 + 只跑增量」最多只能恢复到近 500 天，**全史必须走 daily_backfill**。
         """
         conn = self._connect()
         try:
@@ -369,9 +380,10 @@ class StockDailyIncrementalCollector:
             else:
                 start_date = cutoff
             gap_days = (datetime.strptime(end_date, "%Y%m%d") - datetime.strptime(start_date, "%Y%m%d")).days
-            if gap_days > 500:
-                start_date = (datetime.strptime(end_date, "%Y%m%d") - timedelta(days=500)).strftime("%Y%m%d")
-                logger.warning(f"⚠️ {code} {name} 缺口 {gap_days} 天，限制拉取最近 500 天")
+            if self.max_history_days > 0 and gap_days > self.max_history_days:
+                start_date = (datetime.strptime(end_date, "%Y%m%d")
+                              - timedelta(days=self.max_history_days)).strftime("%Y%m%d")
+                logger.warning(f"⚠️ {code} {name} 缺口 {gap_days} 天，限制拉取最近 {self.max_history_days} 天")
             raw, hfq, src = self.fetch_with_retry(code, start_date, end_date)
             rows, _n_cut, degraded = self.to_rows(code, raw, hfq, src)
             n = self.insert_rows(conn, rows)
