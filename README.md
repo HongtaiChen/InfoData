@@ -133,6 +133,11 @@ scripts\migrate-machine.bat load "D:\path\to\adata_migrate_20261010_074352.sql"
 > 实测体积 dump ≈5.3 GB（gzip 后 ≈1.1 GB）、导入 10~30 分钟。
 > 详见 **[scripts/data-bootstrap.md](scripts/data-bootstrap.md)「路径 0」**。
 
+> 💾 **别让「这台机器」成为唯一副本**：`backend/scripts/backup_assets.py` 只备
+> **不可再生**的约 3.5 GB（实测 gz 后 **545.6 MB**，其中人工资产+配置仅 ≈4 MB）。冻结表
+> **备一次 + 每周 `verify`** 即可，不必每天全备。落点纪律（同一块盘不算异地）与
+> GitHub 的硬限制见 **[scripts/data-bootstrap.md](scripts/data-bootstrap.md) §7**。
+
 **情况 2 · 全新环境 / 给对方干净副本 → 从上游重新采集**
 
 完整清单、依赖顺序、可回补性分类见 **[scripts/data-bootstrap.md](scripts/data-bootstrap.md)**。

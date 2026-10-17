@@ -3,7 +3,8 @@
 > 适用：**全新环境**首次部署，或**换机迁移**后，把业务数据准备起来。
 > 配套：`scripts/schema.sql`（建表）→ 本文档（准备数据）→ 启动服务。
 > **换机请先看 §1 路径 0（整库迁移）**；全新环境 / 干净副本看路径 A/B/C。
-> 最后更新：2026-10-10
+> **想知道「到底能恢复到什么程度」看 §6；想防「原机没了」看 §7（灾备）。**
+> 最后更新：2026-10-17
 
 ---
 
@@ -106,9 +107,37 @@ curl -X POST http://127.0.0.1:8000/api/jobs/tasks/trade_calendar_sync/trigger
 > ⚠️ 触发是**异步**的，接口立刻返回。用 `GET /api/jobs/runs` 或前端作业监控页看结果。
 > ⚠️ 同一任务并发保护：2 小时内已有 `running` 记录时会跳过。
 
-### 路径 C：定向回补历史区间（`daily_backfill`）
+### 路径 C：定向回补 / 全史自举（`daily_backfill`）
 
-日线是唯一提供「指定区间回补」入口的采集器，`source=ranges` 可直接补任意股票任意区间：
+日线是唯一提供「指定区间回补」入口的采集器。三种 `source`：
+
+| source | 用途 | 说明 |
+|---|---|---|
+| `ranges` | 精确补某几只某几段 | 自己给区间，最可控 |
+| `all_stocks` | **全市场全史自举** | 按 `list_date → 今天` 自动生成区间，幂等分批推进（2026-10-17 新增） |
+| `dq_gap`（默认） | 补缺口扫描发现的段 | 读 `dq_gap_detail` 里 `status='open'` 的记录 |
+
+**`all_stocks` —— 空库/残库补齐全史的正解**
+
+```bash
+# 每轮 500 只，反复触发即可推进（已覆盖上市日的票会自动出列，不会重复拉）
+curl -X PUT http://127.0.0.1:8000/api/jobs/tasks/daily_backfill \
+     -H "Content-Type: application/json" \
+     -d '{"params": {"source":"all_stocks","max_codes":500,"adjust":"qfq"}}'
+curl -X POST http://127.0.0.1:8000/api/jobs/tasks/daily_backfill/trigger
+```
+
+判定「还剩多少没补」的口径 = 日线最早日 > 上市日 + 5 天 的股票数：
+
+```sql
+SELECT COUNT(*) FROM stock_info a
+WHERE LEFT(a.stock_code,3) NOT IN ('200','900')
+  AND NOT EXISTS (SELECT 1 FROM stock_market_daily b
+                  WHERE b.stock_code=a.stock_code
+                    AND b.trade_date <= DATE_ADD(COALESCE(a.list_date,'1990-12-19'), INTERVAL 5 DAY));
+```
+
+**`ranges` —— 精确指定**
 
 ```json
 {
@@ -131,7 +160,14 @@ curl -X PUT http://127.0.0.1:8000/api/jobs/tasks/daily_backfill \
 curl -X POST http://127.0.0.1:8000/api/jobs/tasks/daily_backfill/trigger
 ```
 
-`source=dq_gap`（默认）则不用给区间 —— 它读 `dq_gap_detail` 里 `status='open'` 的疑似缺口自动补。
+> 🔴 **两个反直觉的坑（2026-10-17 核实）**
+> 1. **`source=dq_gap` 在空库上永远补不动**：缺口是 `gap_scan` 用 `LAG()` 在**已有行之间**
+>    算出来的，空表零行 ⇒ 零缺口 ⇒ 直接 `return 0`。现已内置自动降级：日线空表 + 无缺口明细
+>    ⇒ 自动改走 `all_stocks`（日志会打印「自动切换为 all_stocks 全史自举」）。
+> 2. **`stock_daily_incr`（日常增量）有 500 天上限**：`max_history_days` 默认 500，
+>    即便某票本地无数据、有上市日，也最多往回拉 500 天。**空库只跑增量 ⇒ 日线只能到近 500 天**，
+>    全史必须走本节路径 C。
+
 
 ---
 
@@ -266,3 +302,105 @@ curl http://127.0.0.1:8000/api/dq/report
 - 行情看板 `/market`：能搜到股票、K 线有数据
 - 数据中心 `/data`：点表名看行数
 - 数据质量 `/dq`：看各表的 freshness / row_count 结论
+
+---
+
+## 6. 能恢复到什么程度（先看这节，再决定用哪条路径）
+
+**一句话：从上游重采 ≠ 全量恢复。** 2026-10-17 按代码 + 生产库实测核对（`COUNT(*)` 口径，非估算）：
+
+| 档 | 表 | 生产库行数 | 重采能到哪 |
+|---|---|---|---|
+| 🔴 **永久拿不回** | `stock_market_daily_ex` | **16,891,313** | 0（`table_meta.writers=[]`，`source_desc='历史导入'`，**无任何采集器**） |
+| 🔴 | `stock_hold_by_fund` | 113,147 | 0（同上，`writers=[]`） |
+| 🔴 | `stock_capital_flow` | 748,019 | 0 自动（`capital_flow_sync` **enabled=0**）；手动开也只有 `refresh_days=7` |
+| ⚠️ **只拿到近端** | `ths_concept_market` | 580,681 | 约 15 天窗口（`days_back=15`）⇒ 不足 1% |
+| ⚠️ | `news` | 18,546 | 只能拿到最新列表，历史不可回溯 |
+| ⚠️ | `index_valuation_daily` | — | `lookback_days=0`，只当日 |
+| ⚠️ | `finance_calendar` | — | 滚动窗口，需持续积累 |
+| ✅ **可补全** | `stock_market_daily` | 18,584,597 | 可补全史，但**必须走路径 C**；只跑增量最多到近 **500 天** |
+| ✅ | 名册 / 指数成分 / 宏观 10 张 / 债券 / 基金 / 期货 / 行业 / 分红 / 财务 | — | 可补全 |
+
+**日线的「9.9% 天花板」**：`stock_market_daily` 近 500 天只有 **1,832,300 行 = 全史 9.9%**。
+`stock_daily_incr._process_one` 的 `max_history_days` 默认 500 —— 空库启动后自愈跑增量，
+**最多只能长到近 2 年**；剩下 90% 只能靠 `daily_backfill` 的 `source=all_stocks`。
+
+**结论**：
+- 原机还在 → **必须走路径 0（整库迁移）**，这是唯一能 100% 保真的方式。
+- 原机已毁 → 最多做到「近端 + 参考类」可重采 + 「历史导入类」永久缺失。
+  **⇒ 所以不要让「原机」成为唯一副本，见 §7。**
+
+---
+
+## 7. 灾备：原机没了 / 硬盘坏了怎么办
+
+### 7.1 现状（2026-10-17 核查，务必知道）
+
+| 检查项 | 实测 |
+|---|---|
+| `scripts/backup/` | 目录存在但**为空** —— 从未导出过 |
+| 计划任务 | 无任何 adata 备份任务 |
+| `datadir` | `D:\Project\Mysql\Data\` ——**与项目代码同一块盘** |
+| binlog | `ON` / `ROW` / 保留 30 天 / 18 个文件 **6.5 GB**，但**也在同一个 datadir** |
+
+⇒ 一次盘故障 = `stock_market_daily_ex` 的 **1690 万行**、基金持仓、全部资讯历史**同时归零，全球无第二份**。
+⚠️ `stock_market_daily_bak_20260920` 看着像备份，其实和主表**同盘同机**，只是误操作保护。
+
+### 7.2 分级备份（`scripts/backup_assets.py`）
+
+不复用整库 dump，而是按「可不可再生」分包，格式 **TSV + gzip**（不绑 MySQL 版本，Excel/awk/pandas 都能读），
+另附 `_schema.sql` + `manifest.json`（含逐表 DDL / 行数 / sha256）。
+
+```bash
+cd backend
+python scripts/backup_assets.py export --pack list     # 看清单
+python scripts/backup_assets.py export --pack small    # 人工资产+配置，约 4 MB
+python scripts/backup_assets.py export --pack core     # 不可再生大表，实测 545.6 MB（gz）
+python scripts/backup_assets.py verify                 # 周校验：文件 sha256 + 源表行数/结构
+python scripts/backup_assets.py restore --dir <目录> --db adata_drill --apply   # 灾备演练
+```
+
+| 包 | 内容 | 体积 | 建议频率 |
+|---|---|---|---|
+| `small` | 台账/人工标注/偏好/人工判定/配置（8 张） | ≈4 MB | 每次改动后；**可进私有 git**（体积小、能 diff、能回滚） |
+| `core` | `stock_market_daily_ex` / `capital_flow` / `ths_concept_market` / `hold_by_fund` / `news` | **545.6 MB**（18,351,706 行） | **冻结表只需备一次 + 每周 `verify`** |
+| `archive` | `*_bak_*` 手工快照 | ≈1.65 GB | 按需（本质非备份） |
+
+### 7.3 为什么不建议把备份直接放 GitHub 仓库
+
+官方限制（2026-10-17 核对 docs.github.com）：
+
+| 项 | 限制 | 对本库的影响 |
+|---|---|---|
+| 普通 git 单文件 | **>100 MiB 直接拒绝**（50 MiB 起告警） | 546 MB 的 `core` 包**推不上去** |
+| 仓库建议体积 | 理想 <1 GB、强烈建议 <5 GB | 每月一份会把仓库撑爆 |
+| Git LFS 免费额度 | 10 GiB 存储 + 10 GiB/月带宽 | 一份 546 MB 尚可，月更几次就超；超额直接禁推 |
+| Releases 附件 | 单文件 <计划上限（免费约 2 GiB），**官方不限总量与下载带宽** | 技术上可行，是 GitHub 唯一「能用」的通道 |
+| 官方定性 | **“Git is not designed to serve as a backup tool”**、**“Git is not designed to handle large SQL files … recommend using a file sharing service”** | 定位不符，且账号单点风险 |
+
+**本仓库是 `public`**（`HongtaiChen/InfoData`，`visibility=public`）⇒ **绝对不能**把 `small` 包里的
+`user_prefs` / 人工标注 / 台账 evidence 提交进去，等于把个人数据和人工判断公开。
+
+**推荐落点组合**：
+
+| 层 | 落点 | 理由 |
+|---|---|---|
+| `small`（4 MB） | **新建一个 private 仓库**（如 `InfoData-assets`），普通 git 提交 | 体积小、天然版本历史，改了什么能 diff |
+| `core`（546 MB） | 网盘 / 对象存储 / **移动硬盘**（择二） | 不受 git 限制；异地才是真备份 |
+| 兜底 | GitHub Releases（private 仓库） | 单文件 <2 GiB 可放，免 LFS 配额，但别当唯一副本 |
+
+### 7.4 落点纪律（3-2-1）
+
+- **3 份**：生产库 + 本机备份 + 异地备份
+- **2 种介质**：如 SSD + 移动硬盘 / 网盘
+- **1 份异地**：**同一个 `D:` 盘（含 `D:\backup`）不算异地** —— 盘毁时数据和备份一起没
+
+### 7.5 完整灾备清单
+
+| 编号 | 动作 | 频率 | 判据 |
+|---|---|---|---|
+| B0 | `export --pack core` + `--pack small`，拷到异地 | 一次性 + 每周 `verify` | `verify` 全绿；`stock_market_daily_ex` 行数 = 16,891,313 |
+| B1 | 整库 dump（`migrate-machine.bat dump`，1.1 GB gz）+ binlog 异地复制 | 每周 / 每日 | 删库后 1~2 小时内重建，56 表行数一致 |
+| B2 | 空库全史自举（§1 路径 C `all_stocks`） | 需要时 | 空库 + 反复触发 ⇒ `stock_market_daily` 行数 ≥ 1800 万 |
+| B3 | 恢复演练（`restore --db adata_drill --apply`） | 每季度 | 抽样 100 只逐日一致；**没有演练的备份等于没有备份** |
+
