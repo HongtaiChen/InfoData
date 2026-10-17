@@ -134,9 +134,13 @@ scripts\migrate-machine.bat load "D:\path\to\adata_migrate_20261010_074352.sql"
 > 详见 **[scripts/data-bootstrap.md](scripts/data-bootstrap.md)「路径 0」**。
 
 > 💾 **别让「这台机器」成为唯一副本**：`backend/scripts/backup_assets.py` 只备
-> **不可再生**的约 3.5 GB（实测 gz 后 **545.6 MB**，其中人工资产+配置仅 ≈4 MB）。冻结表
+> **高成本 / 不可复原**的约 3.4 GB（实测 gz 后 **545.6 MB**，其中人工资产+配置仅 ≈4 MB）。冻结表
 > **备一次 + 每周 `verify`** 即可，不必每天全备。落点纪律（同一块盘不算异地）与
 > GitHub 的硬限制见 **[scripts/data-bootstrap.md](scripts/data-bootstrap.md) §7**。
+>
+> 🧭 **「原机没了到底能恢复到什么程度」**——全库按可再生性分五类、每类配哪种手段、
+> 耗时总账、人工资产（仅 **9.4 KB**）的 seed 方案，见
+> **[scripts/data-restore-plan.md](scripts/data-restore-plan.md)**。
 
 **情况 2 · 全新环境 / 给对方干净副本 → 从上游重新采集**
 
@@ -339,6 +343,7 @@ InvestBuddy/
 ├── scripts/
 │   ├── schema.sql           # ⭐ 全库建表语句（56 张表，幂等，不含数据）
 │   ├── data-bootstrap.md    # ⭐ 业务数据准备指南（新环境 / 换机必读）
+│   ├── data-restore-plan.md # ⭐ 整体还原方案（五类可再生性 + 手段 + 耗时总账）
 │   ├── migrate-machine.bat  # ⭐ 换机整库迁移（dump 源机 / load 目标机）
 │   ├── docker-deploy-guide.md
 │   ├── migrate-local-to-docker.bat
