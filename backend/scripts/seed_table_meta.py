@@ -1455,12 +1455,27 @@ def _ensure_rebuild_columns(conn) -> None:
             cur.execute(
                 "ALTER TABLE table_meta "
                 "ADD COLUMN rebuild varchar(16) NULL "
-                "COMMENT '换机可恢复性：full/param/partial/window/derived/none' AFTER note, "
+                "COMMENT '换机可恢复性：full/param/partial/window/derived/none/archive' AFTER note, "
                 "ADD COLUMN rebuild_note varchar(255) NULL "
-                "COMMENT '可恢复性依据与缺口规模（换机器时看这条）' AFTER rebuild"
+                "COMMENT '可恢复性依据与缺口规模（换机时看这条）' AFTER rebuild"
             )
             conn.commit()
             logger.info("table_meta 已补 rebuild / rebuild_note 列")
+        else:
+            # 列注释里也写着枚举，新增档位（archive）后必须同步，否则看 DDL 的人会以为只有六档。
+            # 只在缺 archive 时才 ALTER（59 行小表，代价可忽略，但不做无谓重建）。
+            cur.execute(
+                "SELECT column_comment FROM information_schema.columns "
+                "WHERE table_schema=DATABASE() AND table_name='table_meta' AND column_name='rebuild'"
+            )
+            row = cur.fetchone()
+            if row and "archive" not in (row[0] or ""):
+                cur.execute(
+                    "ALTER TABLE table_meta MODIFY COLUMN rebuild varchar(16) NULL "
+                    "COMMENT '换机可恢复性：full/param/partial/window/derived/none/archive'"
+                )
+                conn.commit()
+                logger.info("table_meta.rebuild 列注释已同步 archive 档")
 
 
 def _ensure_writer_cols_column(conn) -> None:

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- InvestBuddy / InfoData — 数据库结构定义（schema only，不含任何数据）
 -- ============================================================================
--- 由 scripts/dump_schema.py 从现网 adata 库导出，导出时间：2026-10-09 22:54:15
+-- 由 scripts/dump_schema.py 从现网 adata 库导出，导出时间：2026-10-17 20:27:11
 -- 源库：adata@127.0.0.1:3306
 -- 表数量：56 张（已排除 4 张 *_bak_* / *_backup_* 备份表）
 --
@@ -972,6 +972,8 @@ CREATE TABLE IF NOT EXISTS `table_meta` (
   `writers` json DEFAULT NULL COMMENT '维护该表的采集任务名数组（对应 task_config.task_name，无任务为空）',
   `writer_cols` json DEFAULT NULL COMMENT '列级血缘：{任务名:{source,cols,derived,note,col_notes}} 该任务主要负责写哪些列',
   `note` varchar(255) DEFAULT NULL COMMENT '备注（停更/备份/缺口）',
+  `rebuild` varchar(16) DEFAULT NULL COMMENT '换机可恢复性：full/param/partial/window/derived/none/archive',
+  `rebuild_note` varchar(255) DEFAULT NULL COMMENT '可恢复性依据与缺口规模（换机器时看这条）',
   `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '元数据维护时间',
   PRIMARY KEY (`table_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据中心表级元数据：数据源/清洗口径/维护任务（数据流卡数据源）';
