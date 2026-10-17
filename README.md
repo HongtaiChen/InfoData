@@ -71,6 +71,18 @@ backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 
 ### 第 4 步 · 初始化数据库（**关键，漏了会启动失败**）
 
+> ⚡ **一条命令的路径（2026-10-17 新增，推荐）**
+> ```bat
+> cd backend
+> ".venv\Scripts\python.exe" scripts\restore.py --yes --no-data
+> ```
+> 它按正确顺序完成「建表 → 灌 6 个 seed（自动带 `--apply`）→ 逐表核对 → 输出报告」。
+> `--no-data` = 只做结构 + 配置，数据留到第 5 步；去掉它则连数据一起回补。
+> 先看计划不执行：`scripts\restore.py --list`；预演：`--dry-run`。
+>
+> 为什么值得用：手工步骤里有 3 个**静默失败**点（见下方 ⚠️），漏了不报错、只悄悄不对。
+> 下面的手工步骤保留，作为原理说明与故障时的兜底。
+
 ```bat
 :: 4.1 建库 + 建全部 56 张表（幂等，可重复执行，不含 DROP）
 ::
@@ -164,7 +176,15 @@ cd ..
 ### 第 7 步 · 启动
 
 ```bat
+:: Windows
 start-dev.bat
+```
+
+```bash
+# Linux / macOS（2026-10-17 新增，逻辑与 .bat 一一对齐）
+./scripts/start-dev.sh            # 起后端 + 前端
+./scripts/start-dev.sh backend    # 只起后端
+./scripts/start-dev.sh frontend   # 只起前端
 ```
 
 - 前端 http://127.0.0.1:5173 （Vite dev server）
@@ -178,8 +198,9 @@ start-dev.bat
 > start-dev.bat
 > ```
 >
-> - 一键启动（`start-dev.bat`）只认**系统环境变量**——它是 cmd 脚本，**不读** `frontend/.env.local`。
-> - 直接 `npm run dev` 时才会读 `frontend/.env.local`（模板见 `frontend/.env.example`，该文件不入库）。
+> - 两个启动脚本（`.bat` / `.sh`）都读**进程环境变量**，并会先探测端口：
+>   **已在监听就跳过**，不会起出第二个实例。
+> - 直接 `npm run dev` 时才读 `frontend/.env.local`（模板见 `frontend/.env.example`，该文件不入库）。
 > - 两边用的是**同一组变量名**，不会各自漂移。前端设了 `strictPort`：端口被占会直接报错，
 >   而不是悄悄换到 5174 却仍提示 5173。
 
@@ -241,26 +262,41 @@ docker-start.bat full        :: 模式 B：mysql+backend+frontend 全容器化
 
 ## 环境变量
 
-### ⚠️ 先弄清机制：开发模式**不读 `.env` 文件**
+### 机制：开发模式**从 2026-10-17 起会读 `.env`**
 
-这是一个容易踩的坑。全仓库代码**没有 `load_dotenv`**，后端只读**进程环境变量**。
-真正会用到 `.env` 文件的只有两处：
+> ⚠️ **此处 2026-10-17 有变更**：此前后端不读 `.env`（只读进程环境变量），
+> 而模板却写着「复制为 .env 并填入真实值」——照做无效，属于静默错配。
+> 现已支持（`backend/app/env.py`），**复制 `.env.example` 为 `.env` 即可生效**。
 
 | 场景 | 是否读 `.env` | 说明 |
 |---|---|---|
-| 开发模式（`start-dev.bat` / `uvicorn`） | ❌ | 只读**系统环境变量**。照抄 `.env` 是**无效**的 |
-| Docker 模式（`docker compose`） | ✅ | compose 自动读根目录 `.env` 做 `${VAR}` 插值 |
-| 告警通知（`notifier.py`） | ✅ | 额外读 `backend\.env.local` |
+| 开发模式（`start-dev.bat` / `start-dev.sh` / `uvicorn`） | ✅ | 启动时由 `app/env.py` 加载进 `os.environ` |
+| Docker 模式（`docker compose`） | ✅ | compose 读根 `.env` 做 `${VAR}` 插值（另一套机制） |
 
-开发模式下设置变量的正确姿势：
+**优先级（高 → 低）**：进程环境变量 > `backend/.env.local` > `backend/.env` > 根 `.env` > 代码默认值。
+
+也就是说：shell 里 `export` 过同名变量时，`.env` 里的值**不会生效** ——
+启动日志会打一条 `⚠️ … 全部已被进程环境变量覆盖` 的警告，看到它就去清理 shell 变量。
+设 `INFO_DATA_SKIP_DOTENV=1` 可完全关闭 `.env` 加载（容器里已注入变量时用）。
+
+仍然想用系统环境变量的老办法也照常有效：
 
 ```bat
 :: 临时（当前窗口）
 set INFO_DATA_DB_PASSWORD=你的密码
 start-dev.bat
 
-:: 永久（推荐）
+:: 永久
 setx INFO_DATA_DB_PASSWORD "你的密码"
+```
+
+**启动自检**：后端启动时会自动跑一遍环境体检（数据库连通性 / MySQL 版本 / 时区 /
+表完整性 / seed 是否灌过 / 通知渠道自洽），有问题**打警告但不阻断**。
+需要「不通过就不许启动」时设 `INFO_DATA_PREFLIGHT=strict`。单独复跑：
+
+```bat
+cd backend
+python scripts\preflight.py
 ```
 
 ### 变量清单

@@ -92,13 +92,31 @@ start_date='20180101', end_date='20181231')` 返回 243 行）。
 
 ## 2. 新机器操作步骤（照抄即可）
 
+> ⚡ **2026-10-17 起：结构 + 配置 + 数据已能用一条命令跑完**
+>
+> ```bash
+> git clone https://github.com/HongtaiChen/InfoData.git && cd InfoData
+> python -m venv backend/.venv && backend/.venv/Scripts/pip install -r backend/requirements.txt
+> cd backend
+> python scripts/preflight.py                  # 先体检：MySQL 版本/时区/表完整性
+> python scripts/restore.py --list             # 看计划（不动任何数据）
+> python scripts/restore.py --yes              # 全量恢复（建表→配置→数据→核对→报告）
+> ```
+>
+> 只想要结构 + 配置、数据稍后再说：`python scripts/restore.py --yes --no-data`。
+> 只重建某一段：`--data-only --stages core,daily`。
+>
+> 为什么要有这个脚本：下面 S3/S4/S6 的手工步骤里至少 3 处会**静默失败**
+> （`--apply` 漏写、概念行情只补 400 天、增量采集器不传 `full_sweep`）。
+> **手工步骤保留在下面** —— 它们是原理说明，也是脚本失灵时的兜底。
+
 ### S0 · 装环境（约 10 分钟，一次性）
 
 | 依赖 | 版本 | 说明 |
 |---|---|---|
 | Python | 3.13（3.11+ 均可） | |
 | Node.js | 22.x | 前端 |
-| MySQL | 8.0+ | 建议 8.2，与服务端一致 |
+| MySQL | **8.0+（硬要求）** | schema 用到 `utf8mb4_0900_ai_ci`，MariaDB / 5.7 建表即失败 |
 
 ### S1 · 拉代码（秒级）
 
@@ -417,6 +435,37 @@ SELECT COUNT(DISTINCT stock_code) FROM stock_market_daily;  -- 目标 ≥ 5,300
 > UPDATE task_config SET enabled=1 WHERE task_name='capital_flow_sync';
 > ```
 > 然后手工触发一轮，确认 `stock_capital_flow` 行数真的增长，再交给调度器。
+
+### 可移植性加固（2026-10-17 第二批，已落地）
+
+上一批解决「数据能不能长回来」；这批解决「换个环境会不会**静默错配**」。
+
+| # | 问题（换机时会怎样） | 已做的调整 |
+|---|---|---|
+| 1 | 云主机默认 UTC，cron 与 `CURDATE()` 错 8 小时 ⇒ 采集「成功」但少一天 | `preflight.py` 比对数据库 `NOW()` 与宿主机时间，偏差 >120s 直接报错并给三条修法 |
+| 2 | 后端不读 `.env`，照模板建了 `.env` 却不生效 | 新增 `app/env.py`（零新依赖），启动时加载 `根/.env` → `backend/.env` → `backend/.env.local`；进程环境变量仍优先，被覆盖时打警告 |
+| 3 | MariaDB / MySQL 5.7 建表即失败 | `preflight.py` 校验版本 ≥ 8.0；README 把 8.0+ 标为**硬要求** |
+| 4 | 忘了 seed ⇒ `task_config` 空 ⇒ 调度器排 0 个任务，页面一片空白 | `preflight.py` 检查 `task_config`/`table_meta`/`dq_rules` 行数，为 0 直接判 fail |
+| 5 | 配了通知渠道却漏 token ⇒ 永不推送且不报错 | `preflight.py` 按 provider 校验对应凭证 |
+| 6 | 全新 `docker compose up` 得到**空库** | `docker-compose.yml` 挂载 `schema.sql` 到 `/docker-entrypoint-initdb.d/`（仅首次初始化生效，已注明重建需 `down -v`） |
+| 7 | 仓库零个 `.sh`，Linux/macOS 无启动入口 | 新增 `scripts/start-dev.sh`，与 `.bat` 逻辑对齐（解释器解析 / 端口探测 / 只起后端或前端） |
+| 8 | `schema.sql` 是快照，新增表后没人同步 ⇒ 新机器缺表 | `dump_schema.py --check`：比对表与**字段级**差异，有漂移退出码 1（可接 CI） |
+| 9 | 6 步手工易漏 `--apply` / 参数 | 新增 `backend/scripts/restore.py`：一条命令跑完结构→配置→数据→核对，输出 JSON 报告 |
+
+**实测过的负对照**（证明这些检查不是摆设）：
+
+| 检查 | 负对照做法 | 结果 |
+|---|---|---|
+| 表完整性 | 故意要求一张不存在的表 | ✅ 判 fail |
+| 时区 | 伪造「数据库慢 8 小时」的游标 | ✅ 判 fail |
+| MySQL 版本 | 伪造 `5.7.44` | ✅ 判 fail |
+| 通知渠道 | `provider=wecom` 但不设 webhook | ✅ 判 fail |
+| schema 漂移 | 从 schema.sql 删一张表 / 加一个字段 | ✅ 两种都判 fail、退出码 1 |
+
+> 🐞 加固过程中踩到并已修掉的一个真 bug：`restore.py` 最初用 `sql.split(";")` 切分
+> schema.sql，被 `stock_info.data_source DEFAULT 'EM;BAOSTOCK;CNINFO'`
+> （**字符串字面量内含分号**）劈成两半，报 `1064 ... near ''EM' at line 35` ——
+> 报错位置与真因毫不相干。已改成引号/注释感知的切分器，实测 56/56 条建表语句正确切分。
 >
 > **时限**：窗口只有 120 个交易日（约 5.5 个月）。当前表停在 2025-09-19，
 > 那段已经滑走、**永久补不回**；只有「从现在起」的窗口还能攒。
