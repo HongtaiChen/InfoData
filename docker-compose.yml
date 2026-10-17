@@ -43,6 +43,13 @@ services:
       - "3307:3306"   # 本机 3306 已有本地 MySQL，容器映射 3307
     volumes:
       - mysql_data:/var/lib/mysql
+      # 首次初始化自动建表（2026-10-17 补）
+      # ⚠️ MySQL 官方镜像只在**数据目录为空**时执行 initdb 脚本。
+      #    若 mysql_data 卷已存在（以前起过），本行不会再生效 ——
+      #    需要重建结构时先 `docker compose down -v` 清卷，或手工导入：
+      #      docker compose exec -T mysql mysql -uroot -p < scripts/schema.sql
+      # schema.sql 自带 CREATE DATABASE IF NOT EXISTS + USE adata，可直接执行。
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s

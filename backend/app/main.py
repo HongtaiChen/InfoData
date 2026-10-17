@@ -8,12 +8,6 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer, prefs
-from .scheduler import manager as scheduler_manager
-
 
 def _setup_logging() -> None:
     """让调度器/采集器的 INFO 日志可见（幂等，重复调用无副作用）。
@@ -36,10 +30,43 @@ def _setup_logging() -> None:
 
 _setup_logging()
 
+# =============================================================================
+# 启动顺序（**不可调整**，2026-10-17 可移植性加固）
+#
+#   ① _setup_logging()      —— 先有日志，否则下面 .env 的加载结果无处输出
+#   ② load_env_files()      —— 把 .env 写进 os.environ
+#   ③ 再导入 .api / .scheduler —— 这些模块可能在 **import 期**就调 os.getenv
+#                                （如 app/db.py 的 INFO_DATA_DB_POOL），
+#                                晚一步加载 .env 它们读到的就是默认值。
+#
+# 之所以 .env 现在必须显式加载：后端从不自动读 .env（只读进程环境变量），
+# 而 .env.example 却写着「复制为 .env」——曾经的静默错配见 app/env.py 文件头。
+# =============================================================================
+from .env import load_env_files  # noqa: E402  （有意放在配置之后，见上）
+
+load_env_files()
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer, prefs  # noqa: E402
+from .preflight import advisory  # noqa: E402
+from .scheduler import manager as scheduler_manager  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """服务启停：启动定时调度器（消费 task_config 的 cron），停止时优雅关闭"""
+    """服务启停：先环境自检，再启动定时调度器（消费 task_config 的 cron），停止时优雅关闭"""
+    # 环境自检（2026-10-17 可移植性加固）：把「换机器后的静默错配」提前喊出来。
+    # 默认 advisory——只告警不阻断；INFO_DATA_PREFLIGHT=strict 时才拒绝启动。
+    # 为什么不默认阻断：数据库正在重启这类瞬时故障，不该让后端永远起不来。
+    if not advisory(logger):
+        raise RuntimeError(
+            "环境自检未通过，且已设 INFO_DATA_PREFLIGHT=strict —— 拒绝启动。"
+            " 单独复跑看修法：python scripts/preflight.py"
+        )
     scheduler_manager.start()
     yield
     scheduler_manager.shutdown()
