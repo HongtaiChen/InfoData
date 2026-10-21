@@ -7,6 +7,8 @@ from fastapi import APIRouter, Query
 
 from ..analysis import cross_market as cross_market_mod
 from ..analysis import funding_temperature as funding_temperature_mod
+from ..analysis import leverage_funding as leverage_funding_mod
+from ..analysis import market_sentiment as market_sentiment_mod
 from ..analysis import market_wind as market_wind_mod
 from ..analysis import money_cost as money_cost_mod
 from ..analysis import sector_rotation as sector_rotation_mod
@@ -31,6 +33,22 @@ def market_wind(
     as_of 非空时按该日回放（复盘用），全部查询只取该日及之前。
     """
     return market_wind_mod.market_wind(trend_days, as_of)
+
+
+@router.get("/market-sentiment")
+def market_sentiment():
+    """市场情绪与交易结构：成交集中度（前 5% 成交额占比）、股价偏高占比（60 日涨幅 >20%）、
+    换手率中位数、涨停家数（全市场口径，现算 + 内存缓存）。
+    """
+    return market_sentiment_mod.market_sentiment()
+
+
+@router.get("/leverage-funding")
+def leverage_funding():
+    """杠杆与资金行为：融资余额占比（占全市场流通市值）、ETF 资金流向（份额变化×净值）、
+    新增开户（上交所个人 A 股，月频）。全市场口径。
+    """
+    return leverage_funding_mod.leverage_funding()
 
 
 @router.get("/sector-rotation")

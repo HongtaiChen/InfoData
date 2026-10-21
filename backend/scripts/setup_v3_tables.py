@@ -42,6 +42,9 @@ NEW_TABLES = {
         pe_ttm DECIMAL(12,4) DEFAULT NULL COMMENT '滚动市盈率 TTM（整体法；中证「市盈率2」/乐咕「滚动市盈率」）',
         pe_ttm_median DECIMAL(12,4) DEFAULT NULL COMMENT '滚动市盈率中位数（仅乐咕/全A 源提供）',
         pe_lyr_median DECIMAL(12,4) DEFAULT NULL COMMENT '静态市盈率中位数（仅乐咕/全A 源提供）',
+        pb DECIMAL(10,4) DEFAULT NULL COMMENT '市净率 PB（整体法；乐咕 legu_pb 源「市净率」）',
+        pb_ew DECIMAL(10,4) DEFAULT NULL COMMENT '等权市净率（乐咕 legu_pb 源「等权市净率」）',
+        pb_median DECIMAL(10,4) DEFAULT NULL COMMENT '市净率中位数（乐咕 legu_pb 源「市净率中位数」）',
         dividend_yield DECIMAL(10,4) DEFAULT NULL COMMENT '股息率(%)',
         dividend_yield2 DECIMAL(10,4) DEFAULT NULL COMMENT '股息率2（中证口径：近12月 vs 近3年分红）',
         pe_ttm_pct10y DECIMAL(8,4) DEFAULT NULL COMMENT '滚动PE近十年分位（0~1，仅 all_a 源直接给）',
@@ -146,6 +149,119 @@ NEW_TABLES = {
         KEY idx_announce (announce_date)
     ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4
       COMMENT = '股票回购（蓝图D 产业资本态度，2026-09-19 落地）'
+    """,
+    # ----------------------------------------------------------------
+    # 投资环境模块（2026-10-18）—— 国内指数页的物化/配置/宏观源表
+    # 见 docs/design/投资环境模块_设计方案_v0.2_2026-10-18.md §5.2 / §5.3
+    # ----------------------------------------------------------------
+    "env_threshold": """
+    CREATE TABLE IF NOT EXISTS env_threshold (
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        index_name VARCHAR(50) DEFAULT NULL COMMENT '指数名称',
+        drop_threshold DECIMAL(6,3) DEFAULT NULL COMMENT '大幅下跌阈值(%)：当日跌幅绝对值≥此值视为大幅下跌',
+        threshold_source VARCHAR(20) NOT NULL DEFAULT 'suggested' COMMENT '阈值来源：manual(手定)/suggested(近3年95分位跌幅建议)',
+        threshold_note VARCHAR(255) DEFAULT NULL COMMENT '阈值口径说明（如“按近3年日跌幅95分位统计的建议值，仅供参考”）',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (index_code)
+    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4
+      COMMENT = '投资环境·国内指数大幅下跌阈值表（手定+统计建议，2026-10-18）'
+    """,
+    "env_index_tech_daily": """
+    CREATE TABLE IF NOT EXISTS env_index_tech_daily (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        trade_date DATE NOT NULL COMMENT '交易日',
+        close DECIMAL(12,4) DEFAULT NULL COMMENT '收盘价（后复权口径，跨日比值指标用）',
+        change_pct DECIMAL(8,4) DEFAULT NULL COMMENT '当日涨跌幅(%)',
+        -- 多窗口涨跌幅（12 窗口：半月/一月/一个半月/两月/两个半月/三月/六月/一年/本年/本季/本月/本周）
+        win_halfm DECIMAL(10,4) DEFAULT NULL, win_1m DECIMAL(10,4) DEFAULT NULL,
+        win_15m DECIMAL(10,4) DEFAULT NULL, win_2m DECIMAL(10,4) DEFAULT NULL,
+        win_25m DECIMAL(10,4) DEFAULT NULL, win_3m DECIMAL(10,4) DEFAULT NULL,
+        win_6m DECIMAL(10,4) DEFAULT NULL, win_1y DECIMAL(10,4) DEFAULT NULL,
+        win_ytd DECIMAL(10,4) DEFAULT NULL, win_qtd DECIMAL(10,4) DEFAULT NULL,
+        win_mtd DECIMAL(10,4) DEFAULT NULL, win_wtd DECIMAL(10,4) DEFAULT NULL,
+        -- 均线位置
+        ma60 DECIMAL(12,4) DEFAULT NULL, ma250 DECIMAL(12,4) DEFAULT NULL,
+        close_over_ma60_pct DECIMAL(8,4) DEFAULT NULL COMMENT '收盘价相对MA60偏离(%)',
+        close_over_ma250_pct DECIMAL(8,4) DEFAULT NULL COMMENT '收盘价相对MA250偏离(%)',
+        -- 量价（20 日均量 ±30% 区间）
+        vol_ma20 DECIMAL(22,2) DEFAULT NULL, vol_ratio_20 DECIMAL(8,4) DEFAULT NULL COMMENT '当日成交量/20日均量×100%',
+        -- 技术指标
+        macd_dif DECIMAL(12,4) DEFAULT NULL, macd_dea DECIMAL(12,4) DEFAULT NULL,
+        macd_hist DECIMAL(12,4) DEFAULT NULL, rsi14 DECIMAL(8,4) DEFAULT NULL,
+        boll_upper DECIMAL(12,4) DEFAULT NULL, boll_mid DECIMAL(12,4) DEFAULT NULL, boll_lower DECIMAL(12,4) DEFAULT NULL,
+        -- 支撑阻力
+        high_250 DECIMAL(12,4) DEFAULT NULL, low_250 DECIMAL(12,4) DEFAULT NULL,
+        high_20 DECIMAL(12,4) DEFAULT NULL, low_20 DECIMAL(12,4) DEFAULT NULL,
+        -- 回撤与波动
+        max_dd_1y DECIMAL(8,4) DEFAULT NULL, max_dd_3y DECIMAL(8,4) DEFAULT NULL,
+        max_dd_all DECIMAL(8,4) DEFAULT NULL, ann_vol_60 DECIMAL(8,4) DEFAULT NULL,
+        down_vol_60 DECIMAL(8,4) DEFAULT NULL,
+        -- Beta（对沪深300 60日滚动）
+        beta_60 DECIMAL(8,4) DEFAULT NULL,
+        -- 与沪深300相关性（120日）
+        corr_300_120 DECIMAL(8,4) DEFAULT NULL,
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        data_source VARCHAR(100) DEFAULT NULL,
+        UNIQUE KEY uk_code_date (index_code, trade_date),
+        KEY idx_trade_date (trade_date)
+    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4
+      COMMENT = '投资环境·国内指数技术面日频物化表（2026-10-18）'
+    """,
+    "env_fundamental_daily": """
+    CREATE TABLE IF NOT EXISTS env_fundamental_daily (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        trade_date DATE NOT NULL COMMENT '交易日（估值部分）；盈利部分用最近财报期截面日',
+        -- 估值（源 index_valuation_daily 的 legu/legu_pb 长历史）
+        pe_ttm DECIMAL(12,4) DEFAULT NULL, pe_ttm_pct DECIMAL(8,4) DEFAULT NULL COMMENT 'PE-TTM 全史分位(0~100)',
+        pb DECIMAL(10,4) DEFAULT NULL, pb_pct DECIMAL(8,4) DEFAULT NULL COMMENT 'PB 全史分位(0~100)',
+        dividend_yield DECIMAL(10,4) DEFAULT NULL, dividend_yield_pct DECIMAL(8,4) DEFAULT NULL,
+        erp DECIMAL(10,4) DEFAULT NULL COMMENT '股权风险溢价 = 1/PE - 10Y国债收益率',
+        erp_pct DECIMAL(8,4) DEFAULT NULL,
+        -- 盈利质量与成长（成分股聚合，近40季度趋势另见 env_fundamental_quarter）
+        roe DECIMAL(10,4) DEFAULT NULL COMMENT '成分股聚合ROE(%)',
+        net_profit_yoy DECIMAL(10,4) DEFAULT NULL COMMENT '成分股聚合净利润增速(%)',
+        revenue_yoy DECIMAL(10,4) DEFAULT NULL COMMENT '成分股聚合营收增速(%)',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        data_source VARCHAR(100) DEFAULT NULL,
+        UNIQUE KEY uk_code_date (index_code, trade_date),
+        KEY idx_trade_date (trade_date)
+    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4
+      COMMENT = '投资环境·国内指数基本面日频物化表（估值日频+盈利截面，2026-10-18）'
+    """,
+    "env_fundamental_quarter": """
+    CREATE TABLE IF NOT EXISTS env_fundamental_quarter (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        index_code VARCHAR(20) NOT NULL COMMENT '指数代码',
+        report_date DATE NOT NULL COMMENT '报告期（如 2026-06-30）',
+        roe DECIMAL(10,4) DEFAULT NULL COMMENT '成分股聚合ROE(%)（当季）',
+        net_profit_yoy DECIMAL(10,4) DEFAULT NULL COMMENT '成分股聚合净利润同比增速(%)',
+        revenue_yoy DECIMAL(10,4) DEFAULT NULL COMMENT '成分股聚合营收同比增速(%)',
+        net_profit_sum DECIMAL(20,2) DEFAULT NULL COMMENT '成分股净利润合计（元）',
+        revenue_sum DECIMAL(20,2) DEFAULT NULL COMMENT '成分股营收合计（元）',
+        constituent_count INT DEFAULT NULL COMMENT '参与聚合的成分股数量',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        data_source VARCHAR(100) DEFAULT NULL,
+        UNIQUE KEY uk_code_report (index_code, report_date),
+        KEY idx_report_date (report_date)
+    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4
+      COMMENT = '投资环境·国内指数成分股财务聚合季频表（近40季度趋势，2026-10-18）'
+    """,
+    "env_macro_monthly": """
+    CREATE TABLE IF NOT EXISTS env_macro_monthly (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        stat_month VARCHAR(10) NOT NULL COMMENT '统计月份（YYYY-MM）',
+        indicator VARCHAR(20) NOT NULL COMMENT '指标：gdp/pmi/cpi/ppi',
+        value DECIMAL(14,4) DEFAULT NULL COMMENT '读数',
+        yoy DECIMAL(10,4) DEFAULT NULL COMMENT '同比(%)（GDP为累计同比，CPI/PPI为当月同比）',
+        note VARCHAR(100) DEFAULT NULL COMMENT '口径备注（如 GDP 累计值单位亿元）',
+        update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        data_source VARCHAR(100) DEFAULT NULL,
+        UNIQUE KEY uk_month_ind (stat_month, indicator),
+        KEY idx_indicator (indicator)
+    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4
+      COMMENT = '投资环境·宏观月度序列（GDP/PMI/CPI/PPI，akshare macro_china 系列，2026-10-18）'
     """,
 }
 

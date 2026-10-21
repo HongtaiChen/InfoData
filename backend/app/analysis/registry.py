@@ -303,7 +303,7 @@ REGISTRY: list[dict] = [
              "options": [120, 250, 500], "default": 250},
         ],
         "drilldown": [
-            {"label": "行情看板看K线", "target": "/market"},
+            {"label": "投资环境看国内指数", "target": "/environment"},
             {"label": "板块轮动看行业/概念", "target": "/analysis/sector-rotation"},
         ],
     },
@@ -363,7 +363,7 @@ REGISTRY: list[dict] = [
         ],
         "drilldown": [
             {"label": "概念中心看概念K线", "target": "/concept"},
-            {"label": "行情看板看大盘", "target": "/market"},
+            {"label": "投资环境看国内指数", "target": "/environment"},
         ],
     },
     # ================= 市场风向 · 跨市场对照三卡（data=cross-market） =================
@@ -482,7 +482,7 @@ REGISTRY: list[dict] = [
         ],
         "drilldown": [
             {"label": "货币流动性看资金成本", "target": "/analysis/money-cost"},
-            {"label": "行情看板看大盘", "target": "/market"},
+            {"label": "投资环境看国内指数", "target": "/environment"},
         ],
     },
 ]
