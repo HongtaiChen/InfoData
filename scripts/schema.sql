@@ -1,9 +1,9 @@
 -- ============================================================================
 -- InvestBuddy / InfoData — 数据库结构定义（schema only，不含任何数据）
 -- ============================================================================
--- 由 scripts/dump_schema.py 从现网 adata 库导出，导出时间：2026-10-17 20:27:11
+-- 由 scripts/dump_schema.py 从现网 adata 库导出，导出时间：2026-10-22 07:12:52
 -- 源库：adata@127.0.0.1:3306
--- 表数量：56 张（已排除 4 张 *_bak_* / *_backup_* 备份表）
+-- 表数量：83 张（已排除 5 张 *_bak_* / *_backup_* 备份表）
 --
 -- 用途：全新环境初始化数据库结构。
 --
@@ -37,7 +37,91 @@ USE `adata`;
 -- 让本次导入不受客户端字符集影响（避免中文注释乱码）
 SET NAMES utf8mb4;
 
--- ---------- [1/56] bond_profit_daily ----------
+-- ---------- [1/83] _bak_dc_index_market_holiday_20261019 ----------
+CREATE TABLE IF NOT EXISTS `_bak_dc_index_market_holiday_20261019` (
+  `id` int NOT NULL DEFAULT '0',
+  `index_code` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '指数代码',
+  `index_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '指数简称',
+  `trade_date` date NOT NULL COMMENT '交易日期',
+  `open` decimal(10,4) DEFAULT NULL COMMENT '开盘价',
+  `high` decimal(10,4) DEFAULT NULL COMMENT '最高价',
+  `low` decimal(10,4) DEFAULT NULL COMMENT '最低价',
+  `close` decimal(10,4) DEFAULT NULL COMMENT '收盘价',
+  `volume` bigint DEFAULT NULL COMMENT '成交量，单位: 手',
+  `amount` bigint DEFAULT NULL COMMENT '成交额，单位: 元',
+  `change_amount` decimal(10,3) DEFAULT NULL COMMENT '涨跌额',
+  `change_pct` decimal(8,4) DEFAULT NULL COMMENT '涨跌幅(%)',
+  `turnover_ratio` decimal(8,4) DEFAULT NULL COMMENT '换手率(%)',
+  `index_group` varchar(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '指数分组：市场基准/市值风格/科技成长/情绪温度/股息防守/政策周期',
+  `group_desc` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '角色说明（全A基准锚点等）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `data_source` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '数据来源'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------- [2/83] _bak_index_valuation_holiday_20261019 ----------
+CREATE TABLE IF NOT EXISTS `_bak_index_valuation_holiday_20261019` (
+  `id` bigint NOT NULL DEFAULT '0',
+  `index_code` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '指数代码（全A用 ALL_A）',
+  `index_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL COMMENT '指数名称',
+  `trade_date` date NOT NULL COMMENT '估值日期',
+  `source` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'csindex(中证官网)/legu(乐咕)/all_a(全A等权)',
+  `pe_lyr` decimal(12,4) DEFAULT NULL COMMENT '静态市盈率（整体法；中证「市盈率1」/乐咕「静态市盈率」）',
+  `pe_ttm` decimal(12,4) DEFAULT NULL COMMENT '滚动市盈率 TTM（整体法；中证「市盈率2」/乐咕「滚动市盈率」）',
+  `pe_ttm_median` decimal(12,4) DEFAULT NULL COMMENT '滚动市盈率中位数（仅乐咕/全A 源提供）',
+  `pe_lyr_median` decimal(12,4) DEFAULT NULL COMMENT '静态市盈率中位数（仅乐咕/全A 源提供）',
+  `dividend_yield` decimal(10,4) DEFAULT NULL COMMENT '股息率(%)',
+  `dividend_yield2` decimal(10,4) DEFAULT NULL COMMENT '股息率2（中证口径：近12月 vs 近3年分红）',
+  `pe_ttm_pct10y` decimal(8,4) DEFAULT NULL COMMENT '滚动PE近十年分位（0~1，仅 all_a 源直接给）',
+  `close_point` decimal(16,4) DEFAULT NULL COMMENT '指数点位（乐咕/全A 源提供，供勾稽）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL,
+  `pb` decimal(10,4) DEFAULT NULL COMMENT '市净率 PB（整体法；乐咕「市净率」）',
+  `pb_ew` decimal(10,4) DEFAULT NULL COMMENT '等权市净率（乐咕「等权市净率」）',
+  `pb_median` decimal(10,4) DEFAULT NULL COMMENT '市净率中位数（乐咕「市净率中位数」）'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------- [3/83] _bak_market_style_daily_holiday_20261019 ----------
+CREATE TABLE IF NOT EXISTS `_bak_market_style_daily_holiday_20261019` (
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `ret_bench_20` decimal(10,4) DEFAULT NULL COMMENT '市场基准组等权20日收益%',
+  `ret_bench_60` decimal(10,4) DEFAULT NULL COMMENT '市场基准组等权60日收益%',
+  `ret_size_20` decimal(10,4) DEFAULT NULL COMMENT '市值风格组等权20日收益%',
+  `ret_size_60` decimal(10,4) DEFAULT NULL COMMENT '市值风格组等权60日收益%',
+  `ret_tech_20` decimal(10,4) DEFAULT NULL COMMENT '科技成长组等权20日收益%',
+  `ret_tech_60` decimal(10,4) DEFAULT NULL COMMENT '科技成长组等权60日收益%',
+  `ret_sent_20` decimal(10,4) DEFAULT NULL COMMENT '情绪温度组等权20日收益%',
+  `ret_sent_60` decimal(10,4) DEFAULT NULL COMMENT '情绪温度组等权60日收益%',
+  `ret_div_20` decimal(10,4) DEFAULT NULL COMMENT '股息防守组等权20日收益%',
+  `ret_div_60` decimal(10,4) DEFAULT NULL COMMENT '股息防守组等权60日收益%',
+  `ret_pol_20` decimal(10,4) DEFAULT NULL COMMENT '政策周期组等权20日收益%',
+  `ret_pol_60` decimal(10,4) DEFAULT NULL COMMENT '政策周期组等权60日收益%',
+  `scissors_20` decimal(10,4) DEFAULT NULL COMMENT '大小盘剪刀差20日：小盘组-大盘组',
+  `scissors_60` decimal(10,4) DEFAULT NULL COMMENT '大小盘剪刀差60日',
+  `risk_appetite_20` decimal(10,4) DEFAULT NULL COMMENT '风偏分数：科技成长-股息防守(20日)',
+  `sentiment_20` decimal(10,4) DEFAULT NULL COMMENT '情绪温度：券商-中证全指(20日超额)',
+  `policy_excess_20` decimal(10,4) DEFAULT NULL COMMENT '政策敏感：地产-中证全指(20日超额)',
+  `bench_pos_pct` decimal(6,2) DEFAULT NULL COMMENT '大势位置：中证全指近250日高低区间分位%',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `breadth_total` int DEFAULT NULL COMMENT '当日有效个股数（有收盘价）',
+  `breadth_up` int DEFAULT NULL COMMENT '上涨家数',
+  `breadth_down` int DEFAULT NULL COMMENT '下跌家数',
+  `breadth_up_ratio` decimal(6,2) DEFAULT NULL COMMENT '上涨家数占比%',
+  `breadth_adl` bigint DEFAULT NULL COMMENT '腾落线ADL累计值（Σ上涨-下跌）',
+  `limit_up` int DEFAULT NULL COMMENT '涨停家数（主板≥9.8%，创业板/科创板≥19.8%，近似口径）',
+  `limit_down` int DEFAULT NULL COMMENT '跌停家数',
+  `above_ma20_pct` decimal(6,2) DEFAULT NULL COMMENT '收盘站上MA20个股占比%',
+  `above_ma60_pct` decimal(6,2) DEFAULT NULL COMMENT '收盘站上MA60个股占比%（分母为有60日历史个股）',
+  `new_high60` int DEFAULT NULL COMMENT '创60日新高家数',
+  `new_low60` int DEFAULT NULL COMMENT '创60日新低家数',
+  `hl_diff60` int DEFAULT NULL COMMENT '创60日新高-新低家数差',
+  `market_amount` decimal(18,2) DEFAULT NULL COMMENT '全市场成交额（亿元，个股 amount 求和）',
+  `amount_ratio_20` decimal(8,2) DEFAULT NULL COMMENT '成交额 / 20日均值 ×100%（>100 放量，<100 缩量）',
+  `scissors_adj20` decimal(10,4) DEFAULT NULL COMMENT '剪刀差风险调整：scissors_20 ÷ 其近250日滚动标准差（0=两腿同收益）',
+  `risk_appetite_adj20` decimal(10,4) DEFAULT NULL COMMENT '风偏风险调整：risk_appetite_20 ÷ 其近250日滚动标准差（0=两腿同收益）',
+  `turnover_med` decimal(8,4) DEFAULT NULL COMMENT '个股换手率中位数%（源 turnover_ratio 小数×100；中位数抗异常值）'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------- [4/83] bond_profit_daily ----------
 CREATE TABLE IF NOT EXISTS `bond_profit_daily` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `trade_date` date NOT NULL COMMENT '交易日期',
@@ -59,7 +143,7 @@ CREATE TABLE IF NOT EXISTS `bond_profit_daily` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='国债收益率数据表';
 
--- ---------- [2/56] cb_policy_rate ----------
+-- ---------- [5/83] cb_policy_rate ----------
 CREATE TABLE IF NOT EXISTS `cb_policy_rate` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `country_code` varchar(8) NOT NULL COMMENT '国家/地区代码（US/EU/JP/UK）',
@@ -76,7 +160,19 @@ CREATE TABLE IF NOT EXISTS `cb_policy_rate` (
   KEY `idx_event_date` (`event_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='多国央行政策利率决议（美/欧/日/英，事件表：只在决议日有行，非日频顺延）。⚠️【源时效风险·实测 2026-09-25】akshare 的 macro_bank_*_interest_rate **整族**接口最后非空「今值」停在 2025-07~08（美 2025-07-31=4.5 / 欧 2025-07-24=2.15 / 日 2025-07-31=0.5 / 英 2025-08-07=4.0），表内最后一行日期在 2025-09~10 但今值为空。这是上游（经济日历源）整体停更，**换接口无用**（全族 11 个 macro_bank_* 同病）。⇒ 本表可用作「历史与方向共振」，**不可当作当前利率**；下游必须用 MAX(event_date) 标出「源更新至」而不是默认它就是最新。若上游恢复更新，本表自动跟上。⚠️ 只存 rate 非空的**有效决议**行（源侧未公布的占位行不入库）。';
 
--- ---------- [3/56] cn_cb_balance_monthly ----------
+-- ---------- [6/83] cftc_position_weekly ----------
+CREATE TABLE IF NOT EXISTS `cftc_position_weekly` (
+  `currency` varchar(8) NOT NULL COMMENT '货币代码(USD/EUR/JPY/GBP/AUD/CAD/CHF/NZD/MXN)',
+  `metric` varchar(8) NOT NULL COMMENT '指标(long/short/net)',
+  `trade_date` date NOT NULL COMMENT '截至日(周频)',
+  `value` decimal(20,2) DEFAULT NULL COMMENT '持仓手数',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`currency`,`metric`,`trade_date`),
+  KEY `idx_trade_date` (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='CFTC 货币期货非商业持仓周频（akshare，2026-10-21）';
+
+-- ---------- [7/83] cn_cb_balance_monthly ----------
 CREATE TABLE IF NOT EXISTS `cn_cb_balance_monthly` (
   `stat_month` date NOT NULL COMMENT '统计月份（源为 2026.8 形式，取当月 1 日）',
   `foreign_assets` decimal(20,2) DEFAULT NULL COMMENT '国外资产（亿元）',
@@ -111,7 +207,7 @@ CREATE TABLE IF NOT EXISTS `cn_cb_balance_monthly` (
   PRIMARY KEY (`stat_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='中国人民银行资产负债表月度（28 科目，源 356 期，1993.3 起）。⭐ 本域最有价值的单项新增：中国没有官方「QE 规模」公告，只能从资产负债表倒推——「对其他存款性公司债权」即 MLF/逆回购/PSL 等主动投放工具余额，其扩张/收缩就是中国式扩表/缩表。⚠️ 纯源值镜像表，**不存派生列**（同比/环比在分析层按需算；避免派生值与源值不同步）。⚠️ 部分科目为历史口径（1993~2000 期），近端为 NULL。';
 
--- ---------- [4/56] cn_liquidity_monthly ----------
+-- ---------- [8/83] cn_liquidity_monthly ----------
 CREATE TABLE IF NOT EXISTS `cn_liquidity_monthly` (
   `stat_month` date NOT NULL COMMENT '统计月份（取当月 1 日）',
   `m2` decimal(20,2) DEFAULT NULL COMMENT 'M2 数量（亿元）',
@@ -153,7 +249,7 @@ CREATE TABLE IF NOT EXISTS `cn_liquidity_monthly` (
   PRIMARY KEY (`stat_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='中国货币与信用月度（M0/M1/M2 数量+同比+环比 / 新增信贷 / 社融增量+分项 / 法定准备金率）。⚠️ 两条派生行为：① m1_m2_gap 两列相减；② rrr_* 由「准备金率调整事件表」按月末顺延填充（源是 58 条事件、非月度序列）。其余列均为源值直存。⚠️ 社融 shrzgm* 来自商务数据中心，源侧更新滞后（实测 2026-09-25 时最新仅到 2026-04），故本表以 M1/M2 与新增信贷为主力指标、社融为辅。';
 
--- ---------- [5/56] cn_omo_daily ----------
+-- ---------- [9/83] cn_omo_daily ----------
 CREATE TABLE IF NOT EXISTS `cn_omo_daily` (
   `section` varchar(24) NOT NULL DEFAULT 'omo_trade' COMMENT '来源栏目。⚠️ **各栏目各自独立编号**（同一年「交易公告第1号」与「买断式第1号」并存）⇒ 主键必须含本列。取值：omo_trade=公开市场业务交易公告（7天期逆回购 + 香港央票，日度）/ outright_repo=公开市场买断式逆回购业务公告（月度，2024-10 起）',
   `notice_year` smallint NOT NULL COMMENT '公告年份（人行**按年重新编号**，故「年份+序号」才唯一）。与 section、notice_no 共同构成主键',
@@ -173,7 +269,7 @@ CREATE TABLE IF NOT EXISTS `cn_omo_daily` (
   KEY `idx_type_date` (`op_type`,`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='中国·央行公开市场操作（人行「公开市场业务」栏目群）。⭐ 中国层数量维度的**短端抓手**：M2 是月度存量、OMO 是日度流量。⚠️ 现采 2 个栏目：①`omo_trade` 公开市场业务交易公告（7天期逆回购，日度，约 3800 条；含香港央票）②`outright_repo` 公开市场买断式逆回购业务公告（2024-10 起，月度，39 条）—— 两者**各自独立编号**、且**都叫「公告」但业务完全不同**。⚠️ 已知未采的同级栏目（按需再补）：公开市场国债买卖业务公告、中央国库现金管理业务公告、中央银行票据业务公告、央行票据互换(CBS)、互换便利(SFISF)、其他业务公告(SLO)。⚠️ 两种公告 ID 形式并存：19 位时间戳型（2025-10-09 改版后，前 8 位=日期）与 7 位纯序号型（改版前，**不含日期**）。⚠️ 翻页 modulekey **不一定是数字**（交易公告=17081，买断式=b0da893b 这种 UUID）⇒ 必须从页面动态解析。⚠️ 只有事实列、**没有净投放/未到期余额**：净投放需按期限滚动推算到期日，口径选择权属分析层，刻意不在采集层固化。';
 
--- ---------- [6/56] cn_reserve_monthly ----------
+-- ---------- [10/83] cn_reserve_monthly ----------
 CREATE TABLE IF NOT EXISTS `cn_reserve_monthly` (
   `stat_month` date NOT NULL COMMENT '统计月份（源 统计时间 形如 2026.8 → 2026-08-01）',
   `fx_reserve_usd` decimal(18,2) DEFAULT NULL COMMENT '★国家外汇储备（亿美元，官方口径）。源 akshare macro_china_foreign_exchange_gold。实测 34,383.25 @2026-08。⚠️ 中国层「外储」是三套口径之一，与 cn_cb_balance_monthly.fx_reserve（亿元、历史成本口径）严禁相加、严禁按市价互校',
@@ -185,7 +281,7 @@ CREATE TABLE IF NOT EXISTS `cn_reserve_monthly` (
   PRIMARY KEY (`stat_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='中国·官方外汇储备与黄金储备（月度，akshare macro_china_foreign_exchange_gold，1978-12 起 419 期）。⭐ 中国层「央行对外资产」的**国际可比口径**：外储环比变动 ≈ 估值效应（汇率/金价/债价）+ 交易变动；黄金实物量支撑「央行储备多元化/去美元化」叙事。⚠️ 中国层储备有**三套口径、三种单位，严禁相加、严禁互校**：① 本表 fx_reserve_usd（亿美元·官方）② 本表 gold_reserve_oz（万盎司·实物量）③ cn_cb_balance_monthly.fx_reserve（亿元·货币当局资产负债表「国外资产」的人民币表内口径）。实测「人民币口径 ÷ 美元口径」的隐含折算率 24 期由 6.886 **单调降至** 6.318（同期市场汇率约 7.0~7.3）⇒ 它是**历史成本/复合折算而非汇率**，按市价互校会**稳定误报** ⇒ 互校只保留区间 [6.0,7.4] + 月度变动 <2%，且**放在采集器内断言**（DQ 检查器是单表+where、无 JOIN，跨表校验写不成规则）。⚠️ 源 `统计时间` 是字符串 `YYYY.M`：**字符串序 ≠ 时间序**（`2025.10 < 2025.2`）⇒ 采集器按 `(年,月)` 元组排序（公共件 `parse_cn_month`），**禁止 `iloc[-1]` 取最新**。⚠️ 早期量级极端（1980-12 外储 −12.96 亿美元）⇒ 量级 DQ 只守 2015 年后。';
 
--- ---------- [7/56] currency_boc_daily ----------
+-- ---------- [11/83] currency_boc_daily ----------
 CREATE TABLE IF NOT EXISTS `currency_boc_daily` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `currency` varchar(10) NOT NULL DEFAULT 'USD' COMMENT '币种代码（USD/EUR/JPY…）',
@@ -202,7 +298,7 @@ CREATE TABLE IF NOT EXISTS `currency_boc_daily` (
   KEY `idx_trade_date` (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='人民币外汇牌价与中间价（蓝图E，2026-09-19 落地）';
 
--- ---------- [8/56] dc_index_market ----------
+-- ---------- [12/83] dc_index_market ----------
 CREATE TABLE IF NOT EXISTS `dc_index_market` (
   `id` int NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT '指数代码',
@@ -228,7 +324,7 @@ CREATE TABLE IF NOT EXISTS `dc_index_market` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='东财指数行情信息表';
 
--- ---------- [9/56] dq_close_nonpositive_detail ----------
+-- ---------- [13/83] dq_close_nonpositive_detail ----------
 CREATE TABLE IF NOT EXISTS `dq_close_nonpositive_detail` (
   `run_date` date NOT NULL,
   `stock_code` varchar(10) NOT NULL,
@@ -254,7 +350,7 @@ CREATE TABLE IF NOT EXISTS `dq_close_nonpositive_detail` (
   KEY `idx_defect` (`defect_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全史 close<=0/空 行级清单（daily_value_bounds 全史盲区补全）';
 
--- ---------- [10/56] dq_gap_detail ----------
+-- ---------- [14/83] dq_gap_detail ----------
 CREATE TABLE IF NOT EXISTS `dq_gap_detail` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `run_at` datetime NOT NULL COMMENT '本轮体检时间',
@@ -273,7 +369,7 @@ CREATE TABLE IF NOT EXISTS `dq_gap_detail` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全史疑似缺口明细（L1 gap_scan 产出 → L3 消费）';
 
--- ---------- [11/56] dq_pct_anomaly_detail ----------
+-- ---------- [15/83] dq_pct_anomaly_detail ----------
 CREATE TABLE IF NOT EXISTS `dq_pct_anomaly_detail` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `run_date` date NOT NULL COMMENT '盘点日',
@@ -300,7 +396,7 @@ CREATE TABLE IF NOT EXISTS `dq_pct_anomaly_detail` (
   KEY `idx_run_date` (`run_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='|change_pct|>31% 行级清单（取证报告 2026-09-22 建议4）';
 
--- ---------- [12/56] dq_recon_detail ----------
+-- ---------- [16/83] dq_recon_detail ----------
 CREATE TABLE IF NOT EXISTS `dq_recon_detail` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `run_at` datetime NOT NULL COMMENT '本轮对账时间',
@@ -321,7 +417,7 @@ CREATE TABLE IF NOT EXISTS `dq_recon_detail` (
   KEY `idx_mode` (`mode`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='外部对账差异明细（L2 recon 产出）';
 
--- ---------- [13/56] dq_report ----------
+-- ---------- [17/83] dq_report ----------
 CREATE TABLE IF NOT EXISTS `dq_report` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `run_at` datetime NOT NULL COMMENT '本轮体检执行时间',
@@ -340,7 +436,7 @@ CREATE TABLE IF NOT EXISTS `dq_report` (
   KEY `idx_rule` (`rule_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据质量体检结果表';
 
--- ---------- [14/56] dq_rules ----------
+-- ---------- [18/83] dq_rules ----------
 CREATE TABLE IF NOT EXISTS `dq_rules` (
   `id` int NOT NULL AUTO_INCREMENT,
   `rule_name` varchar(80) NOT NULL COMMENT '规则名（唯一）',
@@ -357,7 +453,217 @@ CREATE TABLE IF NOT EXISTS `dq_rules` (
   UNIQUE KEY `uk_rule_name` (`rule_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据质量规则配置表';
 
--- ---------- [15/56] eu_money_supply_monthly ----------
+-- ---------- [19/83] dr_repo_daily ----------
+CREATE TABLE IF NOT EXISTS `dr_repo_daily` (
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `dr001` decimal(10,4) DEFAULT NULL COMMENT 'DR001 存款类机构隔夜质押式回购利率(%)',
+  `dr007` decimal(10,4) DEFAULT NULL COMMENT 'DR007 存款类机构7天质押式回购利率(%)',
+  `fr007` decimal(10,4) DEFAULT NULL COMMENT 'FR007 全市场7天回购定盘利率(%)',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DR001/DR007存款类机构质押式回购利率日线（中国货币网，2026-10-21）';
+
+-- ---------- [20/83] env_fundamental_daily ----------
+CREATE TABLE IF NOT EXISTS `env_fundamental_daily` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `index_code` varchar(20) NOT NULL COMMENT '指数代码',
+  `trade_date` date NOT NULL COMMENT '交易日（估值部分）；盈利部分用最近财报期截面日',
+  `pe_ttm` decimal(12,4) DEFAULT NULL,
+  `pe_ttm_pct` decimal(8,4) DEFAULT NULL COMMENT 'PE-TTM 全史分位(0~100)',
+  `pb` decimal(10,4) DEFAULT NULL,
+  `pb_pct` decimal(8,4) DEFAULT NULL COMMENT 'PB 全史分位(0~100)',
+  `dividend_yield` decimal(10,4) DEFAULT NULL,
+  `dividend_yield_pct` decimal(8,4) DEFAULT NULL,
+  `erp` decimal(10,4) DEFAULT NULL COMMENT '股权风险溢价 = 1/PE - 10Y国债收益率',
+  `erp_pct` decimal(8,4) DEFAULT NULL,
+  `roe` decimal(10,4) DEFAULT NULL COMMENT '成分股聚合ROE(%)',
+  `net_profit_yoy` decimal(10,4) DEFAULT NULL COMMENT '成分股聚合净利润增速(%)',
+  `revenue_yoy` decimal(10,4) DEFAULT NULL COMMENT '成分股聚合营收增速(%)',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  `pb_dispersion` decimal(10,4) DEFAULT NULL COMMENT '成分股 PB 离散度（横截面标准差）。来自 stock_pb_daily 按 index_constituents 成分股计算',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_date` (`index_code`,`trade_date`),
+  KEY `idx_trade_date` (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·国内指数基本面日频物化表（估值日频+盈利截面，2026-10-18）';
+
+-- ---------- [21/83] env_fundamental_quarter ----------
+CREATE TABLE IF NOT EXISTS `env_fundamental_quarter` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `index_code` varchar(20) NOT NULL COMMENT '指数代码',
+  `report_date` date NOT NULL COMMENT '报告期（如 2026-06-30）',
+  `roe` decimal(10,4) DEFAULT NULL COMMENT '成分股聚合ROE(%)（当季）',
+  `net_profit_yoy` decimal(10,4) DEFAULT NULL COMMENT '成分股聚合净利润同比增速(%)',
+  `revenue_yoy` decimal(10,4) DEFAULT NULL COMMENT '成分股聚合营收同比增速(%)',
+  `net_profit_sum` decimal(20,2) DEFAULT NULL COMMENT '成分股净利润合计（元）',
+  `revenue_sum` decimal(20,2) DEFAULT NULL COMMENT '成分股营收合计（元）',
+  `constituent_count` int DEFAULT NULL COMMENT '参与聚合的成分股数量',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  `ocf_sum` decimal(20,2) DEFAULT NULL COMMENT '成分股经营活动现金流净额之和（元）。来自 stock_cash_flow_ths 逐成分股聚合',
+  `ocf_ratio` decimal(10,4) DEFAULT NULL COMMENT '现金流含金量 = 经营现金流净额之和 / 净利润之和（倍）。>1 利润含金量高，<0 现金流为负',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_report` (`index_code`,`report_date`),
+  KEY `idx_report_date` (`report_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·国内指数成分股财务聚合季频表（近40季度趋势，2026-10-18）';
+
+-- ---------- [22/83] env_index_tech_daily ----------
+CREATE TABLE IF NOT EXISTS `env_index_tech_daily` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `index_code` varchar(20) NOT NULL COMMENT '指数代码',
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `close` decimal(12,4) DEFAULT NULL COMMENT '收盘价（后复权口径，跨日比值指标用）',
+  `change_pct` decimal(8,4) DEFAULT NULL COMMENT '当日涨跌幅(%)',
+  `win_halfm` decimal(10,4) DEFAULT NULL,
+  `win_1m` decimal(10,4) DEFAULT NULL,
+  `win_15m` decimal(10,4) DEFAULT NULL,
+  `win_2m` decimal(10,4) DEFAULT NULL,
+  `win_25m` decimal(10,4) DEFAULT NULL,
+  `win_3m` decimal(10,4) DEFAULT NULL,
+  `win_6m` decimal(10,4) DEFAULT NULL,
+  `win_1y` decimal(10,4) DEFAULT NULL,
+  `win_ytd` decimal(10,4) DEFAULT NULL,
+  `win_qtd` decimal(10,4) DEFAULT NULL,
+  `win_mtd` decimal(10,4) DEFAULT NULL,
+  `win_wtd` decimal(10,4) DEFAULT NULL,
+  `ma60` decimal(12,4) DEFAULT NULL,
+  `ma250` decimal(12,4) DEFAULT NULL,
+  `close_over_ma60_pct` decimal(8,4) DEFAULT NULL COMMENT '收盘价相对MA60偏离(%)',
+  `close_over_ma250_pct` decimal(8,4) DEFAULT NULL COMMENT '收盘价相对MA250偏离(%)',
+  `vol_ma20` decimal(22,2) DEFAULT NULL,
+  `vol_ratio_20` decimal(8,4) DEFAULT NULL COMMENT '当日成交量/20日均量×100%',
+  `macd_dif` decimal(12,4) DEFAULT NULL,
+  `macd_dea` decimal(12,4) DEFAULT NULL,
+  `macd_hist` decimal(12,4) DEFAULT NULL,
+  `rsi14` decimal(8,4) DEFAULT NULL,
+  `boll_upper` decimal(12,4) DEFAULT NULL,
+  `boll_mid` decimal(12,4) DEFAULT NULL,
+  `boll_lower` decimal(12,4) DEFAULT NULL,
+  `high_250` decimal(12,4) DEFAULT NULL,
+  `low_250` decimal(12,4) DEFAULT NULL,
+  `high_20` decimal(12,4) DEFAULT NULL,
+  `low_20` decimal(12,4) DEFAULT NULL,
+  `max_dd_1y` decimal(8,4) DEFAULT NULL,
+  `max_dd_3y` decimal(8,4) DEFAULT NULL,
+  `max_dd_all` decimal(8,4) DEFAULT NULL,
+  `ann_vol_60` decimal(8,4) DEFAULT NULL,
+  `down_vol_60` decimal(8,4) DEFAULT NULL,
+  `beta_60` decimal(8,4) DEFAULT NULL,
+  `corr_300_120` decimal(8,4) DEFAULT NULL,
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_date` (`index_code`,`trade_date`),
+  KEY `idx_trade_date` (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·国内指数技术面日频物化表（2026-10-18）';
+
+-- ---------- [23/83] env_macro_monthly ----------
+CREATE TABLE IF NOT EXISTS `env_macro_monthly` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `stat_month` varchar(10) NOT NULL COMMENT '统计月份（YYYY-MM）',
+  `indicator` varchar(20) NOT NULL COMMENT '指标：gdp/pmi/cpi/ppi',
+  `value` decimal(14,4) DEFAULT NULL COMMENT '读数',
+  `yoy` decimal(10,4) DEFAULT NULL COMMENT '同比(%)（GDP为累计同比，CPI/PPI为当月同比）',
+  `note` varchar(100) DEFAULT NULL COMMENT '口径备注（如 GDP 累计值单位亿元）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_month_ind` (`stat_month`,`indicator`),
+  KEY `idx_indicator` (`indicator`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·宏观月度序列（GDP/PMI/CPI/PPI，akshare macro_china 系列，2026-10-18）';
+
+-- ---------- [24/83] env_overseas_tech_daily ----------
+CREATE TABLE IF NOT EXISTS `env_overseas_tech_daily` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `index_code` varchar(20) NOT NULL COMMENT '海外指数代码',
+  `trade_date` date NOT NULL COMMENT '交易日（各市场本币口径）',
+  `close` decimal(12,4) DEFAULT NULL COMMENT '收盘点位',
+  `change_pct` decimal(8,4) DEFAULT NULL COMMENT '当日涨跌幅(%)',
+  `ma60` decimal(12,4) DEFAULT NULL,
+  `ma250` decimal(12,4) DEFAULT NULL,
+  `close_over_ma60_pct` decimal(8,4) DEFAULT NULL COMMENT '收盘相对MA60偏离(%)',
+  `close_over_ma250_pct` decimal(8,4) DEFAULT NULL COMMENT '收盘相对MA250偏离(%)',
+  `macd_dif` decimal(12,4) DEFAULT NULL,
+  `macd_dea` decimal(12,4) DEFAULT NULL,
+  `macd_hist` decimal(12,4) DEFAULT NULL,
+  `rsi14` decimal(8,4) DEFAULT NULL,
+  `boll_upper` decimal(12,4) DEFAULT NULL,
+  `boll_mid` decimal(12,4) DEFAULT NULL,
+  `boll_lower` decimal(12,4) DEFAULT NULL,
+  `high_250` decimal(12,4) DEFAULT NULL,
+  `low_250` decimal(12,4) DEFAULT NULL,
+  `high_20` decimal(12,4) DEFAULT NULL,
+  `low_20` decimal(12,4) DEFAULT NULL,
+  `max_dd_1y` decimal(8,4) DEFAULT NULL COMMENT '近1年最大回撤(%)',
+  `max_dd_3y` decimal(8,4) DEFAULT NULL,
+  `max_dd_all` decimal(8,4) DEFAULT NULL COMMENT '全史最大回撤(%)',
+  `ann_vol_60` decimal(8,4) DEFAULT NULL COMMENT '60日年化波动率(%)',
+  `down_vol_60` decimal(8,4) DEFAULT NULL COMMENT '60日下行波动率(%)',
+  `rel_strong_60` decimal(8,4) DEFAULT NULL COMMENT '近60日相对ACWI超额(%)',
+  `rel_strong_250` decimal(8,4) DEFAULT NULL COMMENT '近250日相对ACWI超额(%)',
+  `beta_60` decimal(8,4) DEFAULT NULL COMMENT '对ACWI的60日Beta',
+  `corr_60` decimal(8,4) DEFAULT NULL COMMENT '对ACWI的60日滚动相关',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code_date` (`index_code`,`trade_date`),
+  KEY `idx_trade_date` (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·国际指数技术面日频物化表（2026-10-21）';
+
+-- ---------- [25/83] env_policy_view ----------
+CREATE TABLE IF NOT EXISTS `env_policy_view` (
+  `topic` varchar(32) NOT NULL,
+  `state` varchar(32) NOT NULL,
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`topic`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·宏观与政策环境手动判读状态';
+
+-- ---------- [26/83] env_threshold ----------
+CREATE TABLE IF NOT EXISTS `env_threshold` (
+  `index_code` varchar(20) NOT NULL COMMENT '指数代码',
+  `index_name` varchar(50) DEFAULT NULL COMMENT '指数名称',
+  `drop_threshold` decimal(6,3) DEFAULT NULL COMMENT '大幅下跌阈值(%)：当日跌幅绝对值≥此值视为大幅下跌',
+  `threshold_source` varchar(20) NOT NULL DEFAULT 'suggested' COMMENT '阈值来源：manual(手定)/suggested(近3年95分位跌幅建议)',
+  `threshold_note` varchar(255) DEFAULT NULL COMMENT '阈值口径说明（如“按近3年日跌幅95分位统计的建议值，仅供参考”）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`index_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='投资环境·国内指数大幅下跌阈值表（手定+统计建议，2026-10-18）';
+
+-- ---------- [27/83] epu_daily ----------
+CREATE TABLE IF NOT EXISTS `epu_daily` (
+  `trade_date` date NOT NULL COMMENT '日期',
+  `epu` decimal(10,4) DEFAULT NULL COMMENT 'EPU 日频指数',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='美国EPU经济政策不确定性日频（Baker/Bloom/Davis，2026-10-21）';
+
+-- ---------- [28/83] etf_share_daily ----------
+CREATE TABLE IF NOT EXISTS `etf_share_daily` (
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `total_share` decimal(24,4) DEFAULT NULL COMMENT '★全市场股票型 ETF 总份额（份）。Σ 各只股票型 ETF 当日最新份额。⚠️ 仅采集日累积，历史不回溯（源无历史份额序列）',
+  `net_inflow` decimal(18,4) DEFAULT NULL COMMENT '★当日净流入（元）= Σ(Δ份额 × 净值)。Δ份额=当日份额−上一采集日份额；正=净申购/流入、负=净赎回/流出。⚠️ 仅覆盖采集启动后的日变化',
+  `fund_count` int DEFAULT NULL COMMENT '当日纳入统计的股票型 ETF 只数（口径：全市场股票ETF，含跨境/商品，不含债券/货币）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全市场股票型 ETF 份额与净流入（日度，2026-10-20 起采集器逐日积累）。⭐ 「ETF 资金流向」的原料：净流入=份额变化×净值。⚠️ 口径=全市场股票型 ETF（含跨境/商品，排除债券/货币），来源 fund_etf_spot_em 最新份额列（全市场快照）+ fund_etf_scale_sse（沪市，可作交叉校验）。⚠️ 源无历史份额序列 ⇒ 本表从采集启动日起累积，历史不可回溯，UI 须标注「自 YYYY-MM-DD 起」。';
+
+-- ---------- [29/83] eu_hicp_monthly ----------
+CREATE TABLE IF NOT EXISTS `eu_hicp_monthly` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `geo` varchar(8) NOT NULL COMMENT '区域码 EA20',
+  `stat_month` varchar(7) NOT NULL COMMENT '统计月份 YYYY-MM',
+  `value` decimal(12,4) DEFAULT NULL COMMENT 'HICP 同比率 %',
+  `note` varchar(200) DEFAULT NULL,
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(40) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_geo_month` (`geo`,`stat_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='欧元区 HICP 月度同比（Eurostat，2026-10-21）';
+
+-- ---------- [30/83] eu_money_supply_monthly ----------
 CREATE TABLE IF NOT EXISTS `eu_money_supply_monthly` (
   `stat_month` date NOT NULL COMMENT '统计月份（源 period 形如 2026-07，取当月 1 日）',
   `m3` decimal(20,2) DEFAULT NULL COMMENT '★M3（百万欧元，工作日与季节调整）。DBnomics ECB/BSI/M.U2.Y.V.M30.X.1.U2.2300.Z01.E。实测 17,613,983 @2026-07',
@@ -371,7 +677,7 @@ CREATE TABLE IF NOT EXISTS `eu_money_supply_monthly` (
   PRIMARY KEY (`stat_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='欧元区·货币供应量（月度，ECB BSI，1980-01 起 559 期）。⭐ 欧元区是全球第二大货币区，「欧元区 M2/M3 增速 vs 美国」是判断全球美元/欧元流动性相对松紧的直接读数。⚠️ 唯一免费通道：ECB 直连三域实测**全部阻断**（data-api.ecb.europa.eu / data.ecb.europa.eu / sdw-wsrest.ecb.europa.eu 均 SSL timeout 或 DNS 失败），本表经 DBnomics 镜像取得 ⇒ **源单一、必须做「失效即告警」**（DQ 含 freshness 规则）。⚠️ 序列口径为「Euro area (changing composition)」= 按当期成员国组成回溯，与固定组成口径有差异。';
 
--- ---------- [16/56] finance_calendar ----------
+-- ---------- [31/83] finance_calendar ----------
 CREATE TABLE IF NOT EXISTS `finance_calendar` (
   `id` int NOT NULL AUTO_INCREMENT,
   `event_date` date NOT NULL COMMENT '日期',
@@ -383,7 +689,7 @@ CREATE TABLE IF NOT EXISTS `finance_calendar` (
   KEY `idx_event_date` (`event_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='财经日历数据表';
 
--- ---------- [17/56] finance_concept_analysis ----------
+-- ---------- [32/83] finance_concept_analysis ----------
 CREATE TABLE IF NOT EXISTS `finance_concept_analysis` (
   `id` int NOT NULL AUTO_INCREMENT,
   `event_date` date NOT NULL COMMENT '日期',
@@ -400,7 +706,16 @@ CREATE TABLE IF NOT EXISTS `finance_concept_analysis` (
   KEY `idx_concept_code` (`concept_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='财经事件与概念关联分析结果';
 
--- ---------- [18/56] fund_info ----------
+-- ---------- [33/83] fsi_monthly ----------
+CREATE TABLE IF NOT EXISTS `fsi_monthly` (
+  `stat_month` date NOT NULL COMMENT '月份（每月1日）',
+  `fsi` decimal(10,4) DEFAULT NULL COMMENT '金融压力指数（均值100）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`stat_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Püttmann报纸金融压力指数FSI月频（1889-2016，2026-10-21）';
+
+-- ---------- [34/83] fund_info ----------
 CREATE TABLE IF NOT EXISTS `fund_info` (
   `id` int NOT NULL AUTO_INCREMENT,
   `fund_code` varchar(10) NOT NULL COMMENT '基金代码',
@@ -413,7 +728,7 @@ CREATE TABLE IF NOT EXISTS `fund_info` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='基金基本信息表';
 
--- ---------- [19/56] fund_new_issue ----------
+-- ---------- [35/83] fund_new_issue ----------
 CREATE TABLE IF NOT EXISTS `fund_new_issue` (
   `fund_code` varchar(12) NOT NULL COMMENT '基金代码',
   `fund_name` varchar(100) DEFAULT NULL COMMENT '基金简称',
@@ -430,7 +745,7 @@ CREATE TABLE IF NOT EXISTS `fund_new_issue` (
   KEY `idx_establish` (`establish_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='新基金发行与成立（蓝影E 基金发行冰点=反向底部信号，2026-09-19 落地）';
 
--- ---------- [20/56] futures_spot_price ----------
+-- ---------- [36/83] futures_spot_price ----------
 CREATE TABLE IF NOT EXISTS `futures_spot_price` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `trade_date` date NOT NULL COMMENT '交易日期',
@@ -451,7 +766,7 @@ CREATE TABLE IF NOT EXISTS `futures_spot_price` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='现货期货价格表';
 
--- ---------- [21/56] global_liquidity_bis ----------
+-- ---------- [37/83] global_liquidity_bis ----------
 CREATE TABLE IF NOT EXISTS `global_liquidity_bis` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `time_period` date NOT NULL COMMENT '统计期（季度末，源为 2026-Q1 形式 → 2026-03-31）',
@@ -472,7 +787,21 @@ CREATE TABLE IF NOT EXISTS `global_liquidity_bis` (
   KEY `idx_period_cty` (`time_period`,`borrowers_cty`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全球·BIS 全球流动性指标（WS_GLI，季度）。⭐ 这是「全球美元有多少」的**官方口径**，替代 v1.0 原计划的自建全球 M2 汇总（那需要拼 N 国 × 汇率换算，且非官方）。核心用法：`BORROWERS_CTY != US` 的美元信贷 = **离岸美元**（回答「美元流出美国了没有」）。⚠️ 实测 API 形式（与 v1.0/v2.0 文档结论**相反**，已勘误）：resource key 只有 **3 段** `FREQ.CURR_DENOM.BORROWERS_CTY`（如 `Q.USD`、`Q.USD.US`），**多给一段即 404**；且 `/all` 形式实测 **404**。⚠️ BIS 的借款人国家用自有码（US/CN/4T…），不是 ISO2 —— `Q.USD.JP`、`Q.USD.GB` 均 404。⚠️ 美国借款人（Q.USD.US）只报 G/P 两个部门、**无 N（非银行）**，故「离岸美元」不能简单用「全量 − 美国」推导，须按 borrowers_cty 直接筛非美组。⚠️ 季度数据、T+1 季发布，时效天然滞后。';
 
--- ---------- [22/56] global_usd_index_daily ----------
+-- ---------- [38/83] global_macro_annual ----------
+CREATE TABLE IF NOT EXISTS `global_macro_annual` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `country_code` varchar(8) NOT NULL COMMENT 'IMF 三位国家码',
+  `indicator` varchar(24) NOT NULL COMMENT 'gdp_growth/inflation/debt_gdp',
+  `stat_year` smallint NOT NULL COMMENT '统计年份',
+  `value` decimal(12,4) DEFAULT NULL,
+  `note` varchar(200) DEFAULT NULL,
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(40) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_country_ind_year` (`country_code`,`indicator`,`stat_year`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='全球宏观年度序列（IMF WEO，2026-10-21）';
+
+-- ---------- [39/83] global_usd_index_daily ----------
 CREATE TABLE IF NOT EXISTS `global_usd_index_daily` (
   `trade_date` date NOT NULL COMMENT '交易日期（人民币中间价口径的报价日）',
   `dxy_sina` decimal(10,4) DEFAULT NULL COMMENT '★美元指数官方日线收盘（ICE 口径）。源：新浪 NewForexService.getDayKLine?symbol=DINIW（1985-11-08 起，实测 10573 行、列序 日期,开,低,高,收）。与官方实时快照偏差仅 0.004% ⇒ 本列为主口径',
@@ -489,7 +818,20 @@ CREATE TABLE IF NOT EXISTS `global_usd_index_daily` (
   PRIMARY KEY (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='美元指数日频（自算为主 + 新浪 DINIW 快照标定）。口径：自算走人民币中间价交叉汇率（SAFE 25 币种宽表），权重用 ICE DXY 标准公式。实测（2026-09-24）自算 101.3532 vs 新浪官方快照 101.2675，偏差 +0.085% —— 两套口径基本一致，可直接用绝对值。⚠️ 勘误（2026-09-25）：设计文档初稿曾记「偏差 -3.09%、中间价口径有约 ±3% 系统性偏离」，该结论实为标价法单位错误所致（把间接标价的瑞典克朗当直接标价，USDSEK 算成 4.58 而真值 9.94，DXY 因此偏低 3.3%）；修正后偏差 <0.1%。6 个成分货币交叉汇率一并存表，便于口径溯源复核（cross-rate 量级断言见采集器 _CROSS_RANGE）。';
 
--- ---------- [23/56] index_constituents ----------
+-- ---------- [40/83] gpr_daily ----------
+CREATE TABLE IF NOT EXISTS `gpr_daily` (
+  `trade_date` date NOT NULL COMMENT '日期',
+  `gprd` decimal(10,4) DEFAULT NULL COMMENT 'GPR 总指数',
+  `gprd_act` decimal(10,4) DEFAULT NULL COMMENT '实际行动子指数',
+  `gprd_threat` decimal(10,4) DEFAULT NULL COMMENT '威胁子指数',
+  `gprd_ma30` decimal(10,4) DEFAULT NULL COMMENT '30日均值',
+  `event` varchar(255) DEFAULT NULL COMMENT '重大事件标注',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='GPR 地缘政治风险指数日频（Caldara & Iacoviello，2026-10-21）';
+
+-- ---------- [41/83] index_constituents ----------
 CREATE TABLE IF NOT EXISTS `index_constituents` (
   `id` int NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT '指数代码',
@@ -506,7 +848,7 @@ CREATE TABLE IF NOT EXISTS `index_constituents` (
   KEY `idx_index_code` (`index_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指数成分股快照';
 
--- ---------- [24/56] index_profile ----------
+-- ---------- [42/83] index_profile ----------
 CREATE TABLE IF NOT EXISTS `index_profile` (
   `id` int NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT '指数代码',
@@ -516,11 +858,14 @@ CREATE TABLE IF NOT EXISTS `index_profile` (
   `base_point` varchar(20) DEFAULT NULL COMMENT '基点',
   `source` varchar(50) NOT NULL DEFAULT 'seed' COMMENT 'seed/cnindex/csindex',
   `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `core_note` varchar(255) DEFAULT NULL COMMENT '核心说明（原话）：对「核心之处」的完整原话，多句用、连接，不改字；NULL=原话未提',
+  `limit_note` varchar(255) DEFAULT NULL COMMENT '不足说明（原话）：对「不足之处」的完整原话；NULL=原话未提',
+  `importance_rank` tinyint unsigned DEFAULT NULL COMMENT '代表指数的重要程度：1=上证 ... 14=中证全指房地产（按用户清单出现先后）；99=用户未确认排序的默认最小值',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_index_code` (`index_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指数档案（释义/基准）';
 
--- ---------- [25/56] index_valuation_daily ----------
+-- ---------- [43/83] index_valuation_daily ----------
 CREATE TABLE IF NOT EXISTS `index_valuation_daily` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT '指数代码（全A用 ALL_A）',
@@ -537,12 +882,27 @@ CREATE TABLE IF NOT EXISTS `index_valuation_daily` (
   `close_point` decimal(16,4) DEFAULT NULL COMMENT '指数点位（乐咕/全A 源提供，供勾稽）',
   `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `data_source` varchar(100) DEFAULT NULL,
+  `pb` decimal(10,4) DEFAULT NULL COMMENT '市净率 PB（整体法；乐咕「市净率」）',
+  `pb_ew` decimal(10,4) DEFAULT NULL COMMENT '等权市净率（乐咕「等权市净率」）',
+  `pb_median` decimal(10,4) DEFAULT NULL COMMENT '市净率中位数（乐咕「市净率中位数」）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_index_date_source` (`index_code`,`trade_date`,`source`),
   KEY `idx_trade_date` (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='指数估值日频（股债性价比 ERP 的估值分母，2026-09-19 P2 落地）';
 
--- ---------- [26/56] interbank_rate_daily ----------
+-- ---------- [44/83] index_valuation_intl ----------
+CREATE TABLE IF NOT EXISTS `index_valuation_intl` (
+  `index_code` varchar(20) NOT NULL COMMENT '项目指数代码',
+  `metric` varchar(16) NOT NULL COMMENT '指标(pe_ttm/pe_fwd/cape)',
+  `trade_date` date NOT NULL COMMENT '快照日',
+  `value` decimal(12,4) DEFAULT NULL,
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`index_code`,`metric`,`trade_date`),
+  KEY `idx_trade_date` (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='国际指数估值快照（Siblis 免费层，2026-10-21）';
+
+-- ---------- [45/83] interbank_rate_daily ----------
 CREATE TABLE IF NOT EXISTS `interbank_rate_daily` (
   `trade_date` date NOT NULL COMMENT '交易日',
   `shibor_on` decimal(8,4) DEFAULT NULL COMMENT 'Shibor 隔夜(%)',
@@ -556,7 +916,7 @@ CREATE TABLE IF NOT EXISTS `interbank_rate_daily` (
   PRIMARY KEY (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='银行间拆借利率 + LPR（蓝图A「钱贵不贵」维度，2026-09-19 落地）';
 
--- ---------- [27/56] market_style_daily ----------
+-- ---------- [46/83] market_style_daily ----------
 CREATE TABLE IF NOT EXISTS `market_style_daily` (
   `trade_date` date NOT NULL COMMENT '交易日',
   `ret_bench_20` decimal(10,4) DEFAULT NULL COMMENT '市场基准组等权20日收益%',
@@ -598,7 +958,7 @@ CREATE TABLE IF NOT EXISTS `market_style_daily` (
   PRIMARY KEY (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='市场风格日频物化表（分析研究·市场风向模块数据源，口径见交互设计规范 §4.1）';
 
--- ---------- [28/56] market_xcheck_daily ----------
+-- ---------- [47/83] market_xcheck_daily ----------
 CREATE TABLE IF NOT EXISTS `market_xcheck_daily` (
   `trade_date` date NOT NULL COMMENT '与 market_style_daily.trade_date 对齐的交易日',
   `items_n` tinyint unsigned DEFAULT NULL COMMENT '参与判定的项数（当前 7）',
@@ -611,7 +971,7 @@ CREATE TABLE IF NOT EXISTS `market_xcheck_daily` (
   PRIMARY KEY (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='交叉印证背离数日频物化（market_wind 卡片分位用）';
 
--- ---------- [29/56] news ----------
+-- ---------- [48/83] news ----------
 CREATE TABLE IF NOT EXISTS `news` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `title` varchar(500) NOT NULL COMMENT '新闻标题',
@@ -625,7 +985,7 @@ CREATE TABLE IF NOT EXISTS `news` (
   KEY `idx_pubtime` (`published_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='财经资讯新闻表';
 
--- ---------- [30/56] overseas_index_daily ----------
+-- ---------- [49/83] overseas_index_daily ----------
 CREATE TABLE IF NOT EXISTS `overseas_index_daily` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT 'HSI/DJI/SPX/IXIC',
@@ -644,7 +1004,16 @@ CREATE TABLE IF NOT EXISTS `overseas_index_daily` (
   KEY `idx_trade_date` (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='海外/港股指数日线（蓝图E 跨市场，2026-09-19 落地）';
 
--- ---------- [31/56] securities_margin ----------
+-- ---------- [50/83] ovx_daily ----------
+CREATE TABLE IF NOT EXISTS `ovx_daily` (
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `close` decimal(10,4) DEFAULT NULL COMMENT 'OVX 收盘',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='OVX 原油ETF隐含波动率日线（Cboe 官方 CSV，2026-10-21）';
+
+-- ---------- [51/83] securities_margin ----------
 CREATE TABLE IF NOT EXISTS `securities_margin` (
   `id` int NOT NULL AUTO_INCREMENT,
   `trade_date` date DEFAULT NULL COMMENT '交易日期',
@@ -660,7 +1029,24 @@ CREATE TABLE IF NOT EXISTS `securities_margin` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='融资融券余额数据';
 
--- ---------- [32/56] stock_capital_flow ----------
+-- ---------- [52/83] stock_account_monthly ----------
+CREATE TABLE IF NOT EXISTS `stock_account_monthly` (
+  `stat_month` date NOT NULL COMMENT '统计月份（当月 1 日）',
+  `person` decimal(12,4) DEFAULT NULL COMMENT '★股票账户新开户·个人总数（万户）。上交所官方口径 COMMON_SSE_TZZ_M_STOCK_ACCT_C.PERSON',
+  `org` decimal(12,4) DEFAULT NULL COMMENT '股票账户新开户·机构总数（万户）。ORG',
+  `a_person` decimal(12,4) DEFAULT NULL COMMENT '★其中 A 股·个人（万户）。A_PERSON —— 主展示列（A股个人新开户）',
+  `a_org` decimal(12,4) DEFAULT NULL COMMENT '其中 A 股·机构（万户）。A_ORG',
+  `b_person` decimal(12,4) DEFAULT NULL COMMENT '其中 B 股·个人（万户）。B_PERSON（量级极小，参考）',
+  `b_org` decimal(12,4) DEFAULT NULL COMMENT '其中 B 股·机构（万户）。B_ORG',
+  `total_person` decimal(14,4) DEFAULT NULL COMMENT '累计总户数·个人（万户）。TERM=累计总户数 行的 PERSON',
+  `total_a_person` decimal(14,4) DEFAULT NULL COMMENT '累计总户数·A股个人（万户）。累计行的 A_PERSON',
+  `source_note` varchar(200) DEFAULT NULL COMMENT '口径来源标注：SSE=上交所官方（2023 至今）/ EM=东财全市场历史（2015~2023，⚠️ 与上交所口径不同，仅作背景趋势）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`stat_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='上交所股票账户新开户（月度，2015-04 起）。⭐ 「新增开户」的原料：散户开户节奏是情绪极值读数（开户峰值≈顶部、冰点≈底部）。⚠️ 双口径拼接：① 上交所官方接口 COMMON_SSE_TZZ_M_STOCK_ACCT_C（2023 至今，只返回当前月报当年 1-12 月+累计，逐月采集积累）② 东财 stock_account_statistics_em（2015-04~2023-08，全市场口径）。⚠️ 两者口径不同（上交所单所 vs 全市场），严禁直接续接同一序列，source_note 必须标注来源，UI 分两段展示。';
+
+-- ---------- [53/83] stock_capital_flow ----------
 CREATE TABLE IF NOT EXISTS `stock_capital_flow` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -680,7 +1066,17 @@ CREATE TABLE IF NOT EXISTS `stock_capital_flow` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='日度资金流向表';
 
--- ---------- [33/56] stock_code_mapping ----------
+-- ---------- [54/83] stock_cash_flow_ths ----------
+CREATE TABLE IF NOT EXISTS `stock_cash_flow_ths` (
+  `stock_code` varchar(10) NOT NULL COMMENT '股票代码（6 位）',
+  `report_date` date NOT NULL COMMENT '报告期（季度，如 2026-06-30）',
+  `operating_cash_flow` decimal(20,4) DEFAULT NULL COMMENT '★经营活动产生的现金流量净额（元）。同花顺现金流量表「报告期」口径。⚠️ 累计值（年初至今），非单季值',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`stock_code`,`report_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='个股经营活动现金流量净额（按报告期，同花顺现金流量表）。⭐「经营性现金流」指标原料：逐成分股聚合→指数级现金流趋势；现金流净额/净利润→盈利含金量。⚠️ 净额是累计值（年初至今），跨期需注意口径；源为 stock_financial_cash_ths（akshare）。';
+
+-- ---------- [55/83] stock_code_mapping ----------
 CREATE TABLE IF NOT EXISTS `stock_code_mapping` (
   `id` int NOT NULL AUTO_INCREMENT,
   `old_code` varchar(10) NOT NULL COMMENT '变更前代码（北交所新三板时期 43/83/87 等段）',
@@ -699,7 +1095,25 @@ CREATE TABLE IF NOT EXISTS `stock_code_mapping` (
   KEY `idx_new_code` (`new_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='证券代码变更对照（北交所 920 代码切换）';
 
--- ---------- [34/56] stock_financial_abstract_ths ----------
+-- ---------- [56/83] stock_cyq_daily ----------
+CREATE TABLE IF NOT EXISTS `stock_cyq_daily` (
+  `stock_code` varchar(10) NOT NULL COMMENT '股票代码（6 位）',
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `benefit_part` decimal(8,2) DEFAULT NULL COMMENT '★获利比例（%）：现价以下的筹码占比，0-100',
+  `avg_cost` decimal(12,2) DEFAULT NULL COMMENT '★平均成本（元）：累计筹码 50% 分位所在价位',
+  `cost90_low` decimal(12,2) DEFAULT NULL COMMENT '90% 筹码成本区间下限（元）',
+  `cost90_high` decimal(12,2) DEFAULT NULL COMMENT '90% 筹码成本区间上限（元）',
+  `cost90_con` decimal(8,2) DEFAULT NULL COMMENT '90 集中度（%）：区间宽度/区间中点×100，越小越集中',
+  `cost70_low` decimal(12,2) DEFAULT NULL COMMENT '70% 筹码成本区间下限（元）',
+  `cost70_high` decimal(12,2) DEFAULT NULL COMMENT '70% 筹码成本区间上限（元）',
+  `cost70_con` decimal(8,2) DEFAULT NULL COMMENT '70 集中度（%）',
+  `data_source` varchar(40) DEFAULT NULL COMMENT '数据来源（cyq_local：本地 stock_market_daily 重算）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`stock_code`,`trade_date`),
+  KEY `idx_trade_date` (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='个股筹码分布日频（2026-10-20 起）。⭐ 算法复刻东财 CYQ「换手率衰减三角分布」，输入为本地 stock_market_daily 的 OHLCV + turnover_ratio，纯库内离线计算（app/services/cyq.py），不联网。⚠️ 筹码概念**只对个股成立**（需流通盘换手率），指数/行业无此概念。⚠️ 算法窗口 120 根 K 线预热，但本表只存最近 90 交易日（对齐 akshare stock_cyq_em 口径）。⚠️ 集中度越低=筹码越集中（主力控盘度高），获利比例越高=套牢盘越少。';
+
+-- ---------- [57/83] stock_financial_abstract_ths ----------
 CREATE TABLE IF NOT EXISTS `stock_financial_abstract_ths` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -722,7 +1136,7 @@ CREATE TABLE IF NOT EXISTS `stock_financial_abstract_ths` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票关键指标';
 
--- ---------- [35/56] stock_hold_by_fund ----------
+-- ---------- [58/83] stock_hold_by_fund ----------
 CREATE TABLE IF NOT EXISTS `stock_hold_by_fund` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -739,7 +1153,7 @@ CREATE TABLE IF NOT EXISTS `stock_hold_by_fund` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票基金股票重仓信息表';
 
--- ---------- [36/56] stock_industry_sw ----------
+-- ---------- [59/83] stock_industry_sw ----------
 CREATE TABLE IF NOT EXISTS `stock_industry_sw` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -756,7 +1170,7 @@ CREATE TABLE IF NOT EXISTS `stock_industry_sw` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票申万一二级行业信息数据表';
 
--- ---------- [37/56] stock_info ----------
+-- ---------- [60/83] stock_info ----------
 CREATE TABLE IF NOT EXISTS `stock_info` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -798,7 +1212,7 @@ CREATE TABLE IF NOT EXISTS `stock_info` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票基本信息+公司档案宽表（东财名单/Baostock状态/巨潮档案三源构成：证券核心列+档案24列+管理列）';
 
--- ---------- [38/56] stock_info_ex ----------
+-- ---------- [61/83] stock_info_ex ----------
 CREATE TABLE IF NOT EXISTS `stock_info_ex` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -814,7 +1228,7 @@ CREATE TABLE IF NOT EXISTS `stock_info_ex` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票信息拓展表';
 
--- ---------- [39/56] stock_jgdy_detail ----------
+-- ---------- [62/83] stock_jgdy_detail ----------
 CREATE TABLE IF NOT EXISTS `stock_jgdy_detail` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -836,7 +1250,7 @@ CREATE TABLE IF NOT EXISTS `stock_jgdy_detail` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='机构调研详细表';
 
--- ---------- [40/56] stock_market_current ----------
+-- ---------- [63/83] stock_market_current ----------
 CREATE TABLE IF NOT EXISTS `stock_market_current` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -869,7 +1283,7 @@ CREATE TABLE IF NOT EXISTS `stock_market_current` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票最新行情数据当前表';
 
--- ---------- [41/56] stock_market_daily ----------
+-- ---------- [64/83] stock_market_daily ----------
 CREATE TABLE IF NOT EXISTS `stock_market_daily` (
   `id` bigint NOT NULL DEFAULT '0',
   `stock_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '股票代码',
@@ -896,7 +1310,7 @@ CREATE TABLE IF NOT EXISTS `stock_market_daily` (
   KEY `idx_amount` (`amount`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='股票行情历史数据表';
 
--- ---------- [42/56] stock_market_daily_ex ----------
+-- ---------- [65/83] stock_market_daily_ex ----------
 CREATE TABLE IF NOT EXISTS `stock_market_daily_ex` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -920,7 +1334,19 @@ CREATE TABLE IF NOT EXISTS `stock_market_daily_ex` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票日K线数据表除权';
 
--- ---------- [43/56] stock_repurchase ----------
+-- ---------- [66/83] stock_pb_daily ----------
+CREATE TABLE IF NOT EXISTS `stock_pb_daily` (
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `stock_code` varchar(10) NOT NULL COMMENT '股票代码（6 位）',
+  `pb` decimal(12,4) DEFAULT NULL COMMENT '★市净率 PB（倍）。东财个股行情快照「市净率」列（stock_zh_a_spot_em）',
+  `close` decimal(12,4) DEFAULT NULL COMMENT '收盘价（元），供交叉校验',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`,`stock_code`),
+  KEY `idx_code` (`stock_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='个股 PB（市净率）日频快照。⭐「PB 离散度」指标原料：按 index_constituents 成分股取横截面 PB，算标准差/分位差。⚠️ 仅采集日累积，历史不回溯（源无历史个股 PB 横截面序列）；依赖东财 push2 域，网络恢复后首采。';
+
+-- ---------- [67/83] stock_repurchase ----------
 CREATE TABLE IF NOT EXISTS `stock_repurchase` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -945,7 +1371,7 @@ CREATE TABLE IF NOT EXISTS `stock_repurchase` (
   KEY `idx_announce` (`announce_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票回购（蓝图D 产业资本态度，2026-09-19 落地）';
 
--- ---------- [44/56] stock_shares ----------
+-- ---------- [68/83] stock_shares ----------
 CREATE TABLE IF NOT EXISTS `stock_shares` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -963,7 +1389,7 @@ CREATE TABLE IF NOT EXISTS `stock_shares` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票股本信息表';
 
--- ---------- [45/56] table_meta ----------
+-- ---------- [69/83] table_meta ----------
 CREATE TABLE IF NOT EXISTS `table_meta` (
   `table_name` varchar(64) NOT NULL COMMENT '目标表名',
   `category` varchar(20) DEFAULT NULL COMMENT '域分类（行情/指数/概念/日历/资讯/资料/基金/系统/质量等）',
@@ -978,7 +1404,7 @@ CREATE TABLE IF NOT EXISTS `table_meta` (
   PRIMARY KEY (`table_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据中心表级元数据：数据源/清洗口径/维护任务（数据流卡数据源）';
 
--- ---------- [46/56] task_config ----------
+-- ---------- [70/83] task_config ----------
 CREATE TABLE IF NOT EXISTS `task_config` (
   `task_name` varchar(50) NOT NULL COMMENT '任务名',
   `enabled` tinyint(1) DEFAULT '1' COMMENT '是否启用',
@@ -988,7 +1414,7 @@ CREATE TABLE IF NOT EXISTS `task_config` (
   PRIMARY KEY (`task_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='采集任务配置表';
 
--- ---------- [47/56] task_runs ----------
+-- ---------- [71/83] task_runs ----------
 CREATE TABLE IF NOT EXISTS `task_runs` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `task_name` varchar(50) NOT NULL COMMENT '任务名',
@@ -1002,7 +1428,7 @@ CREATE TABLE IF NOT EXISTS `task_runs` (
   KEY `idx_task_time` (`task_name`,`started_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据采集作业记录表';
 
--- ---------- [48/56] ths_concept_info ----------
+-- ---------- [72/83] ths_concept_info ----------
 CREATE TABLE IF NOT EXISTS `ths_concept_info` (
   `id` int NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT '指数代码',
@@ -1017,7 +1443,7 @@ CREATE TABLE IF NOT EXISTS `ths_concept_info` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='同花顺概念板块信息表';
 
--- ---------- [49/56] ths_concept_market ----------
+-- ---------- [73/83] ths_concept_market ----------
 CREATE TABLE IF NOT EXISTS `ths_concept_market` (
   `id` int NOT NULL AUTO_INCREMENT,
   `index_code` varchar(20) NOT NULL COMMENT '指数代码',
@@ -1041,7 +1467,7 @@ CREATE TABLE IF NOT EXISTS `ths_concept_market` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='同花顺概念指数K线数据表';
 
--- ---------- [50/56] ths_stock_concepts ----------
+-- ---------- [74/83] ths_stock_concepts ----------
 CREATE TABLE IF NOT EXISTS `ths_stock_concepts` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -1059,7 +1485,7 @@ CREATE TABLE IF NOT EXISTS `ths_stock_concepts` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='同花顺股票概念关系表';
 
--- ---------- [51/56] ths_stock_dividend ----------
+-- ---------- [75/83] ths_stock_dividend ----------
 CREATE TABLE IF NOT EXISTS `ths_stock_dividend` (
   `id` int NOT NULL AUTO_INCREMENT,
   `stock_code` varchar(10) NOT NULL COMMENT '股票代码',
@@ -1083,7 +1509,16 @@ CREATE TABLE IF NOT EXISTS `ths_stock_dividend` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='股票分红派息信息表';
 
--- ---------- [52/56] trade_calendar ----------
+-- ---------- [76/83] tpu_monthly ----------
+CREATE TABLE IF NOT EXISTS `tpu_monthly` (
+  `stat_month` date NOT NULL COMMENT '月份（每月1日）',
+  `tpu` decimal(10,4) DEFAULT NULL COMMENT 'TPU 指数（100=1% 文章占比）',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`stat_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='贸易政策不确定性TPU月频（Caldara et al.，2026-10-21）';
+
+-- ---------- [77/83] trade_calendar ----------
 CREATE TABLE IF NOT EXISTS `trade_calendar` (
   `id` int NOT NULL AUTO_INCREMENT,
   `trade_date` date NOT NULL COMMENT '日期',
@@ -1101,7 +1536,7 @@ CREATE TABLE IF NOT EXISTS `trade_calendar` (
   KEY `idx_update_time` (`update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='交易日历表';
 
--- ---------- [53/56] us_fed_balance_weekly ----------
+-- ---------- [78/83] us_fed_balance_weekly ----------
 CREATE TABLE IF NOT EXISTS `us_fed_balance_weekly` (
   `trade_date` date NOT NULL COMMENT '周三水平日（H.4.1 每周四发布、数据截至前一日周三）',
   `total_assets` decimal(20,2) DEFAULT NULL COMMENT '★总资产（百万美元）。DBnomics FED/H41/RESPPMA_N.WW。实测 6,747,704 @2026-09-23。扩表=放水、缩表=收水',
@@ -1121,7 +1556,7 @@ CREATE TABLE IF NOT EXISTS `us_fed_balance_weekly` (
   PRIMARY KEY (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='美国·美联储资产负债表（周度，H.4.1，2002-12-18 起 1241 期）。⭐ 本域「美国数量维度」的核心：总资产 = 美联储放水/收水的总闸门。⚠️ 双轨制：主口径 = DBnomics FED/H41（历史完整）；校验口径 = 美联储官网 H.4.1 发布页 HTML 解析（仅最新一期，official_check 列），实测两通道逐位一致（6,747,704）⇒ 任一通道失效可自动降级且能即时发现。⚠️ 官网当期页只含最近数周、无法用于历史回填，故主口径必须是 DBnomics —— 这是对 v1.0 方案「主口径 = 官网」的实测修正。⚠️ DBnomics 该数据集的部分**已停报细分子项**（_F01~_F12）含 -999999 缺失哨兵（341/1241），本表只取核心汇总序列（实测零哨兵），采集器仍显式过滤哨兵。';
 
--- ---------- [54/56] us_money_market_daily ----------
+-- ---------- [79/83] us_money_market_daily ----------
 CREATE TABLE IF NOT EXISTS `us_money_market_daily` (
   `trade_date` date NOT NULL COMMENT '交易日（三个源日期并集；每列只在各自有值的日期非空）',
   `sofr` decimal(8,4) DEFAULT NULL COMMENT 'SOFR 有担保隔夜融资利率（%）。纽约联储 markets API。实测 3.87 @2026-09-23',
@@ -1142,7 +1577,7 @@ CREATE TABLE IF NOT EXISTS `us_money_market_daily` (
   PRIMARY KEY (`trade_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='美国·货币市场日度（纽约联储 SOFR/EFFR/ON RRP + 美财政部 TGA/国债总额）。⭐ 支撑两个关键口径：① 政策利率的**实际成交价**（EFFR 相对目标区间的位置 = 准备金是否充裕）；② 「美元净流动性」合成指标 A5 = 美联储总资产 − TGA − ON RRP（⚠️ 合成口径、非官方，须在 UI 显式标注）。⚠️ 单位不统一且无法统一（源就是这么给的）：利率 %、成交量与 TGA 与 ON RRP **百万美元**、国债总额 **美元** —— 一律以列注释为准，勿凭列名猜。⚠️ 三个源交易日历不同（回购市场 / 联邦基金 / 财政工作日）⇒ 日期是并集、增量水位必须**按列**取。⚠️ NY Fed 的 SOMA 接口实测全 400（路径已变），本表不采 SOMA。';
 
--- ---------- [55/56] us_money_supply_monthly ----------
+-- ---------- [80/83] us_money_supply_monthly ----------
 CREATE TABLE IF NOT EXISTS `us_money_supply_monthly` (
   `stat_month` date NOT NULL COMMENT '统计月份（源 period 形如 2026-08-31，取当月 1 日）',
   `m2` decimal(20,2) DEFAULT NULL COMMENT '★M2（十亿美元，季调 SA）。DBnomics FED/H6_H6_M2/M2.M。实测 23,342.8 @2026-08',
@@ -1162,7 +1597,7 @@ CREATE TABLE IF NOT EXISTS `us_money_supply_monthly` (
   PRIMARY KEY (`stat_month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='美国·货币供应量（月度，H.6，1959-01 起 812 期）。单位一律**十亿美元**。⚠️ 口径变更：2020-05 起 M1 口径改革（纳入储蓄存款），故 M1 序列在 2020 前后不可直接跨期比绝对值，**一律看同比**。⚠️ 恒等式实测成立：准备金余额 + 流通中货币 = 基础货币（2,936.0 + 2,475.6 = 5,411.6）⇒ 可作 DQ 守护。⚠️ 双轨：主 = DBnomics（历史完整）；校验 = 官网 H.6（仅最新一期）。';
 
--- ---------- [56/56] user_prefs ----------
+-- ---------- [81/83] user_prefs ----------
 CREATE TABLE IF NOT EXISTS `user_prefs` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `owner` varchar(64) NOT NULL,
@@ -1174,8 +1609,30 @@ CREATE TABLE IF NOT EXISTS `user_prefs` (
   UNIQUE KEY `uk_owner_kind_scope` (`owner`,`kind`,`scope`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户偏好（服务端持久化）';
 
+-- ---------- [82/83] vix_daily ----------
+CREATE TABLE IF NOT EXISTS `vix_daily` (
+  `trade_date` date NOT NULL COMMENT '交易日',
+  `open` decimal(10,4) DEFAULT NULL,
+  `high` decimal(10,4) DEFAULT NULL,
+  `low` decimal(10,4) DEFAULT NULL,
+  `close` decimal(10,4) DEFAULT NULL COMMENT 'VIX 收盘',
+  `volume` decimal(20,2) DEFAULT NULL,
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`trade_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='VIX 恐慌指数日线（新浪 gi 直连，2026-10-21）';
+
+-- ---------- [83/83] wui_monthly ----------
+CREATE TABLE IF NOT EXISTS `wui_monthly` (
+  `stat_month` date NOT NULL COMMENT '月份（每月1日）',
+  `wui` decimal(14,4) DEFAULT NULL COMMENT 'WUI 全球 GDP 加权指数',
+  `update_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `data_source` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`stat_month`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='世界不确定性指数WUI月频（全球GDP加权，2026-10-21）';
+
 -- ============================================================================
--- 完成：共 56 张表。
+-- 完成：共 83 张表。
 -- 下一步：跑 seed 脚本灌入配置，再执行采集器回补业务数据。
 --   详见 scripts/data-bootstrap.md
 -- ============================================================================

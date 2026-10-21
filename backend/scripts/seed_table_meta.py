@@ -118,10 +118,11 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "回补需付费第三方源，成本远超收益；往后按月度自然积累即可。",
      ["index_cons_sync"], ""),
     ("index_profile", "指数",
-     "中证指数官网",
-     "指数档案（13 只跟踪指数）：名称/代码/简介，随 index_cons_sync 刷新；uk_index_code 幂等；"
+     "seed_index_profile.py（人工整理，非采集器）",
+     "指数档案（21 只）：名称/代码/简介/基日基点 + 核心说明 core_note / 不足说明 limit_note；"
+     "由 seed_index_profile.py 全量播种（幂等 upsert），无采集器写它；uk_index_code 幂等；"
      "供前端指数列表与释义展示。",
-     ["index_cons_sync"], ""),
+     [], ""),
     ("stock_code_mapping", "资料",
      "北交所官网（经 akshare stock_info_bj_name_code）;北交所《新旧代码对照表》",
      "证券代码变更对照台账（**北交所 920 代码切换**，2026-09-20 立）："
@@ -303,9 +304,12 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      [], ""),
     ("dq_rules", "质量",
      "手动维护;seed_dq_rules",
-     "数据质量规则配置（132 条 / 20 类检查器，daily 124 + weekly 8；2026-09-19 新增 column_watermark "
+     "数据质量规则配置（209 条 = daily 201 + weekly 8，启用 207 / 停用 2；21 类检查器。"
+     "2026-09-19 新增 column_watermark "
      "检查器专治「有列无值」；2026-09-24 新增 ref_missing 引用完整性 —— 名册曾漏收 89 只 A 股"
-     "潜伏数月无人发现，该检查器是唯一能发现「跑成功但漏收」的形态）；数据质量栏目可维护。",
+     "潜伏数月无人发现，该检查器是唯一能发现「跑成功但漏收」的形态；2026-10-18 gap_scan 判定改为"
+     "「相对上轮新增段数」（存量多为真停牌、重采不可补）、per_key_coverage 增 stale_days 排除停牌股"
+     "并优化查询至 0.6s）；数据质量栏目可维护。",
      [], ""),
     ("stock_company_profile_bak_20260905", "资料",
      "备份(巨潮)",
@@ -362,13 +366,48 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
     # ---- 2026-09-19 市场风向蓝图 P2/P3 落地（6 张新表）----
     ("index_valuation_daily", "估值",
      "中证指数官网;乐咕乐股;全A等权(akshare)",
-     "指数估值日频三源（1,281 行）：**source 列区分三套口径、绝不可跨源比较**——"
-     "csindex=`stock_zh_index_value_csindex`（中证官网，滚动 PE 整体法）；"
-     "legu=`stock_index_pe_lg`（乐咕，上证50/沪深300/中证500/中证1000，**含近 250 个月末历史**，"
-     "ERP 分位窗口的唯一来源，故 lookback_days=0 不截断）；all_a=`stock_a_ttm_lyr`（全A等权）。"
+     "指数估值日频四源：**source 列区分四套口径、绝不可跨源比较**——"
+     "csindex=`stock_zh_index_value_csindex`（中证官网 8 指数，滚动 PE 整体法，近 20 日）；"
+     "legu=`stock_index_pe_lg`（乐咕 PE 12 指数，含深市创业板50/深证100/深证红利，**含近 250 个月末历史**，"
+     "ERP 分位窗口的唯一来源，故 lookback_days=0 不截断）；"
+     "legu_pb=`stock_index_pb_lg`（乐咕 PB 同 12 指数，落 pb/pb_ew/pb_median）；all_a=`stock_a_ttm_lyr`（全A等权）。"
      "⚠️ 实测同日中证滚动 PE 系统性高于乐咕（16.92 vs 12.68）→ 只可同源纵向比。"
-     "uk_index_date_source 幂等 upsert；每工作日 19:25。消费方：ERP（100/滚动PE − 10Y 国债）。",
+     "uk_index_date_source 幂等 upsert；每工作日 19:25。消费方：ERP（100/滚动PE − 10Y 国债）+ 投资环境估值分位。",
      ["index_valuation_sync"], ""),
+    # ---- 2026-10-18 投资环境模块（国内指数页，E1~E6 定稿）----
+    ("env_index_tech_daily", "环境",
+     "本地派生（dc_index_market，无外部源）",
+     "投资环境·国内指数技术面日频物化表：env_derive 每工作日盘后链式触发（挂 market_current_sync 之后），"
+     "由 dc_index_market 全史日线逐指数算出 12 窗口涨跌幅（半月/一月/…/本年/本季/本月/本周）、MA60/250 及"
+     "相对偏离、量价（20日均量±30%区间）、MACD/RSI/BOLL、支撑阻力（250/20日高低点）、近1Y/3Y/全史最大回撤、"
+     "年化/下行波动率（60日滚动）、对沪深300 的 Beta(60日)与相关性(120日)。纯库内计算，DELETE+INSERT 全量重建。"
+     "⚠️ 结论由观看者判断：只存客观数值与分位，不存定性词。消费方：投资环境「国内指数」技术面内容块。",
+     ["env_derive"], ""),
+    ("env_fundamental_daily", "环境",
+     "本地派生（index_valuation_daily + bond_profit_daily，无外部源）",
+     "投资环境·国内指数基本面日频物化表：env_derive 由 index_valuation_daily 长历史（legu PE/legu_pb PB/"
+     "csindex 股息率）逐指数算全史分位（pe_ttm_pct/pb_pct/dividend_yield_pct）+ ERP（1/PE−10Y国债）。"
+     "分位在物化时算好，前端只读。纯库内计算，DELETE+INSERT 全量重建。消费方：投资环境「国内指数」估值内容块。",
+     ["env_derive"], ""),
+    ("env_fundamental_quarter", "环境",
+     "本地派生（index_constituents + stock_financial_abstract_ths，无外部源）",
+     "投资环境·国内指数成分股财务聚合季频表：env_derive 按 index_constituents 最新成分股名单，"
+     "聚合 stock_financial_abstract_ths 各报告期的 ROE/净利润同比/营收同比（中位数，抗极端值）及"
+     "净利润/营收合计，近 40 季度趋势。uk_code_report 幂等 upsert。消费方：投资环境「盈利质量与成长」内容块。",
+     ["env_derive"], ""),
+    ("env_threshold", "环境",
+     "本地配置（手定 + dc_index_market 统计派生）",
+     "投资环境·国内指数「大幅下跌阈值」配置表：上证 1%、沪深300 1.5%、创业板·科创 2% 为手定值"
+     "（threshold_source=manual）；其余指数用「近3年日跌幅95分位」统计建议值（threshold_source=suggested），"
+     "threshold_note 标注口径为统计事实而非 AI 判断。env_derive 每轮 upsert 刷新。消费方：投资环境当日涨跌幅块的阈值参考线。",
+     ["env_derive"], ""),
+    ("env_macro_monthly", "环境",
+     "akshare macro_china 系列（GDP/PMI/CPI/PPI）",
+     "投资环境·宏观月度/季度序列表：env_macro_sync 每天 20:50 拉取 akshare macro_china_gdp/pmi/cpi/ppi。"
+     "GDP 为季度累计值（stat_month 用季度末月表示，Q1→03/H1→06/Q3→09/FY→12）；PMI/CPI/PPI 为月度。"
+     "⚠️ 源 df 倒序且月份为中文字符串，须 parse_cn_month 解析后按时间正序落库（字符串序≠时间序）。"
+     "uk_month_ind 幂等 upsert。消费方：投资环境「宏观与政策环境」内容块。",
+     ["env_macro_sync"], ""),
     ("interbank_rate_daily", "利率",
      "上海银行同业拆借市场(Shibor);全国银行间同业拆借中心(LPR)",
      "银行间拆借利率 + LPR（4,984 行）：Shibor 隔夜/1周/1月/3月 走 "
@@ -382,25 +421,22 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "那不是「钱便宜」而是「没经历过钱荒」，属窗口选错导致的伪信号。",
      ["interbank_rate_sync"], ""),
     ("overseas_index_daily", "海外",
-     "新浪财经(akshare stock_hk_index_daily_sina / index_us_stock_sina / 直连 gi 接口)",
-     "海外与港股指数日线（**10 个指数**，跨亚/欧/美三个时区）：HSI 恒生"
-     "（`stock_hk_index_daily_sina`）+ DJI/SPX/IXIC 道指·标普500·纳指（`index_us_stock_sina`）"
-     "+ **2026-09-25 新增** DAX/CAC/UKX/SX5E/N225/KOSPI —— 这 6 个**直连**新浪 "
-     "`gi.finance.sina.com.cn/hq/daily`，不走 akshare 函数（实测 `index_global_hist_sina` "
-     "符号映射表 key 对不上、`index_global_hist_em` 因东财 kline 域名被拦全数失败）。"
-     "uk_code_date 幂等增量；每自然日 19:50（美股为 T-1 收盘，源侧天然滞后一天，别当缺数）。"
-     "⚠️ 新增 6 个指数**只有 1,000 行（约 4 年，2022-08 起）**——`num=10000` 实测只返 1000 行，"
-     "够算近一年分位与 20/60 日变化，**不够做长周期历史类比**。"
-     "⚠️ 新浪 gi 在亚洲盘中会返回**当日未完成的 bar**（2026-09-25 实测 10:04 时 N225 已有当日行、"
-     "而其余 9 条腿都停在 T-1）⇒「最新日行数」是**时点耦合量**、不可作判据：既有规则 "
-     "`overseas_rows_latest`（最新日行数 ≥3）已因此退休，改为 spx/dax/n225/kospi 四条逐腿 "
-     "`date_floor_where`。"
-     "消费方：分析研究「跨市场对照」模块 —— 它仍只用 SPX/IXIC/DJI/HSI 四个"
-     "（`INDEXES` 是显式白名单，扩表不影响它）。⚠️ 与 A股 交易日不同步（时差 + 各自休市），"
-     "该模块按**日期并集 + 前值填充**对齐；按下标对齐会把相差近一个月的日期画成同一时刻，"
-     "产生的错位恰好会被读成「美股领先 A股」。隔夜传导只用『标普500 × 中证全指』这一对 —— "
-     "恒生与 A股 交易时段部分重叠，混算会把两个机制平均掉。",
-     ["overseas_index_sync"], ""),
+     "新浪财经(akshare stock_hk_index_daily_sina / index_us_stock_sina / 直连 gi 接口) + MSCI 官方公开 API",
+     "海外与港股指数日线（18 个指数，跨亚/欧/美三时区）：HSI 恒生 + DJI/SPX/IXIC 道指·标普500·纳指 "
+     "+ 2026-09-25 增 DAX/CAC/UKX/SX5E/N225/KOSPI（直连新浪 gi）。"
+     "uk_code_date 幂等增量；每自然日 19:50（美股 T-1 收盘，源侧天然滞后一天）。"
+     "⚠️ 新增 6 指数仅 1000 行（约 4 年，2022-08 起），够算近一年分位，不够长周期类比。"
+     "⚠️ 新浪 gi 亚洲盘中返当日未完成 bar ⇒ 最新日行数是时点耦合量不可作判据。"
+     "2026-10-20 国际指数章节扩到 18 个：增 NDX 纳斯达克100（3186 行 2014 起）、"
+     "HSCEI 恒生中国企业（3240 行 2013 起）、IBOV 巴西 Bovespa、SENSEX 印度孟买30（各 1000 行）。"
+     "另加 MSCI 四指数 ACWI/MSWORLD/MSEAFE/MSEM（msci_index_sync 采集器，MSCI 官方公开 chart API "
+     "getLevelDataForGraph，免 Key、USD 价格收益 STRD，回 2000 年全史 6991 行）。"
+     "⚠️ MSCI 只有收盘 LEVEL、无 OHLC/量，open/high/low/volume 置 NULL。"
+     "⚠️ 官网权威 code：ACWI=892400 / World=990100 / EAFE=990300 / EM=891800（msci-data 包文档 code 有错位）。"
+     "⚠️ MSCI China(735657)/Japan 免费 API 返回空未落库——中国相关用 HSCEI、日本用日经225 替代。"
+     "消费方：分析研究「跨市场对照」只用 SPX/IXIC/DJI/HSI 四个（显式白名单，扩表不影响）。"
+     "⚠️ 与 A股 交易日不同步，按日期并集+前值填充对齐；隔夜传导只用「标普500×中证全指」一对。",
+     ["overseas_index_sync", "msci_index_sync"], ""),
     ("currency_boc_daily", "汇率",
      "新浪财经-中行人民币牌价(akshare currency_boc_sina)",
      "人民币外汇牌价与中间价（**17 币种 = 源侧合法全集**；2026-09-25 由 4 个扩到 17）。"
@@ -619,6 +655,92 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "**禁止 iloc[-1]**。⚠️ 早期量级极端（1980-12 外储 −12.96 亿美元）⇒ 量级 DQ 只守 2015 年后。"
      "消费方：分析研究「货币流动性」模块「货币总量」区块 · 中国层。",
      ["cn_reserve_sync"], ""),
+    # ---- 2026-10-21 全球货币章节（1.6）新表 ----
+    ("dr_repo_daily", "宏观",
+     "中国货币网质押式回购(akshare repo_rate_hist)",
+     "DR001/DR007 存款类机构质押式回购加权利率日频（445 行，2025-01 起）：dr_repo_sync 按 300 天/段"
+     "从 2025-01-01 分段回溯拉取（源单次超 300 天报 KeyError），合并后全量 upsert（主键 trade_date，"
+     "量级几百行、重跑无成本）。⭐ 中国层「价格维度」短端抓手，与 cn_omo_daily（数量）互补。"
+     "每工作日 06:40。",
+     ["dr_repo_sync"], ""),
+    ("ovx_daily", "宏观",
+     "Cboe 官方 CSV",
+     "OVX 原油波动率日线：global_risk_sync(OvxSyncCollector) 全量覆盖（REPLACE）拉取 Cboe 官方 CSV；"
+     "每工作日 06:10。",
+     ["ovx_sync"], ""),
+    ("gpr_daily", "宏观",
+     "Caldara & Iacoviello 官网",
+     "GPR 地缘政治风险日线（gprd/gprd_act/gprd_threat）：gpr_sync 全量覆盖，源随报纸入库延迟会修订；"
+     "每工作日 06:15。",
+     ["gpr_sync"], ""),
+    ("epu_daily", "宏观",
+     "policyuncertainty.com",
+     "美国经济政策不确定性日频：epu_sync 全量覆盖（源响应慢，timeout 90s）；每工作日 06:20。",
+     ["epu_sync"], ""),
+    ("wui_monthly", "宏观",
+     "worlduncertaintyindex.com(WUI)",
+     "WUI 世界不确定性指数月频（IMF 编制）：wui_sync 全量覆盖（REPLACE，源为初值会修订）；每周六 06:25。",
+     ["wui_sync"], ""),
+    ("tpu_monthly", "宏观",
+     "Caldara et al.(TPU)",
+     "TPU 贸易政策不确定性月频：tpu_sync 全量覆盖；每周六 06:30。",
+     ["tpu_sync"], ""),
+    ("fsi_monthly", "宏观",
+     "policyuncertainty.com(Püttmann)",
+     "Püttmann 报纸金融压力指数月频（1889-2016，已停更仅兜底）：fsi_sync 全量覆盖；每年 1/7 月 1 日 06:35。",
+     ["fsi_sync"], "已停更（1889-2016）仅兜底"),
+    ("global_macro_annual", "宏观",
+     "IMF WEO/IFS(akshare/直连)",
+     "全球主要经济体宏观年度指标（GDP/CPI/失业等，美欧中等国别）：global_macro_sync 按 IMF code 直连拉取，"
+     "MAX(stat_year) 增量；eu_hicp_sync 亦写入本表（欧元区 HICP 部分）。",
+     ["global_macro_sync", "eu_hicp_sync"], ""),
+    ("cftc_position_weekly", "宏观",
+     "akshare macro_usa_cftc_nc_holding",
+     "CFTC 货币期货非商业/投机持仓周频（1986 起，trade_date 为「截至日」）：cftc_position_sync 增量按 "
+     "MAX(trade_date) 过滤 + uk(currency,metric,trade_date) 幂等 upsert。",
+     ["cftc_position_sync"], ""),
+    ("etf_share_daily", "资金",
+     "东财 ETF 实时快照(akshare fund_etf_spot_em)",
+     "ETF 份额与净流入日频：etf_flow_sync 逐日积累，**历史不可回溯**（源只给当日快照）。"
+     "⚠️ 正=净申购（流入）、负=净赎回（流出）。",
+     ["etf_flow_sync"], "历史不可回溯，仅当日起逐日积累"),
+    ("stock_pb_daily", "估值",
+     "东财实时行情(akshare stock_zh_a_spot_em，双通道降级)",
+     "个股 PB 日频快照（~5500 只含市净率 f23）：stock_pb_sync 双通道（akshare→push2 直连），"
+     "PRIMARY KEY(trade_date,stock_code) upsert 当日行。**历史不可回溯**（实时快照源）。",
+     ["stock_pb_sync"], "实时快照源，历史不可回溯"),
+    ("stock_account_monthly", "资金",
+     "上交所官网;东财历史",
+     "股票开户数月度：主口径上交所（2023 至今逐月积累）+ 东财历史背景（2015-04~2023-08）；"
+     "account_open_sync 每轮只增新月份，**历史无法回溯**（上线前官方月用东财 EM 口径兜底）。",
+     ["account_open_sync"], "逐月积累，上线前官方月用东财兜底"),
+    ("stock_cash_flow_ths", "财务",
+     "同花顺(akshare stock_financial_cash_ths)",
+     "经营性现金流（现金流量表，逐股全历史期）：cash_flow_sync 与 financial_abstract 同款——"
+     "只补滞后股票 + 逐股增量 upsert，单只失败不中断。",
+     ["cash_flow_sync"], ""),
+    ("index_valuation_intl", "估值",
+     "Shiller(ie_data.xls);多源国际估值",
+     "国际指数估值（股息率/席勒PE 等）：index_valuation_intl_sync 拉 Shiller 官方 xls 及多源，"
+     "MAX(trade_date) 增量。",
+     ["index_valuation_intl_sync"], ""),
+    ("env_overseas_tech_daily", "分析",
+     "本地派生(overseas_index_daily)",
+     "海外科技指数衍生日频（20/250 日高低位等）：overseas_tech_derive 纯库内计算，DELETE+INSERT 全量重建。",
+     ["overseas_tech_derive"], "派生表，全量可重建"),
+    ("env_policy_view", "分析",
+     "本地派生(env_service 判读卡)",
+     "政策环境判读卡（topic/state）：env_service.py 建表 + INSERT 维护的定性视图数据，"
+     "供投资环境「政策」区块展示。",
+     ["env_derive"], "派生/定性卡数据"),
+    ("vix_daily", "宏观",
+     "新浪财经(gi.finance.sina.com.cn)",
+     "VIX 恐慌指数日线：vix_sync 新浪 symbol=VIX num=10000 拉全史，MAX(trade_date) 增量。",
+     ["vix_sync"], ""),
+    ("eu_hicp_monthly", "宏观",
+     "Eurostat",
+     "欧元区 HICP 月度：eu_hicp_sync 直连 Eurostat，MAX(stat_month) 增量。",
+     ["eu_hicp_sync"], ""),
 ]
 
 # 列级血缘：table_name -> { 任务名: {source, cols[], derived[], note?, col_notes{}} }
@@ -782,10 +904,11 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
         },
     },
     "index_profile": {
-        "index_cons_sync": {
-            "source": "中证指数官网",
-            "cols": ["index_code", "index_name", "description", "base_date", "base_point", "source"],
-            "note": "13 只跟踪指数的档案，随成分快照同轮刷新；uk_index_code 幂等",
+        "seed_index_profile": {
+            "source": "人工整理（seed，非采集器）",
+            "cols": ["index_code", "index_name", "description", "base_date", "base_point",
+                     "source", "core_note", "limit_note"],
+            "note": "21 只指数档案 + 核心说明/不足说明，seed_index_profile.py 全量播种；uk_index_code 幂等",
         },
     },
     "stock_code_mapping": {
@@ -994,21 +1117,85 @@ _WRITER_COLS: dict[str, dict[str, dict]] = {
     # ---- 2026-09-19 市场风向蓝图 P2/P3 落地 ----
     "index_valuation_daily": {
         "index_valuation_sync": {
-            "source": "中证官网;乐咕;全A等权",
+            "source": "中证官网;乐咕PE;乐咕PB;全A等权",
             "cols": ["index_code", "index_name", "trade_date", "source", "pe_lyr", "pe_ttm",
-                     "pe_ttm_median", "pe_lyr_median", "dividend_yield", "dividend_yield2",
-                     "pe_ttm_pct10y", "close_point"],
-            "note": "三源同表以 source 区分（csindex/legu/all_a）；乐咕源保留全历史"
-                    "（ERP 分位窗口依赖近 250 个月末），故 lookback_days=0 不截断",
+                     "pe_ttm_median", "pe_lyr_median", "pb", "pb_ew", "pb_median",
+                     "dividend_yield", "dividend_yield2", "pe_ttm_pct10y", "close_point"],
+            "note": "四源同表以 source 区分（csindex/legu/legu_pb/all_a）；乐咕源保留全历史"
+                    "（ERP 分位窗口依赖近 250 个月末），故 lookback_days=0 不截断；"
+                    "2026-10-18 乐咕扩至 12 指数并新增 PB 采集",
             "col_notes": {
                 "pe_ttm": "滚动市盈率 TTM（整体法）：中证「市盈率2」/ 乐咕「滚动市盈率」；"
                           "⚠️ 三源口径不可比，只可同源纵向比",
                 "pe_lyr": "静态市盈率：中证「市盈率1」/ 乐咕「静态市盈率」",
+                "pb": "市净率 PB 整体法（乐咕 legu_pb 源「市净率」）",
+                "pb_ew": "等权市净率（乐咕 legu_pb 源「等权市净率」）",
+                "pb_median": "市净率中位数（乐咕 legu_pb 源「市净率中位数」）",
                 "dividend_yield": "中证源股息率1（近12个月）",
                 "dividend_yield2": "中证源股息率2（近12个月，分母口径不同）",
                 "pe_ttm_pct10y": "近10年 PE 分位（仅乐咕源提供）",
                 "close_point": "指数点位（乐咕/全A 源提供，供与 dc_index_market 勾稽）",
             },
+        },
+    },
+    # ---- 2026-10-18 投资环境模块 ----
+    "env_index_tech_daily": {
+        "env_derive": {
+            "source": "dc_index_market 派生（纯库内计算）",
+            "cols": ["index_code", "trade_date", "close", "change_pct",
+                     "win_halfm", "win_1m", "win_15m", "win_2m", "win_25m", "win_3m",
+                     "win_6m", "win_1y", "win_ytd", "win_qtd", "win_mtd", "win_wtd",
+                     "ma60", "ma250", "close_over_ma60_pct", "close_over_ma250_pct",
+                     "vol_ma20", "vol_ratio_20", "macd_dif", "macd_dea", "macd_hist",
+                     "rsi14", "boll_upper", "boll_mid", "boll_lower",
+                     "high_250", "low_250", "high_20", "low_20",
+                     "max_dd_1y", "max_dd_3y", "max_dd_all",
+                     "ann_vol_60", "down_vol_60", "beta_60", "corr_300_120"],
+            "derived": ["win_halfm", "win_1m", "win_15m", "win_2m", "win_25m", "win_3m",
+                        "win_6m", "win_1y", "win_ytd", "win_qtd", "win_mtd", "win_wtd",
+                        "ma60", "ma250", "close_over_ma60_pct", "close_over_ma250_pct",
+                        "vol_ma20", "vol_ratio_20", "macd_dif", "macd_dea", "macd_hist",
+                        "rsi14", "boll_upper", "boll_mid", "boll_lower",
+                        "high_250", "low_250", "high_20", "low_20",
+                        "max_dd_1y", "max_dd_3y", "max_dd_all",
+                        "ann_vol_60", "down_vol_60", "beta_60", "corr_300_120"],
+            "note": "指数点位本身连续（成分调样/分红经除数调整），跨日比值直接可用，无需复权因子",
+        },
+    },
+    "env_fundamental_daily": {
+        "env_derive": {
+            "source": "index_valuation_daily + bond_profit_daily 派生",
+            "cols": ["index_code", "trade_date", "pe_ttm", "pe_ttm_pct", "pb", "pb_pct",
+                     "dividend_yield", "dividend_yield_pct", "erp", "erp_pct"],
+            "derived": ["pe_ttm_pct", "pb_pct", "dividend_yield_pct", "erp", "erp_pct"],
+            "note": "分位在物化时算好（全史窗口），前端只读；erp = 100/PE − 10Y国债收益率",
+        },
+    },
+    "env_fundamental_quarter": {
+        "env_derive": {
+            "source": "index_constituents + stock_financial_abstract_ths 派生",
+            "cols": ["index_code", "report_date", "roe", "net_profit_yoy", "revenue_yoy",
+                     "net_profit_sum", "revenue_sum", "constituent_count"],
+            "derived": ["roe", "net_profit_yoy", "revenue_yoy", "net_profit_sum",
+                        "revenue_sum", "constituent_count"],
+            "note": "按最新成分股名单聚合；ROE/增速取中位数（抗极端值），合计取求和",
+        },
+    },
+    "env_threshold": {
+        "env_derive": {
+            "source": "手定 + dc_index_market 统计派生",
+            "cols": ["index_code", "index_name", "drop_threshold", "threshold_source",
+                     "threshold_note"],
+            "derived": ["drop_threshold", "threshold_note"],
+            "note": "手定 6 指数（上证1%/沪深300 1.5%/创业板·科创 2%），其余近3年95分位跌幅建议值",
+        },
+    },
+    "env_macro_monthly": {
+        "env_macro_sync": {
+            "source": "akshare macro_china 系列（GDP/PMI/CPI/PPI）",
+            "cols": ["stat_month", "indicator", "value", "yoy", "note"],
+            "derived": ["note"],
+            "note": "GDP 季度累计值（stat_month=季度末月）；PMI/CPI/PPI 月度；源 df 倒序须解析后正序",
         },
     },
     "interbank_rate_daily": {
@@ -1435,12 +1622,37 @@ _REBUILD: dict[str, tuple[str, str]] = {
     "dq_pct_anomaly_detail": ("derived", "体检审计明细，重跑体检可再生成（无独立产出脚本）"),
     "market_xcheck_daily": ("derived", "双源核对产出，重跑 xcheck_sync 可再生"),
     "market_style_daily": ("derived", "由日线派生，重跑 market_style_sync 可再生"),
+    # ---- 投资环境（2026-10-18）----
+    "env_index_tech_daily": ("derived", "由 dc_index_market 派生，重跑 env_derive 可再生"),
+    "env_fundamental_daily": ("derived", "由 index_valuation_daily + bond_profit_daily 派生，重跑 env_derive 可再生"),
+    "env_fundamental_quarter": ("derived", "由 index_constituents + stock_financial_abstract_ths 派生，重跑 env_derive 可再生"),
+    "env_threshold": ("derived", "手定值 + dc_index_market 统计派生，重跑 env_derive 可再生"),
+    "env_macro_monthly": ("full", "akshare macro_china 系列全史可拉，重跑 env_macro_sync 可再生"),
     # ---- AI 产出 ----
     "finance_concept_analysis": ("derived", "AI 概念分析产出，重跑 ai_concept_analysis 可再生（需 ARK API Key）"),
     # ---- 备份留档（不参与重建；单列 archive，避免混进「换机会丢」筛选里制造噪音）----
     "stock_market_daily_bak_20250802": ("archive", "备份表，仅作留档；正表可由采集器重建"),
     "stock_company_profile_bak_20260905": ("archive", "备份表，仅作留档"),
     "dq_pct_fix_backup_20260922": ("archive", "口径修正前的备份快照，仅作留档"),
+    # ---- 2026-10-21 全球货币章节（1.6）新表 ----
+    "dr_repo_daily": ("full", "中国货币网 FDR 分段回溯 2025-01 起，全量 upsert 可补全史"),
+    "ovx_daily": ("full", "Cboe 官方 CSV 全量覆盖，可补全史"),
+    "gpr_daily": ("full", "Caldara 官网全量覆盖，可补全史"),
+    "epu_daily": ("full", "policyuncertainty.com 全量覆盖，可补全史"),
+    "wui_monthly": ("full", "WUI 官网全量覆盖，可补全史"),
+    "tpu_monthly": ("full", "TPU 官网全量覆盖，可补全史"),
+    "fsi_monthly": ("full", "Püttmann FSI 全量覆盖（1889-2016 已停更，全史即可拿回）"),
+    "global_macro_annual": ("full", "IMF 直连 MAX(stat_year) 增量，可补全史"),
+    "cftc_position_weekly": ("full", "akshare CFTC 周频 1986 起全史可拉"),
+    "vix_daily": ("full", "新浪 VIX num=10000 拉全史，可补全史"),
+    "eu_hicp_monthly": ("full", "Eurostat 直连 MAX(stat_month) 增量，可补全史"),
+    "etf_share_daily": ("window", "东财实时快照源只给当日，历史不可回溯；换机仅能重建当日起"),
+    "stock_pb_daily": ("window", "东财实时 PB 快照，历史不可回溯；换机仅能重建当日起"),
+    "stock_account_monthly": ("window", "上交所逐月积累，历史无法回溯；上线前官方月用东财 EM 兜底"),
+    "stock_cash_flow_ths": ("full", "同花顺逐股全历史期，可补全史（逐股增量 upsert）"),
+    "index_valuation_intl": ("full", "Shiller 官方 xls 全史 + 多源，可补全史"),
+    "env_overseas_tech_daily": ("derived", "由 overseas_index_daily 派生，重跑 overseas_tech_derive 可再生"),
+    "env_policy_view": ("derived", "env_service 判读卡定性数据，重跑 env_derive 可再生"),
 }
 
 

@@ -78,6 +78,8 @@ STAGES: list[tuple[str, str, list[str]]] = [
         "stock_company_sync", "stock_repurchase_sync", "jgdy_sync",
         "margin_sync", "bond_profit_sync", "bj_stock_sync",
         "finance_calendar_sync",
+        # 2026-10-21 补：现金流（逐股全史）+ 个股 PB / ETF 份额 / 开户（实时快照，当日起积累）
+        "cash_flow_sync", "stock_pb_sync", "etf_flow_sync", "account_open_sync",
     ]),
     ("fund", "④ 基金（信息 / 持仓 / 新发）", [
         "fund_info_sync", "fund_hold_sync", "fund_new_issue_sync",
@@ -88,10 +90,15 @@ STAGES: list[tuple[str, str, list[str]]] = [
         "us_money_supply_sync", "us_money_market_sync", "us_fed_balance_sync",
         "global_liquidity_sync", "futures_sync", "currency_boc_sync",
         "usd_index_sync", "overseas_index_sync",
+        # 2026-10-21 全球货币章节（1.6）：全球风险/不确定性/宏观/持仓/回购利率/国际估值
+        "dr_repo_sync", "ovx_sync", "gpr_sync", "epu_sync", "wui_sync", "tpu_sync",
+        "fsi_sync", "global_macro_sync", "cftc_position_sync", "vix_sync",
+        "eu_hicp_sync", "index_valuation_intl_sync", "index_fundamental_intl_sync",
     ]),
     ("derived", "⑥ 派生与体检（依赖上面所有数据）", [
         "market_current_sync", "market_style_sync", "data_quality_check",
         "data_quality_check_weekly", "xcheck_sync", "daily_recon_window",
+        "overseas_tech_derive",
     ]),
     ("news", "⑦ 资讯（只能从现在起积累，补不回历史）", [
         "news_fetch",
@@ -142,6 +149,7 @@ SEEDS: list[tuple[str, list[str], str]] = [
     ("seed_indexes.py", ["--apply"], "性能索引（⚠️ 不加 --apply 不创建）"),
     ("seed_recovered_tasks.py", [], "历史恢复任务配置"),
     ("seed_market_style.py", [], "市场风格任务配置"),
+    ("seed_index_profile.py", ["--apply"], "指数档案（⚠️ 不加 --apply 不落库）"),
 ]
 
 # 恢复后允许为空的表（其余为空都算「没补上」）
