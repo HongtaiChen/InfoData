@@ -65,7 +65,7 @@ MISFIRE_GRACE_SECONDS = 21600
 CHAIN_NEXT: dict[str, list[str]] = {
     "stock_daily_incr": ["market_style_sync"],
     "market_style_sync": ["market_current_sync"],
-    "market_current_sync": ["data_quality_check"],
+    "market_current_sync": ["env_derive", "data_quality_check"],
 }
 
 # 兜底班次清单：这些任务的固定时刻只在「当日链式未跑成」时才真正执行。
@@ -77,7 +77,7 @@ CHAIN_NEXT: dict[str, list[str]] = {
 # **直接 return，不写 task_runs**。所以「task_runs 里 MINUTE=50 有 0 次」并不等于
 # 班次没触发，只能说明它每次都走了跳过分支。判「任务跑没跑」要看 task_runs；
 # 判「班次有没有触发」必须看日志或 next_run_time，两者不可混为一谈。
-CHAIN_FALLBACK_TASKS: set[str] = {"market_style_sync", "market_current_sync", "data_quality_check"}
+CHAIN_FALLBACK_TASKS: set[str] = {"market_style_sync", "market_current_sync", "env_derive", "data_quality_check"}
 
 # ============================================================================
 # 链式接力的「最早执行时刻」下限（2026-09-22 新增）

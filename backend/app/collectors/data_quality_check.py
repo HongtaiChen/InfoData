@@ -41,7 +41,12 @@ dq_rules.params（JSON）契约，按 check_type 分：
                                                             还有多少行（>max_gap_rows 判列已断供）。
                                                             与 freshness_daily 互补——后者答「表还在更新吗」，
                                                             本检查器答「这一列还在更新吗」（2026-09-19 立）
-  gap_scan          {date_col, gap_days, high_days}        全史疑似缺口扫描（LAG 窗口）→ 写 dq_gap_detail
+  gap_scan          {date_col, gap_days, high_days, delta_only?}
+                                                           全史疑似缺口扫描（LAG 窗口）→ 写 dq_gap_detail。
+                                                           **delta_only（默认 true）改变的是判定口径，不是扫描范围**：
+                                                           全量段数照旧写入 dq_gap_detail（存量盘点），但
+                                                           status 只看「相对上一轮**新增**的缺口」。理由见
+                                                           `_gap_scan` docstring（2026-10-18 立）
   source_handoff    {date_col, source_col, since, max_pct} 跨源衔接一致性（相邻行 data_source 变化处）
   factor_link       {date_col, max_pct, max_count}           复权因子自洽：pre_close ≈
                                                            LAG(close)×LAG(adj_factor)/adj_factor（全史）；
@@ -53,7 +58,10 @@ dq_rules.params（JSON）契约，按 check_type 分：
                                                            复权断阶三类故障（2026-09-21 立）
   per_key_coverage  {date_col, key_col, window_days, min_rows, min_listed_days,
                      ref_table, ref_key, ref_status_col, ref_status_val, ref_date_col,
-                     exclude_prefixes}                     近端每票行数下限（在市老票）
+                     exclude_prefixes, stale_days?}        近端每票行数下限（在市老票）。
+                                                           stale_days（默认 0=不启用）排除「窗口内末笔已
+                                                           超过 N 天」的股票 —— 长期停牌股不属「均匀稀疏」
+                                                           口径，计入即恒为假阳性（2026-10-18 立）
   ref_missing       {key_col, ref_table, ref_key, where?, max_count}
                                                            引用完整性：目标表满足 where 的 key
                                                            必须存在于参照表（去重计数）。
@@ -143,6 +151,17 @@ class DataQualityCheckCollector:
                 self._column_cache[table] = {r["column_name"] for r in self._norm_rows(cur.fetchall())}
         return self._column_cache[table]
 
+    def _column_type(self, conn, table: str, col: str) -> str:
+        """返回列的 data_type（如 varchar/date/datetime/int），用于按类型决定 SQL 写法"""
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_schema = DATABASE() AND table_name = %s AND column_name = %s",
+                (table, col),
+            )
+            rows = self._norm_rows(cur.fetchall())
+            return (rows[0]["data_type"] or "").lower() if rows else ""
+
     def _validate(self, conn, rule: dict) -> str | None:
         """规则静态校验，返回错误信息或 None"""
         table = rule["table_name"]
@@ -173,6 +192,16 @@ class DataQualityCheckCollector:
             bad = [t for t in _IDENT_RE.findall(w_scan) if t not in cols and t.upper() not in _WHERE_FUNCS]
             if bad:
                 return f"where 表达式含非白名单标识符: {bad[:3]}"
+        # ref_where（参照表的命中子集过滤）：标识符按参照表列集合校验（2026-10-19 新增，
+        # 用于「必须命中参照表 is_trading_day=1 交易日子集」这类语义）
+        rw = p.get("ref_where")
+        if rw:
+            ref_cols_for_w = self._columns(conn, ref_table) if ref_table else set()
+            rw_scan = re.sub(r"'[^']*'", "''", rw)
+            bad_rw = [t for t in _IDENT_RE.findall(rw_scan)
+                      if t not in ref_cols_for_w and t.upper() not in _WHERE_FUNCS]
+            if bad_rw:
+                return f"ref_where 表达式含非白名单标识符: {bad_rw[:3]}"
         for c in p.get("cols") or []:
             if c not in cols:
                 return f"列 {c} 不存在于 {table}"
@@ -529,11 +558,39 @@ class DataQualityCheckCollector:
         只读 date_col（走 (stock_code, trade_date) 唯一索引有序扫描，18M 行实测 ~196s）；
         明细写入 dq_gap_detail（本轮幂等：先清同 run_at），供 L3 修复闭环消费。
         语义为「疑似」——当前无停牌表，长期停牌与真缺数无法自动区分。
+
+        🔴 2026-10-18 判定口径改造：**全量计数 → 增量计数**（扫描范围不变）
+
+        为什么必须改（当日实测）：
+          · 全量口径下本规则**结构性恒红**：实测 5684 段，且这 5684 段主体是**市场事实**，不是缺数
+            —— 抽样向源侧（新浪）复核近端缺口（002731 / 688121 / 300225 等），源侧在缺口区间内
+            **同样只有零星两端附近的数据**（如 002731 仅 2026-04-30 与 2026-07-07），即真停牌；
+            更早的 5660 段集中在 2006-2023，是借壳重组长期停牌与北交所/新三板协议转让的稀疏成交。
+            这类缺口的主体（数月~数年无成交）**重采也补不出来**，永远无法归零 ⇒ 变成常态噪音，
+            真正的「采集断档」反而被 5684 淹没。
+          · ⚠️ **但「主体不可补」不等于「整段没有东西可补」**（2026-10-18 二次抽样实测，避免过度断言）：
+            随机抽 12 段高危历史缺口逐段向源侧取证，其中 **6 段在缺口区间内仍存在源侧有、库内无的
+            孤立交易日（各 1 行）**；近端 24 段中可完成取证的 9 段里 4 段同此。⇒ 存量缺口里确有
+            **真实零星缺失**（单日行，对分析影响极小），只是它不体现在「段数」上，需另做定向回补
+            （`daily_backfill` source=dq_gap）。本规则不做该判定，故不应声称「存量全部不可补」。
+          · 缺口能且只能说明「这段时间没有成交记录」，它**不能证明是漏采**。故本检查器只应
+            回答「**有没有新出现**的缺口」—— 新增缺口才是需要人看的事件。
+          · ⚠️ 本检查器用 `LAG()` 在**已有行之间**找洞，**天生看不见「系列尾部整体停更」**
+            （尾部没有 next 行 ⇒ 不构成 gap）。尾部停更由 freshness_daily /
+            per_key_coverage 的 stale_days 负责，不要指望本规则。
+            实测反例：B 股自 2026-09-19 起整段停更，本规则从未报出。
+
+        delta_only=True（默认）时：
+          - 全量段数照旧写入 dq_gap_detail（存量盘点、供 L3 消费）不变；
+          - status 只看「相对上一轮 run_date 新增的 (stock_code, prev_date, next_date)」；
+          - 上一轮不存在（首轮/明细被清理后首轮）⇒ 视为基线，判 pass 并注明，不制造一次假红。
+        delta_only=False 可退回旧的全量口径（仅供对照，不建议长期使用）。
         """
         p = rule.get("params") or {}
         date_col = p.get("date_col", "trade_date")
         gap_days = int(p.get("gap_days", 45))
         high_days = int(p.get("high_days", 365))
+        delta_only = bool(p.get("delta_only", True))
         table = rule["table_name"]
         sql = (
             f"SELECT stock_code, prev_date, next_date, DATEDIFF(next_date, prev_date) AS gap_days FROM ("
@@ -563,6 +620,33 @@ class DataQualityCheckCollector:
                         for r in rows
                     ],
                 )
+            # 增量口径：与「上一轮 run_date」比较。必须在下面的保留清理**之前**算，
+            # 否则上一轮明细可能已被删掉，退化成"首轮基线"而漏报新增缺口。
+            new_n = None
+            if delta_only:
+                cur.execute(
+                    "SELECT MAX(run_date) AS d FROM dq_gap_detail WHERE run_date < %s",
+                    (self.run_date,),
+                )
+                prev_row = cur.fetchone()
+                prev_date = prev_row["d"] if prev_row else None
+                if prev_date is None:
+                    new_n = None                      # 无上一轮 ⇒ 基线轮
+                elif not rows:
+                    new_n = 0
+                else:
+                    cur.execute(
+                        "SELECT COUNT(*) AS n FROM dq_gap_detail "
+                        "WHERE run_at = %s AND (stock_code, prev_date, next_date) NOT IN ("
+                        "  SELECT stock_code, prev_date, next_date FROM dq_gap_detail "
+                        "  WHERE run_date = %s)",
+                        (self.run_at, prev_date),
+                    )
+                    new_n = cur.fetchone()["n"]
+                logger.info(
+                    f"⏳ gap_scan 增量口径：上一轮 {prev_date} → 本轮新增 {new_n} 段"
+                    + ("（无上一轮，记基线）" if new_n is None else "")
+                )
             # 明细保留策略与 dq_report 对齐
             cur.execute(
                 "DELETE FROM dq_gap_detail WHERE run_date < %s",
@@ -570,14 +654,34 @@ class DataQualityCheckCollector:
             )
         n = len(rows)
         high = sum(1 for r in rows if r["gap_days"] >= high_days)
-        status = "pass" if n == 0 else "warning"
         sample = "; ".join(
             f"{r['stock_code']} {r['prev_date']}→{r['next_date']}({r['gap_days']}d)" for r in rows[:3]
         )
-        msg = f"疑似缺口 {n} 段（≥{high_days} 天高危 {high} 段）；明细已入 dq_gap_detail"
-        if sample:
+        if not delta_only:
+            status = "pass" if n == 0 else "warning"
+            msg = f"疑似缺口 {n} 段（≥{high_days} 天高危 {high} 段）；明细已入 dq_gap_detail"
+            if sample:
+                msg += f"；最长：{sample}"
+            return {"status": status, "metric_value": str(n), "message": msg}
+
+        # 增量口径：判据 = 本轮新增缺口数；全量段数只作盘点信息（不进 status）
+        if new_n is None:
+            return {
+                "status": "pass",
+                "metric_value": "0",
+                "message": (
+                    f"首轮基线：存量疑似缺口 {n} 段（≥{high_days} 天高危 {high} 段）已入 dq_gap_detail，"
+                    "本轮不判红；下轮起按「新增缺口」判定"
+                ),
+            }
+        status = "pass" if new_n == 0 else "warning"
+        msg = (
+            f"本轮新增缺口 {new_n} 段；存量 {n} 段（≥{high_days} 天高危 {high} 段）"
+            "主体为长期停牌/退市股与北交所稀疏成交（停牌期源侧亦无数据），明细入 dq_gap_detail"
+        )
+        if status != "pass" and sample:
             msg += f"；最长：{sample}"
-        return {"status": status, "metric_value": str(n), "message": msg}
+        return {"status": status, "metric_value": str(new_n), "message": msg}
 
     def _source_handoff(self, conn, rule: dict) -> dict:
         """跨源衔接一致性：相邻两笔记录 data_source 不同时，pre_close 应≈「上一笔 close × 因子比」
@@ -742,6 +846,24 @@ class DataQualityCheckCollector:
 
         抓「均匀稀疏」（gap_scan 阈值内漏不出的形态）。名单来自参照表（白名单校验），
         排除北交所前缀（现四源均不支持北交所，避免规则常红掩盖真问题）。
+
+        stale_days（2026-10-18 新增，默认 0 = 不启用）：排除「窗口内末笔记录已超过 N 天」的股票。
+
+        为什么必须排除（2026-10-18 实测）：本规则当时唯一违规票 002731 *ST萃华 在窗口内只有
+        90 行（<100），但向源侧复核为**真停牌**——新浪源 2026-09-01 起对该票零返回，库内止于
+        2026-08-31，两侧完全一致。也就是说它并不是「均匀稀疏」，而是「停牌后不再产生记录」。
+        长期停牌/待退市股计入覆盖率即恒为假阳性，且其停牌天数只会持续增长、永不自愈。
+
+        ⇒ 覆盖率的判据只应覆盖「仍在交易的票」；「整只票停更」属另一形态，**本检查器天生
+        看不见**（INNER JOIN 会把零行的票直接丢弃，同 `_ref_missing` docstring 所述致盲机制），
+        不要指望它兜底尾部停更。
+
+        🔴 2026-10-18 性能改造：**先聚合、后 JOIN**（语义完全等价，实测 151s → 0.5s，300 倍）
+        旧写法把 `JOIN stock_info` 写在 WHERE 前，优化器会以 5000 行的维表驱动、对
+        `uk_stock_code_trade_date` 做约 5000 次「单票区间回扫」（每次仍要扫 250 天），
+        实测 151 秒；改成先在目标表内按 `idx_trade_date` 聚合（约 140 万行 → 5000 组），
+        再与 (code, c, mx) 小结果集 JOIN 维表筛条件，0.5 秒。新的 `stale_days` 也顺势
+        变成对聚合列 `t.mx` 的普通过滤，无需 HAVING 里再算一次 MAX()。
         """
         p = rule.get("params") or {}
         date_col = p.get("date_col", "trade_date")
@@ -755,25 +877,35 @@ class DataQualityCheckCollector:
         ref_status_val = p.get("ref_status_val", "上市")
         ref_date_col = p.get("ref_date_col", "list_date")
         excludes = p.get("exclude_prefixes") or ["4", "8", "920"]
+        stale_days = int(p.get("stale_days", 0) or 0)
         table = rule["table_name"]
-        excl_sql = " AND ".join([f"d.`{key_col}` NOT LIKE %s"] * len(excludes))
+        excl_sql = " AND ".join([f"t.`{key_col}` NOT LIKE %s"] * len(excludes))
+        stale_sql = ""
+        stale_args: list = []
+        if stale_days > 0:
+            # 末笔记录太旧 ⇒ 该票已停牌/停更，不属「均匀稀疏」口径
+            stale_sql = f" AND t.mx >= DATE_SUB(CURDATE(), INTERVAL %s DAY)"
+            stale_args = [stale_days]
         sql = (
             f"SELECT COUNT(*) AS n FROM ("
-            f"  SELECT d.`{key_col}` AS k, COUNT(*) AS c FROM `{table}` d "
-            f"  JOIN `{ref_table}` s ON s.`{ref_key}` = d.`{key_col}` "
-            f"  WHERE d.`{date_col}` > DATE_SUB(CURDATE(), INTERVAL %s DAY) "
-            f"    AND s.`{ref_status_col}` = %s AND s.`{ref_date_col}` IS NOT NULL "
-            f"    AND DATEDIFF(CURDATE(), s.`{ref_date_col}`) >= %s "
-            f"    AND {excl_sql} "
-            f"  GROUP BY d.`{key_col}` HAVING c < %s"
-            f") t"
+            f"  SELECT `{key_col}` AS `{key_col}`, COUNT(*) AS c, MAX(`{date_col}`) AS mx "
+            f"  FROM `{table}` "
+            f"  WHERE `{date_col}` > DATE_SUB(CURDATE(), INTERVAL %s DAY) "
+            f"  GROUP BY `{key_col}`"
+            f") t "
+            f"JOIN `{ref_table}` s ON s.`{ref_key}` = t.`{key_col}` "
+            f"WHERE s.`{ref_status_col}` = %s AND s.`{ref_date_col}` IS NOT NULL "
+            f"  AND DATEDIFF(CURDATE(), s.`{ref_date_col}`) >= %s "
+            f"  AND {excl_sql} "
+            f"  AND t.c < %s{stale_sql}"
         )
-        args = [window_days, ref_status_val, min_listed_days] + [f"{x}%" for x in excludes] + [min_rows]
+        args = [window_days, ref_status_val, min_listed_days] + [f"{x}%" for x in excludes] + [min_rows] + stale_args
         with conn.cursor() as cur:
             cur.execute(sql, args)
             n = cur.fetchone()["n"]
         status = "pass" if n == 0 else "warning"
-        msg = f"近 {window_days} 日行数 <{min_rows} 的在市老票 {n} 只（参照 {ref_table}，排除北交所前缀 {excludes}）"
+        msg = f"近 {window_days} 日行数 <{min_rows} 的在市老票 {n} 只（参照 {ref_table}，排除北交所前缀 {excludes}"
+        msg += f"，已排除末笔超 {stale_days} 天的停牌股）" if stale_days > 0 else "）"
         return {"status": status, "metric_value": str(n), "message": msg}
 
     def _ref_missing(self, conn, rule: dict) -> dict:
@@ -798,11 +930,16 @@ class DataQualityCheckCollector:
         与 `market_current_sync` 的**上游股票池** ⇒ 名册缺 1 只 = 日线缺、快照缺、行业分布缺。
         该缺口曾潜伏数月无人发现，直到前端「行业分布」出现「其他(74)」才被用户追问出来。
 
-        params: {key_col, ref_table, ref_key, where?, max_count}
+        params: {key_col, ref_table, ref_key, where?, ref_where?, max_count}
           key_col    目标表的键列（默认 stock_code）
           ref_table  参照表（与表名/列名一样走 information_schema 白名单校验）
           ref_key    参照表的键列（默认同 key_col）
           where      可选，缩小目标表扫描范围（受**单表白名单**约束，不可含子查询）
+          ref_where  可选，限定参照表的命中子集（受**单表白名单**约束，不可含子查询）。
+                     用于「必须命中参照表的特定子集」语义，如
+                     `dc_index_market.trade_date` 必须命中 `trade_calendar` 中
+                     `is_trading_day=1` 的**交易日**（而非「日历里存在即可」）——
+                     否则休市日一旦进了日历表，假日假 K 线会被当成「命中」而漏判。
         metric = **去重后的缺失 key 数**（「缺 N 只」比「缺 N 行」更贴合诊断语义）；
         不为 0 时 message 附最多 5 个样本代码，便于直接定位。
 
@@ -815,10 +952,20 @@ class DataQualityCheckCollector:
         ref_table = p["ref_table"]
         ref_key = p.get("ref_key", key_col)
         where = p.get("where")
+        ref_where = p.get("ref_where")
         max_count = int(p.get("max_count", 0))
         table = rule["table_name"]
         cond = f" AND ({where})" if where else ""
-        # 键为 NULL / 空串的行不计（空值属格式问题，由 regex_count 类规则负责）
+        # 参照表的命中子集过滤（如 is_trading_day=1），拼在 JOIN 的 ON 之后、只作用于参照表
+        ref_cond = f" AND ({ref_where})" if ref_where else ""
+        # 键为 NULL 的行不计（空值属格式问题，由 regex_count 类规则负责）。
+        # 空串判断 `<> ''` 仅对字符串类键有意义 —— 对 DATE/DATETIME/数值类键，
+        # `col <> ''` 会触发 MySQL 把 `''` 转成该列类型而报 1525「Incorrect DATE value」
+        # （2026-10-19 给 dc_index_market.trade_date 挂交易日历引用完整性时踩到）。
+        # 故按 key_col 的实际 data_type 决定是否追加空串过滤。
+        key_type = self._column_type(conn, table, key_col)
+        str_types = {"varchar", "char", "text", "tinytext", "mediumtext", "longtext", "enum", "set"}
+        empty_filter = f" AND `{key_col}` <> ''" if key_type in str_types else ""
         # ⚠️ where 必须**下推到目标表的单表子查询**里，不能直接拼在 JOIN 之后：
         # 目标表与参照表常有同名列（如都有 stock_code），拼在后面会报
         # `1052 Column 'stock_code' in where clause is ambiguous`（实测踩到）。
@@ -826,11 +973,11 @@ class DataQualityCheckCollector:
         # 目标表自己的列 → 与 `_validate` 的单表白名单校验天然一致。
         inner = (
             f"SELECT DISTINCT `{key_col}` AS k FROM `{table}` "
-            f"WHERE `{key_col}` IS NOT NULL AND `{key_col}` <> ''{cond}"
+            f"WHERE `{key_col}` IS NOT NULL{empty_filter}{cond}"
         )
         sql = (
             f"SELECT DISTINCT d.k AS k FROM ({inner}) d "
-            f"LEFT JOIN `{ref_table}` s ON s.`{ref_key}` = d.k "
+            f"LEFT JOIN `{ref_table}` s ON s.`{ref_key}` = d.k{ref_cond} "
             f"WHERE s.`{ref_key}` IS NULL"
         )
         with conn.cursor() as cur:

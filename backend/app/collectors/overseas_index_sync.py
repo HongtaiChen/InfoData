@@ -70,6 +70,14 @@ OVERSEAS = [
     ("SX5E", "欧洲斯托克50", "gi", "SX5E"),
     ("N225", "日经225", "gi", "NKY"),
     ("KOSPI", "韩国综合指数", "gi", "KOSPI"),
+    # ---- 2026-10-20 国际指数章节（补全 18 指数清单）----
+    # 美国补：纳斯达克100（区分于已有的「纳斯达克综合」IXIC）
+    ("NDX", "纳斯达克100", "us", ".NDX"),
+    # 中国相关补：恒生中国企业指数（离岸中资大盘蓝筹，MSCI China 免费源拿不到，用它替代）
+    ("HSCEI", "恒生中国企业指数", "hk", "HSCEI"),
+    # 新兴市场补：巴西 Bovespa + 印度 SENSEX（NIFTY 50 新浪无 symbol，用孟买30 替代）
+    ("IBOV", "巴西Bovespa", "gi", "IBOV"),
+    ("SENSEX", "印度SENSEX", "gi", "SENSEX"),
 ]
 _TGT = ["index_code", "index_name", "trade_date",
         "open", "high", "low", "close", "volume", "amount"]

@@ -49,7 +49,7 @@ load_env_files()
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer, prefs  # noqa: E402
+from .api import market, concept, calendar, news, analysis, jobs, ai, db_browser, quality, sql_explorer, prefs, env  # noqa: E402
 from .preflight import advisory  # noqa: E402
 from .scheduler import manager as scheduler_manager  # noqa: E402
 
@@ -99,6 +99,7 @@ app.include_router(db_browser.router, prefix="/api/db", tags=["数据中心"])
 app.include_router(quality.router, prefix="/api/dq", tags=["数据质量"])
 app.include_router(sql_explorer.router, prefix="/api/sql", tags=["数据探查"])
 app.include_router(prefs.router, prefix="/api/prefs", tags=["偏好设置"])
+app.include_router(env.router, prefix="/api/environment", tags=["投资环境"])
 
 
 @app.get("/api/health")

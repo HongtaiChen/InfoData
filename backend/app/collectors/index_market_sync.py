@@ -395,6 +395,44 @@ class IndexMarketSyncCollector:
         except Exception:
             return None
 
+    @staticmethod
+    def _filter_trading_days(cur, rows: list[dict]) -> tuple[list[dict], int]:
+        """交易日闸门：按 trade_calendar 剔除「非交易日」的源数据行，返回 (过滤后行, 剔除数)。
+
+        为什么需要（2026-10-19 用户发现假日假 K 线后立）：
+        中证官网（CSINDEX）在长假后首次更新时，会把同一份最新数据错写到休市日日期上
+        —— 实测 2026 国庆后 10-09 晚写入时，10-01/10-02/10-07 三日各被写进一组
+        OHLCV 完全相同、与 9-30 高度雷同的假 bar（21 个指数 47 行）。上游给什么日期
+        就写什么，采集器此前**没有任何交易日校验**，是假日假 K 线入库的根因。
+        本闸门在写入前统一过滤，非交易日一律拒收，从入口根治（可移植性纪律：固化进代码，
+        而非依赖人工事后清理）。
+
+        ⚠️ 边界：trade_calendar 只覆盖 2005-01-01 起，2005 前的老数据不在日历内，
+        会被 LEFT JOIN 判为「非交易日」。故本闸门只过滤 >=2005-01-01 的行，
+        老数据（1990-2004 全史）不受影响（回补老区间时不得误删）。
+        """
+        if not rows:
+            return rows, 0
+        dates = sorted({_dstr(r["trade_date"]) for r in rows if _dstr(r["trade_date"]) >= "2005-01-01"})
+        if not dates:
+            return rows, 0
+        trading = set()
+        try:
+            cur.execute(
+                "SELECT trade_date FROM trade_calendar "
+                "WHERE is_trading_day=1 AND trade_date BETWEEN %s AND %s",
+                (dates[0], dates[-1]),
+            )
+            trading = {_dstr(r[0]) for r in cur.fetchall()}
+        except Exception:
+            # 交易日历不可用时不拦截（宁放过，不误删：老数据与异常态安全优先）
+            return rows, 0
+        kept = [
+            r for r in rows
+            if _dstr(r["trade_date"]) < "2005-01-01" or _dstr(r["trade_date"]) in trading
+        ]
+        return kept, len(rows) - len(kept)
+
     # ---------- 全量回补（按区间强制重建） ----------
     def backfill(self, start: str, end: str | None = None, codes: list[str] | None = None) -> dict:
         """忽略增量窗口，对 [start, end] 区间强制重建（用于历史成交额 / 涨跌缺口 / 全史回补）。
@@ -422,6 +460,9 @@ class IndexMarketSyncCollector:
                     if not rows:
                         continue
                     rows.sort(key=lambda x: x["trade_date"])
+                    rows, dropped = self._filter_trading_days(cur, rows)
+                    if dropped:
+                        logger.warning(f"⚠️ 回补 {code} {name} 剔除 {dropped} 行非交易日源数据")
                     healed += self._heal_change(cur, code, rows)
                     cur.execute(
                         "DELETE FROM dc_index_market WHERE index_code=%s AND trade_date>=%s "
@@ -527,6 +568,9 @@ class IndexMarketSyncCollector:
                         continue
 
                     rows.sort(key=lambda x: x["trade_date"])
+                    rows, dropped = self._filter_trading_days(cur, rows)
+                    if dropped:
+                        logger.warning(f"⚠️ 指数 {code} {name} 剔除 {dropped} 行非交易日源数据")
                     healed += self._heal_change(cur, code, rows)
 
                     # 清理窗口内旧行（含历史降级源残留防重复）+ 写入

@@ -1,8 +1,14 @@
 """一次性脚本：创建 index_constituents / index_profile 表并 seed 21 指数释义。
 
+⚠️ 废弃声明（2026-10-18）：
+  index_profile 的权威事实来源已迁至 backend/scripts/seed_index_profile.py（含
+  core_note / limit_note 两列，已进 restore.py 的 SEEDS）。本脚本的 index_profile
+  建表 DDL 不含这两列、SEED 也不写这两列，**不要再手动跑本脚本的 index_profile 部分**，
+  否则会在干净机器上建出缺两列的旧表。本脚本仅保留 index_constituents 的建表能力。
+
 用法：python setup_index_tables.py
 释义与基准信息为人工整理的公开常识（source='seed'），基准信息无把握的留空。
-⚠️ 维护约定：采集侧每新增一个要上市场页的指数，必须同步在此扩 seed ——
+⚠️ 维护约定：采集侧每新增一个要上市场页的指数，必须同步在 seed_index_profile.py 扩 seed ——
 否则指数详情抽屉会显示「暂无指数释义」（2026-09-19 曾因此缺 8 个）。
 后续如需官网自动抓取释义，可扩展为采集任务。
 """

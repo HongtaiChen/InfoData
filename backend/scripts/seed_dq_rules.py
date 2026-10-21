@@ -66,8 +66,12 @@ InvestBuddy 数据质量规则种子（幂等，可重复执行）
   体检若早于它们（原为链式紧跟上游的 20:02）就会数到 T-1 → 每个工作日恒 warning。
   故 2026-09-22 起：**freshness 类规则一律不加 grace_days**，靠时点正确而非靠放宽来 pass。
 
-weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷新）：
-- daily_gap_scan        全史疑似缺口（LAG 窗口，18M 行 ~196s）→ 明细入 dq_gap_detail
+weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷新，2026-10-18 缺口/覆盖率口径修订）：
+- daily_gap_scan        全史疑似缺口（LAG 窗口，18M 行 ~196s）→ 明细入 dq_gap_detail。
+  ⚠️2026-10-18 **判定口径改为增量**（`delta_only`）：存量段数是市场事实（长期停牌/退市/
+  北交所稀疏成交，源侧抽样核实重采不可补），全量计数让规则结构性恒红、淹没真断档；
+  现只对「相对上轮新增」判红。另注：LAG **看不见系列尾部整体停更**（B 股 2026-09-19 起
+  停更即从未被本规则报出），尾部停更不在本规则职责内。
 - daily_ohlc_consistent 全史 OHLC 自洽（实测 0 违反，守护型）
 - daily_change_link     涨跌幅与前收衔接（恒等式，构造上必成立）。
   ⚠️2026-09-20 **二次修订**：原判据用 **pp 口径 0.02pp** —— 它与价格量级无关，而低价股的
@@ -75,7 +79,9 @@ weekly 组设计说明（2026-09-10 立，2026-09-20 随 daily 口径改造刷�
   而全表 <3 元仅占 4.13%）。改为「元口径 + 存储精度上界」后实测 **0 行**。
   adj_factor 过滤保留，但理由改写：**不是**旧口径行会失败，而是 AUSAHRE 段历史行的
   pct 只存 2 位小数（22 行，由 legacy_scale_rows 上账）。
-- daily_coverage_recent 近 250 日每票行数下限（实测 0 异常）
+- daily_coverage_recent 近 250 日每票行数下限（实测 0 异常）。
+  ⚠️2026-10-18 加 `stale_days=45`：排除末笔超 45 天的停牌股。原判据把「停牌不再产生记录」
+  当成「均匀稀疏」，唯一违规票 002731 *ST萃华 经源侧复核确认为真停牌 ⇒ 恒为假阳性。
 - daily_source_handoff  跨源衔接偏差（实测 0 行，改造后按「前收盘 vs 上一笔 close×因子比」比）
 - daily_factor_link     🆕2026-09-20：全史因子自洽，整个复权体系的**最强单一判据**。
   ⚠️窗口必须在**未过滤**全序列上做 LAG —— 旧版把 WHERE adj_factor IS NOT NULL 写在内层
@@ -358,6 +364,12 @@ RULES = [
      {"cols": ["source", "url"], "expect": "exists"}, "info", 1, "幂等保障：uk_source_url"),
     ("trade_calendar_uniq", "trade_calendar", "unique_index",
      {"cols": ["trade_date"], "expect": "exists"}, "info", 1, "幂等保障：uk_trade_date"),
+    ("trade_calendar_coverage", "trade_calendar", "date_floor",
+     {"date_col": "trade_date", "days_back": -1}, "warning", 1,
+     "日历覆盖未来：MAX(trade_date) 必须 ≥ 明天（防日历停更导致采集器基准/交易日闸门失效）。"
+     "2026-10-19 立——用户担心「某天突然停市」：days_back=-1 让 floor=明天，日历只要"
+     "覆盖到未来即 pass；一旦源停更、MAX 落到过去即 fail。跨年瞬间（12-31 源未发布次年）"
+     "会误报 1 天，severity=warning 可接受，作为「该续明年日历了」的提醒"),
     # ---------- 股票档案/退市一致性（v1.4 stock_info 宽表合并后） ----------
     ("stock_info_delist_mark", "stock_info", "where_count",
      {"where": "list_status='上市' AND delist_date IS NOT NULL", "max_count": 0}, "warning", 1,
@@ -435,8 +447,11 @@ RULES = [
 # weekly 组：全史窗口扫描类（每周一 21:30 独立任务，见文件头说明）
 WEEKLY_RULES = [
     ("daily_gap_scan", "stock_market_daily", "gap_scan",
-     {"date_col": "trade_date", "gap_days": 45, "high_days": 365}, "warning", 1,
-     "全史疑似缺口：同票相邻记录间隔 >45 自然日（≥365 天高危单独计数）；明细入 dq_gap_detail 供 L3 修复"),
+     {"date_col": "trade_date", "gap_days": 45, "high_days": 365, "delta_only": True}, "warning", 1,
+     "全史疑似缺口盘点（同票相邻 >45 自然日）→ 明细入 dq_gap_detail 供 L3 修复。"
+     "判定口径 = 相对上轮**新增**段数（2026-10-18 改）：存量 5684 段主体为长期停牌/退市与"
+     "北交所稀疏成交（停牌期源侧亦无数据、永不归零），全量计数会让本规则结构性恒红并淹没真断档；"
+     "⚠️抽样另见部分缺口内仍存源侧孤立交易日（真实零星缺失，需定向回补，不计入本判据）"),
     ("daily_ohlc_consistent", "stock_market_daily", "where_count",
      {"where": "close>0 AND high>0 AND low>0 "
                "AND (high < LEAST(open,close) OR low > GREATEST(open,close) OR volume<0)",
@@ -473,9 +488,12 @@ WEEKLY_RULES = [
       "window_days": 250, "min_rows": 100, "min_listed_days": 365,
       "ref_table": "stock_info", "ref_key": "stock_code",
       "ref_status_col": "list_status", "ref_status_val": "上市",
-      "ref_date_col": "list_date", "exclude_prefixes": ["4", "8", "920"]},
+      "ref_date_col": "list_date", "exclude_prefixes": ["4", "8", "920"],
+      "stale_days": 45},
      "warning", 1,
-     "近 250 日每票行数下限（在市且上市满 1 年，排除北交所；抓均匀稀疏型缺失）"),
+     "近 250 日每票行数下限（在市且上市满 1 年，排除北交所；抓均匀稀疏型缺失）。"
+     "已排除末笔超 45 天的停牌股——停牌不再产生记录，计入即恒为假阳性（2026-10-18 实测 "
+     "002731 *ST萃华 源侧确认 2026-09 起停牌）"),
     ("daily_source_handoff", "stock_market_daily", "source_handoff",
      {"date_col": "trade_date", "source_col": "data_source",
       "since": "2025-09-01", "max_pct": 0.5}, "warning", 1,
@@ -704,8 +722,8 @@ BLUEPRINT_RULES = [
      "指数估值新鲜度：乐咕/全A 为「月末 + 最新」序列，非月末日靠最新一个点覆盖，故容忍 5 日"
      "（grace 3 日覆盖周末 + 假期）"),
     ("valuation_rows", "index_valuation_daily", "row_count_total",
-     {"min_rows": 1000}, "warning", 1,
-     "估值总行数下限（中证官网 6 指数×20 日 + 乐咕 4 指数全史 ~900 + 全A ~260 ≈ 1,280；防误清空）"),
+     {"min_rows": 3000}, "warning", 1,
+     "估值总行数下限（中证官网 8 指数×20 日 + 乐咕 PE 12 指数全史 ~2000 + 乐咕 PB 12 指数全史 ~2000 + 全A ~260 ≈ 4,400；防误清空）"),
     ("valuation_pe_range", "index_valuation_daily", "where_count",
      {"where": "pe_ttm IS NOT NULL AND (pe_ttm <= 0 OR pe_ttm > 300)", "max_count": 0},
      "warning", 1, "滚动市盈率取值域 (0, 300] —— 上限放到 300 是因全A 中位口径与科创50 会到三位数"),
@@ -984,6 +1002,17 @@ REF_RULES = [
      "名册停更守护：stock_info.update_time 距今 ≤30h pass / ≤48h warning / 超则 fail。"
      "2026-09-24 立——该表原有 10 条规则全是值域·口径类，无一能发现「名册停更」，"
      "而采集器 upsert-only，整源静默失败既不报错、行数也不减"),
+    # ---------- 2026-10-19 假日假 K 线守护（与 index_market_sync 的交易日闸门配套） ----------
+    ("index_calendar_link", "dc_index_market", "ref_missing",
+     {"key_col": "trade_date", "ref_table": "trade_calendar", "ref_key": "trade_date",
+      "where": "trade_date >= '2005-01-01'",
+      "ref_where": "is_trading_day = 1",
+      "max_count": 0},
+     "critical", 1,
+     "引用完整性·交易日历：dc_index_market.trade_date 必须命中 trade_calendar 的交易日"
+     "(is_trading_day=1)，守假日假K线。2026-10-19 立——中证源长假后把数据错写到 10-01/02/07，"
+     "21 指数 47 行假 bar 入库无人发现。ref_where 限定交易日：休市日进日历表后，"
+     "若只判「日期在表内」会把假行当命中漏判。配套入口根治见 _filter_trading_days"),
 ]
 
 # ============================================================================
@@ -1324,10 +1353,11 @@ LIQUIDITY_RULES = [
               "lenders_sector", "l_pos_type", "l_instr", "unit_measure"], "expect": "exists"},
      "info", 1, "幂等保障：8 列复合唯一键 uk_gliquidity"),
     ("glb_fresh", "global_liquidity_bis", "date_floor",
-     {"date_col": "time_period", "days_back": 200},
+     {"date_col": "time_period", "days_back": 240},
      "warning", 1,
-     "季度新鲜度：BIS GLI 是 T+1 季发布（如 2026-Q1 数据约 2026-07 才出），"
-     "200 天容忍覆盖「发布滞后 + 机器离线」；再晚即断档"),
+     "季度新鲜度：BIS 季末后约 120 天才发布（实测 2025-Q4→2026-04-30、2026-Q1→2026-07-31、"
+     "下期 2026-10-30）⇒ 下次发布前一日最新期已 214 天，原 200 天阈值每季必红。"
+     "取 240 天：覆盖「发布滞后+离线」，漏掉一整季（≈305 天）仍能抓住"),
     ("glb_rows", "global_liquidity_bis", "row_count_total",
      {"min_rows": 6000}, "warning", 1,
      "总行数下限（实测 6,720 行；防误清空 —— BIS 维度是「国×部门×工具×头寸」笛卡尔积，"
@@ -1441,6 +1471,48 @@ RESERVE_RULES = [
 ]
 
 
+# 2026-10-18 投资环境模块（国内指数页）—— 5 张新表
+ENV_RULES = [
+    # -- env_index_tech_daily（技术面物化） --
+    ("env_tech_rows", "env_index_tech_daily", "row_count_total",
+     {"min_rows": 3000}, "warning", 1,
+     "技术面物化总行数下限（21 指数 × 全史 ~500 交易日 ≈ 10,500；3000 为防大面积缺失的保守下限）"),
+    ("env_tech_uniq", "env_index_tech_daily", "unique_index",
+     {"cols": ["index_code", "trade_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_code_date（全量重建前 DELETE 的前提）"),
+    # -- env_fundamental_daily（估值分位物化） --
+    ("env_fund_rows", "env_fundamental_daily", "row_count_total",
+     {"min_rows": 500}, "warning", 1,
+     "基本面物化总行数下限（12 指数可采估值 × 全史 ≈ 数千行；500 为保守下限）"),
+    # -- env_fundamental_quarter（成分股财务聚合） --
+    ("env_fin_q_rows", "env_fundamental_quarter", "row_count_total",
+     {"min_rows": 100}, "warning", 1,
+     "财务聚合季频总行数下限（19 指数有成分 × 40 季度 ≈ 760；100 为保守下限）"),
+    ("env_fin_q_uniq", "env_fundamental_quarter", "unique_index",
+     {"cols": ["index_code", "report_date"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_code_report"),
+    # -- env_threshold（阈值配置） --
+    ("env_thr_rows", "env_threshold", "row_count_total",
+     {"min_rows": 15}, "warning", 1,
+     "阈值表行数下限（21 指数应全覆盖；15 为保守下限，防误清空）"),
+    ("env_thr_range", "env_threshold", "where_count",
+     {"where": "drop_threshold IS NOT NULL AND (drop_threshold <= 0 OR drop_threshold > 10)",
+      "max_count": 0}, "warning", 1,
+     "跌幅阈值取值域 (0, 10]%：阈值是「日跌幅绝对值」，为负或 >10% 都属口径错（正常指数日跌 95 分位约 1.5~3.5%）"),
+    # -- env_macro_monthly（宏观序列） --
+    ("env_macro_fresh", "env_macro_monthly", "date_floor",
+     {"date_col": "stat_month", "days_back": 120}, "warning", 1,
+     "宏观序列新鲜度：GDP/PMI/CPI/PPI 均次月中旬左右发布（GDP 季度略晚），120 天容忍覆盖发布偏晚 + 机器离线；再晚即断档"),
+    ("env_macro_uniq", "env_macro_monthly", "unique_index",
+     {"cols": ["stat_month", "indicator"], "expect": "exists"}, "info", 1,
+     "幂等保障：uk_month_ind"),
+    ("env_macro_no_future", "env_macro_monthly", "date_ceiling",
+     {"date_col": "stat_month", "grace_days": 60}, "warning", 1,
+     "🔴 月份不得落到未来（容忍 60 天，因季度 GDP 的末月可能比当前月略晚）。源月份是中文字符串，"
+     "解析写错会静默写出未来月份，而那种行会让 freshness 恒通过——这是能穿透新鲜度守护的形态"),
+]
+
+
 # 已废弃规则：每次 seed 时显式删除（避免升级后旧冻结规则与新规则并存产生噪音）
 RETIRED_RULES = [
     # 2026-09-25 货币流动性批次 2C：海外指数扩到 10 条腿（跨亚/欧/美三个时区）后，
@@ -1482,6 +1554,7 @@ def main():
             + [(r, "daily") for r in REF_RULES]             # 2026-09-24 引用完整性 + 名册停更守护
             + [(r, "daily") for r in LIQUIDITY_RULES]       # 2026-09-25 货币流动性批次 2（3 新表 + 自算 DXY）
             + [(r, "daily") for r in RESERVE_RULES]         # 2026-09-26 批次 C2（中国官方外储/黄金）
+            + [(r, "daily") for r in ENV_RULES]             # 2026-10-18 投资环境模块（5 张新表）
         )
         with conn.cursor() as cur:
             for (name, table, ctype, params, severity, enabled, desc), group in all_rules:
