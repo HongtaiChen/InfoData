@@ -90,6 +90,28 @@ def _new_conn() -> "pymysql.Connection":
     return pymysql.connect(**get_db_config().to_dict(), autocommit=True)
 
 
+def _ping_with_timeout(conn: "pymysql.Connection") -> None:
+    """带短超时的探活：给 socket 临时设读超时，ping 后恢复原值。
+
+    直接 conn.ping(reconnect=True) 会先发 COM_PING 且不带超时——若连接已被对端
+    半关闭（如系统睡眠唤醒后的死连接），会阻塞到 TCP 超时（可达分钟级），导致
+    接口整体挂起。这里把 socket 超时临时压到 _PING_TIMEOUT 秒，快速失败后由
+    _acquire 丢弃重建。
+    """
+    import pymysql
+
+    sock = getattr(conn, "_sock", None)
+    if sock is None:
+        # 连接已处于关闭态，直接走重建
+        raise pymysql.err.InterfaceError("connection already closed")
+    old_timeout = sock.gettimeout()
+    sock.settimeout(_PING_TIMEOUT)
+    try:
+        conn.ping(reconnect=True)
+    finally:
+        sock.settimeout(old_timeout)
+
+
 def _discard() -> None:
     """关闭并清空本线程持有的连接"""
     conn = getattr(_local, "conn", None)
@@ -100,6 +122,11 @@ def _discard() -> None:
         except Exception:
             pass
     _local.conn = None
+
+
+# 探活用的 socket 短超时（秒）。ping 前临时压到连接上，避免对死连接发 COM_PING
+# 时无限挂起（2026-10-22 排查：系统睡眠→唤醒后死连接 + 无超时 ping 挂死整个接口）。
+_PING_TIMEOUT = float(os.getenv("INFO_DATA_DB_PING_TIMEOUT", "2"))
 
 
 def _acquire() -> tuple["pymysql.Connection", bool]:
@@ -114,7 +141,7 @@ def _acquire() -> tuple["pymysql.Connection", bool]:
     conn = getattr(_local, "conn", None)
     if conn is not None:
         try:
-            conn.ping(reconnect=True)
+            _ping_with_timeout(conn)
             _STATS["reused"] += 1
             return conn, True
         except Exception:
