@@ -54,6 +54,7 @@ from ..collectors.xcheck_sync import XcheckSyncCollector
 from ..collectors.index_valuation_sync import IndexValuationSyncCollector
 from ..collectors.interbank_rate_sync import InterbankRateSyncCollector
 from ..collectors.overseas_index_sync import OverseasIndexSyncCollector
+from ..collectors.msci_index_sync import MsciIndexSyncCollector
 from ..collectors.currency_boc_sync import CurrencyBocSyncCollector
 from ..collectors.fund_new_issue_sync import FundNewIssueSyncCollector
 from ..collectors.stock_repurchase_sync import StockRepurchaseSyncCollector
@@ -75,6 +76,11 @@ from ..collectors.eu_money_supply_sync import EuMoneySupplySyncCollector
 from ..collectors.cn_omo_sync import CnOmoSyncCollector
 from ..collectors.cn_reserve_sync import CnReserveSyncCollector
 from ..collectors.global_liquidity_sync import GlobalLiquiditySyncCollector
+# 2026-10-18 投资环境模块：技术/基本面物化 + 宏观序列（E6）
+from ..collectors.env_derive import EnvDeriveCollector
+from ..collectors.env_macro_sync import EnvMacroSyncCollector
+# 2026-10-20 筹码分布（B 方案）：个股筹码分布物化（纯库内，读 stock_market_daily 算 CYQ）
+from ..collectors.stock_cyq_sync import StockCyqSyncCollector
 from ..analysis import concept_ai
 
 logger = logging.getLogger("infodata.tasks")
@@ -343,6 +349,42 @@ def run_market_style_sync(params: dict) -> int:
     """市场风格日频物化表计算（market_style_daily：纯库内，挂 index_market_sync 之后）"""
     collector = MarketStyleSyncCollector()
     result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_env_derive(params: dict) -> int:
+    """投资环境物化（env_index_tech_daily / env_fundamental_daily / env_fundamental_quarter /
+    env_threshold）：纯库内计算，挂 market_current_sync 之后链式触发（依赖当日指数日线）。"""
+    collector = EnvDeriveCollector(
+        tech_days=int(params.get("tech_days") or 0),
+        lookback_years=int(params.get("lookback_years") or 3),
+    )
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_env_macro_sync(params: dict) -> int:
+    """投资环境·宏观序列（env_macro_monthly：GDP/PMI/CPI/PPI，akshare macro_china 系列）"""
+    collector = EnvMacroSyncCollector(timeout_sec=float(params.get("timeout_sec") or 60))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 宏观序列 {result['error_count']} 项异常（其余正常）: {result['errors'][:3]}")
+    return result["records_written"]
+
+
+def run_stock_cyq_sync(params: dict) -> int:
+    """个股筹码分布物化（stock_cyq_daily，纯库内，读 stock_market_daily 算 CYQ 三角分布）。
+
+    挂 stock_daily_incr 之后链式触发。params: codes（逗号分隔定向回填，缺省全量）、
+    limit（最多处理只数，缺省全量）。
+    """
+    collector = StockCyqSyncCollector(
+        codes=str(params.get("codes") or ""),
+        limit=int(params.get("limit") or 0),
+    )
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ 筹码计算 {result['error_count']} 只异常（其余正常）: {result['errors'][:3]}")
     return result["records_written"]
 
 
@@ -1049,6 +1091,21 @@ def run_overseas_index_sync(params: dict) -> int:
     return result["records_written"]
 
 
+def run_msci_index_sync(params: dict) -> int:
+    """MSCI 指数日线同步（写 overseas_index_daily：ACWI/World/EAFE/EM，USD 收盘 LEVEL）
+
+    2026-10-20 国际指数章节 —— MSCI 官方公开 chart API，免 Key、无 WAF，回 2000 年。
+    字段口径与海外指数不同（无 OHLC，只有收盘），故独立采集器、共写一张表。
+    params: timeout_sec(60)
+    """
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = MsciIndexSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    if result["error_count"] > 0:
+        logger.warning(f"⚠️ MSCI 指数 {result['error_count']} 项异常: {result['errors'][:3]}")
+    return result["records_written"]
+
+
 def run_currency_boc_sync(params: dict) -> int:
     """人民币外汇牌价同步（currency_boc_daily：美元/欧元/日元/港元）
 
@@ -1067,6 +1124,32 @@ def run_currency_boc_sync(params: dict) -> int:
     return result["records_written"]
 
 
+def run_account_open_sync(params: dict) -> int:
+    """新增开户同步（stock_account_monthly：上交所官方 + 东财历史拼接）
+
+    杠杆与资金行为·开户腿 —— 上交所月报接口逐月积累（官方口径）。
+    params: timeout_sec(90)
+    """
+    from ..collectors.account_open_sync import AccountOpenSyncCollector
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = AccountOpenSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_etf_flow_sync(params: dict) -> int:
+    """ETF 资金流向同步（etf_share_daily：东财全市场 ETF 份额快照，逐日积累）
+
+    杠杆与资金行为·ETF 腿 —— 份额变化 × 价格 = 净流入估算。
+    params: timeout_sec(120)
+    """
+    from ..collectors.etf_flow_sync import EtfFlowSyncCollector
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = EtfFlowSyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
 def run_fund_new_issue_sync(params: dict) -> int:
     """新基金发行同步（fund_new_issue：东财全量）
 
@@ -1075,6 +1158,221 @@ def run_fund_new_issue_sync(params: dict) -> int:
     """
     p = _task_params(params, {"timeout_sec": 120})
     collector = FundNewIssueSyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_cash_flow_sync(params: dict) -> int:
+    """经营性现金流同步（stock_cash_flow_ths：同花顺现金流量表，逐股增量）
+
+    盈利质量与成长·现金流腿 —— 经营活动现金流量净额，逐成分股聚合→指数级现金流趋势。
+    params: max_stocks(0=全量)、timeout_sec(30)
+    """
+    from ..collectors.cash_flow_sync import CashFlowSyncCollector
+    p = _task_params(params, {"max_stocks": 0, "timeout_sec": 30})
+    collector = CashFlowSyncCollector(
+        max_stocks=int(p.get("max_stocks", 0)),
+        timeout_sec=float(p.get("timeout_sec", 30)),
+    )
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_stock_pb_sync(params: dict) -> int:
+    """个股 PB 快照同步（stock_pb_daily：东财实时行情，双通道降级）
+
+    估值水平·PB 离散度腿 —— 个股市净率横截面，逐日积累。
+    params: timeout_sec(120)
+    """
+    from ..collectors.stock_pb_sync import StockPbSyncCollector
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = StockPbSyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_overseas_tech_derive(params: dict) -> int:
+    """国际指数技术面物化（env_overseas_tech_daily，纯库内，读 overseas_index_daily）
+
+    国际指数章节·技术面 4 块的数据底座：均线/MACD/RSI/波动率/回撤/相对强弱/Beta/相关性。
+    挂 msci_index_sync / overseas_index_sync 之后链式触发。
+    """
+    from ..collectors.overseas_tech_derive import OverseasTechDeriveCollector
+    collector = OverseasTechDeriveCollector(
+        lookback_years=int(params.get("lookback_years") or 0))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_vix_sync(params: dict) -> int:
+    """VIX 恐慌指数同步（vix_daily：新浪 gi 直连）
+
+    国际指数章节·波动率与风险块：标普500 隐含波动率。
+    params: timeout_sec(20)
+    """
+    from ..collectors.vix_sync import VixSyncCollector
+    p = _task_params(params, {"timeout_sec": 20})
+    collector = VixSyncCollector(timeout_sec=float(p.get("timeout_sec", 20)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_cftc_position_sync(params: dict) -> int:
+    """CFTC 货币期货非商业持仓同步（cftc_position_weekly：akshare，周频）
+
+    国际指数章节·资金流与仓位块：机构多空敞口。
+    params: timeout_sec(60)
+    """
+    from ..collectors.cftc_position_sync import CftcPositionSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = CftcPositionSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_index_valuation_intl_sync(params: dict) -> int:
+    """国际指数估值同步（index_valuation_intl：Siblis 免费 API，稀疏快照）
+
+    国际指数章节·基本面块：pe_ttm/pe_fwd/cape 三指标（PB/股息率免费源不可得）。
+    params: timeout_sec(20)
+    """
+    from ..collectors.index_valuation_intl_sync import IndexValuationIntlSyncCollector
+    p = _task_params(params, {"timeout_sec": 20})
+    collector = IndexValuationIntlSyncCollector(timeout_sec=float(p.get("timeout_sec", 20)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_index_fundamental_intl_sync(params: dict) -> int:
+    """国际指数估值扩展同步（标普500 股息率，Shiller 学术长历史）
+
+    国际指数章节·基本面块：补 dividend_yield 指标（回溯 12 个月股息÷月末价）。
+    ⚠️ Shiller 数据更新滞后（完整到 2023-06），PB/其余指数股息率免费源不可得，如实留空。
+    params: timeout_sec(90)
+    """
+    from ..collectors.index_fundamental_intl_sync import IndexFundamentalIntlSyncCollector
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = IndexFundamentalIntlSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_global_macro_sync(params: dict) -> int:
+    """全球宏观年度序列同步（global_macro_annual：IMF WEO，gdp_growth/inflation/debt_gdp）
+
+    国际指数章节·宏观块：12 主要经济体 × 3 指标，含历史+预测（半年更新）。
+    params: timeout_sec(120)
+    """
+    from ..collectors.global_macro_sync import GlobalMacroSyncCollector
+    p = _task_params(params, {"timeout_sec": 120})
+    collector = GlobalMacroSyncCollector(timeout_sec=float(p.get("timeout_sec", 120)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_eu_hicp_sync(params: dict) -> int:
+    """欧元区 HICP 月度通胀同步（eu_hicp_monthly：Eurostat，及时月度）
+
+    国际指数章节·宏观块：本域唯一可得的及时月度国际通胀源（ECB 目标基准口径）。
+    params: timeout_sec(60)
+    """
+    from ..collectors.eu_hicp_sync import EuHicpSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = EuHicpSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_ovx_sync(params: dict) -> int:
+    """OVX 原油波动率同步（ovx_daily：Cboe 官方 CSV，日频）
+
+    国际环境章节·技术面①市场波动块。全量覆盖（REPLACE）。
+    params: timeout_sec(30)
+    """
+    from ..collectors.global_risk_sync import OvxSyncCollector
+    p = _task_params(params, {"timeout_sec": 30})
+    collector = OvxSyncCollector(timeout_sec=float(p.get("timeout_sec", 30)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_gpr_sync(params: dict) -> int:
+    """GPR 地缘政治风险指数同步（gpr_daily：Caldara & Iacoviello，日频）
+
+    国际环境章节·技术面① + 基本面①地缘块。全量覆盖（REPLACE）。
+    params: timeout_sec(60)
+    """
+    from ..collectors.global_risk_sync import GprSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = GprSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_epu_sync(params: dict) -> int:
+    """美国 EPU 经济政策不确定性同步（epu_daily：Baker/Bloom/Davis，日频）
+
+    国际环境章节·技术面④情绪不确定性块。全量覆盖（REPLACE）。
+    ⚠️ policyuncertainty.com 响应慢，timeout 默认 90s。
+    params: timeout_sec(90)
+    """
+    from ..collectors.global_risk_sync import EpuSyncCollector
+    p = _task_params(params, {"timeout_sec": 90})
+    collector = EpuSyncCollector(timeout_sec=float(p.get("timeout_sec", 90)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_wui_sync(params: dict) -> int:
+    """WUI 世界不确定性指数同步（wui_monthly：IMF 编制，月频）
+
+    国际环境章节·技术面④情绪不确定性块。全量覆盖（REPLACE）。
+    params: timeout_sec(60)
+    """
+    from ..collectors.global_uncertainty_sync import WuiSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = WuiSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_tpu_sync(params: dict) -> int:
+    """TPU 贸易政策不确定性同步（tpu_monthly：Caldara et al.，月频）
+
+    国际环境章节·技术面④ + 基本面②经贸块。全量覆盖（REPLACE）。
+    params: timeout_sec(60)
+    """
+    from ..collectors.global_uncertainty_sync import TpuSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = TpuSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_fsi_sync(params: dict) -> int:
+    """Püttmann 报纸金融压力指数同步（fsi_monthly：1889-2016，已停更）
+
+    国际环境章节·技术面①市场波动块。一次性落库，后续仅兜底。
+    params: timeout_sec(60)
+    """
+    from ..collectors.global_uncertainty_sync import FsiSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = FsiSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
+    result = _collector_run(collector)
+    return result["records_written"]
+
+
+def run_dr_repo_sync(params: dict) -> int:
+    """DR001/DR007 存款类机构质押式回购利率同步（dr_repo_daily，日频）
+
+    国内货币章节·技术面②价格指标块（短端资金「温度计」）。
+    ⚠️ 源侧硬限制：repo_rate_hist 单次请求最长约 300 天，采集器按 300 天/段自
+       2025-01-01 回溯分段拉取后全量 upsert。
+    params: timeout_sec(60)
+    """
+    from ..collectors.dr_repo_sync import DrRepoSyncCollector
+    p = _task_params(params, {"timeout_sec": 60})
+    collector = DrRepoSyncCollector(timeout_sec=float(p.get("timeout_sec", 60)))
     result = _collector_run(collector)
     return result["records_written"]
 
@@ -1340,6 +1638,7 @@ TASKS = {
     "index_valuation_sync": run_index_valuation_sync,
     "interbank_rate_sync": run_interbank_rate_sync,
     "overseas_index_sync": run_overseas_index_sync,
+    "msci_index_sync": run_msci_index_sync,
     "currency_boc_sync": run_currency_boc_sync,
     "fund_new_issue_sync": run_fund_new_issue_sync,
     "stock_repurchase_sync": run_stock_repurchase_sync,
@@ -1360,6 +1659,35 @@ TASKS = {
     # 2026-10-08 启动收敛（自愈闭环 ·「启动即收敛」）—— 由 scheduler._boot_pipeline
     # 在每次进程启动时自动调用，也可前端手动触发一次全量收敛
     "startup_converge": run_startup_converge,
+    # 2026-10-18 投资环境模块（国内指数页）：技术/基本面物化 + 宏观序列
+    "env_derive": run_env_derive,
+    "env_macro_sync": run_env_macro_sync,
+    # 2026-10-20 筹码分布（B 方案）：个股筹码分布物化（纯库内，读 stock_market_daily）
+    "stock_cyq_sync": run_stock_cyq_sync,
+    # 2026-10-20 杠杆与资金行为（三指标之开户/ETF）：上交所官方开户 + 东财 ETF 份额
+    "account_open_sync": run_account_open_sync,
+    "etf_flow_sync": run_etf_flow_sync,
+    # 2026-10-20 估值水平/盈利质量章节补齐：经营性现金流 + 个股 PB 离散度
+    "cash_flow_sync": run_cash_flow_sync,
+    "stock_pb_sync": run_stock_pb_sync,
+    # 2026-10-21 国际指数章节：技术面物化 + VIX + CFTC 持仓 + 估值
+    "overseas_tech_derive": run_overseas_tech_derive,
+    "vix_sync": run_vix_sync,
+    "cftc_position_sync": run_cftc_position_sync,
+    "index_valuation_intl_sync": run_index_valuation_intl_sync,
+    # 2026-10-21 国际指数基本面：估值扩展 + 全球宏观 + 欧元区 HICP
+    "index_fundamental_intl_sync": run_index_fundamental_intl_sync,
+    "global_macro_sync": run_global_macro_sync,
+    "eu_hicp_sync": run_eu_hicp_sync,
+    # 2026-10-21 国际环境：波动率/地缘/不确定性指数（OVX/GPR/EPU/WUI/TPU/FSI）
+    "ovx_sync": run_ovx_sync,
+    "gpr_sync": run_gpr_sync,
+    "epu_sync": run_epu_sync,
+    "wui_sync": run_wui_sync,
+    "tpu_sync": run_tpu_sync,
+    "fsi_sync": run_fsi_sync,
+    # 2026-10-21 国内货币：DR001/DR007 存款类机构质押式回购利率
+    "dr_repo_sync": run_dr_repo_sync,
 }
 
 

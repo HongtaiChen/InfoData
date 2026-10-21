@@ -94,6 +94,44 @@ TASKS = [
      {"timeout_sec": 90}),
     ("overseas_index_sync", 1, "50 19 * * *",                       # 每天 19:50（蓝图E 恒生+美股，美股为前一夜收盘）
      {"timeout_sec": 60}),
+    ("msci_index_sync", 1, "55 19 * * *",                            # 每天 19:55（国际指数章节 MSCI 四指数，官方公开 API）
+     {"timeout_sec": 60}),
+    # ---------- 国际指数章节（2026-10-21）：技术面物化 + VIX + CFTC + 估值 ----------
+    # 技术面物化是纯库内计算，依赖 overseas/msci 日线，挂 msci 之后链式触发；
+    # VIX/CFTC/估值是纯外部取数，固定时刻、彼此错峰。
+    ("overseas_tech_derive", 1, "8 20 * * *",                        # 每天 20:08（国际指数技术面物化，读 overseas_index_daily）
+     {"lookback_years": 0}),
+    ("vix_sync", 1, "15 20 * * 0-4",                                 # 每周一至周五 20:15（VIX 恐慌指数，新浪 gi）
+     {"timeout_sec": 20}),
+    ("cftc_position_sync", 1, "45 20 * * 0",                        # 每周一 20:45（CFTC 周频持仓，每周二发布上一周数据）
+     {"timeout_sec": 60}),
+    ("index_valuation_intl_sync", 1, "30 6 * * 6",                   # 每周六 06:30（国际指数估值，Siblis 免费层稀疏快照）
+     {"timeout_sec": 20}),
+    # ---------- 国际指数基本面（2026-10-21）：估值扩展 + 全球宏观 + 欧元区 HICP ----------
+    # 三源均为**纯外部取数**、免 Key，频率低（年度/月度/快照），固定时刻错峰。
+    ("index_fundamental_intl_sync", 1, "35 6 * * 6",                 # 每周六 06:35（标普500 股息率，Shiller 长历史）
+     {"timeout_sec": 90}),
+    ("global_macro_sync", 1, "40 6 1 4,10 *",                        # 每年 4/10 月 1 日 06:40（IMF WEO，半年更新）
+     {"timeout_sec": 120}),
+    ("eu_hicp_sync", 1, "45 6 * * 6",                                # 每周六 06:45（欧元区 HICP 月度，Eurostat）
+     {"timeout_sec": 60}),
+    # ---------- 国际环境（2026-10-21）：波动率/地缘/不确定性指数 ----------
+    # 六源均为官方/学术开放数据、免 Key，全量覆盖（REPLACE）镜像官方最新版本。
+    # OVX/GPR/EPU 日频每日错峰；WUI/TPU/FSI 月频或停更，低频错峰。
+    ("ovx_sync", 1, "10 6 * * *",                                    # 每天 06:10（OVX 原油波动率，Cboe 官方 CSV）
+     {"timeout_sec": 30}),
+    ("gpr_sync", 1, "15 6 * * *",                                    # 每天 06:15（GPR 地缘政治风险，Caldara & Iacoviello）
+     {"timeout_sec": 60}),
+    ("epu_sync", 1, "20 6 * * *",                                    # 每天 06:20（美国 EPU 日频，policyuncertainty.com）
+     {"timeout_sec": 90}),
+    ("wui_sync", 1, "25 6 * * 6",                                    # 每周六 06:25（WUI 世界不确定性，月频）
+     {"timeout_sec": 60}),
+    ("tpu_sync", 1, "30 6 * * 6",                                    # 每周六 06:30（TPU 贸易政策不确定性，月频）
+     {"timeout_sec": 60}),
+    ("fsi_sync", 1, "35 6 1 1,7 *",                                  # 每年 1/7 月 1 日 06:35（Püttmann FSI，已停更仅兜底）
+     {"timeout_sec": 60}),
+    ("dr_repo_sync", 1, "40 6 * * 1-5",                               # 工作日 06:40（DR001/DR007 存款类机构质押式回购，中国货币网）
+     {"timeout_sec": 60}),
     ("currency_boc_sync", 1, "5 20 * * *",                          # 每天 20:05（蓝图E 人民币中间价）
      {"timeout_sec": 60, "first_lookback_days": 1825, "from_date": None}),
     ("fund_new_issue_sync", 1, "20 20 * * *",                       # 每天 20:20（蓝图E 发行冰点）
@@ -238,6 +276,39 @@ TASKS = [
     #   params.max_repairs 只约束「由 DQ 缺口触发的额外修复」个数；时间维度的启动补偿不限额。
     ("startup_converge", 1, "手动",
      {"max_repairs": 10, "verify": True, "dry_run": False}),
+    # ---------- 投资环境模块（2026-10-18，E1~E6 定稿，国内指数页） ----------
+    # env_derive：技术/基本面物化（env_index_tech_daily / env_fundamental_daily /
+    #   env_fundamental_quarter / env_threshold），纯库内计算，依赖当日指数日线
+    #   → 主触发=链式（挂在 market_current_sync 之后），固定时刻仅兜底。
+    # env_macro_sync：宏观序列（env_macro_monthly：GDP/PMI/CPI/PPI），纯外部取数
+    #   （akshare macro_china 系列），固定时刻即可；月频数据靠幂等 upsert 收敛。
+    ("env_derive", 1, "40 21 * * 0-4",                                  # 每周一至周五 21:40（兜底；主触发=链式）
+     {"tech_days": 0, "lookback_years": 3}),
+    ("env_macro_sync", 1, "50 20 * * *",                                # 每天 20:50（月频数据，每日触碰靠幂等收敛）
+     {"timeout_sec": 60}),
+    # ---------- 筹码分布（2026-10-20，B 方案） ----------
+    # stock_cyq_sync：个股筹码分布物化（stock_cyq_daily），纯库内计算，读 stock_market_daily
+    #   → 主触发=链式（挂 stock_daily_incr 之后），固定时刻仅兜底。参数 codes/limit 供定向回填。
+    ("stock_cyq_sync", 1, "10 22 * * 0-4",                              # 每周一至周五 22:10（兜底；主触发=链式）
+     {"codes": "", "limit": 0}),
+    # ---------- 杠杆与资金行为（2026-10-20，三指标中的两个采集任务） ----------
+    # account_open_sync：上交所官方开户月报（月频，接口只返回当年 1-12 月 + 累计）
+    #   → 排「每天 07:30」靠幂等收敛（每月约 7 号后出上月数据，每天跑一次成本 1 次接口调用）
+    ("account_open_sync", 1, "30 7 * * *",                              # 每天 07:30（月频数据，每日触碰靠幂等收敛）
+     {"timeout_sec": 90}),
+    # etf_flow_sync：全市场股票型 ETF 份额快照（日频，逐日积累，历史不可回溯）
+    #   → 每个交易日收盘后采（份额为日频快照）；⚠️ 当前开发环境代理对东财 push2 域不稳，生产环境可用
+    ("etf_flow_sync", 1, "0 21 * * 0-4",                                # 每周一至周五 21:00
+     {"timeout_sec": 120}),
+    # ---------- 估值水平 / 盈利质量与成长（2026-10-20，章节拆分后补齐两指标） ----------
+    # cash_flow_sync：经营性现金流（同花顺现金流量表，逐股增量，季频数据）
+    #   → 排「每周一至周五 08:00」靠幂等收敛（财务数据按披露日历更新，逐股增量仅扫滞后股票）
+    ("cash_flow_sync", 1, "0 8 * * 0-4",                                # 每周一至周五 08:00
+     {"max_stocks": 0, "timeout_sec": 30}),
+    # stock_pb_sync：个股 PB 快照（东财实时行情，日频逐日积累，历史不可回溯）
+    #   → 每个交易日收盘后采；⚠️ 依赖东财 push2 域（与 etf_flow_sync 同一网络障碍），网络恢复后首采
+    ("stock_pb_sync", 1, "10 21 * * 0-4",                               # 每周一至周五 21:10
+     {"timeout_sec": 120}),
 ]
 
 
