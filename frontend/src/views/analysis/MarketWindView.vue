@@ -162,10 +162,10 @@ const detailColumns: DataTableColumns<DetailRow> = [
   { title: '20日收益', key: 'ret_20', width: 100, render: (r) => pctRender(r.ret_20) },
   {
     title: '操作', key: 'op', width: 90,
-    render: (r) => h(NButton, {
+    render: () => h(NButton, {
       size: 'tiny', secondary: true,
-      onClick: () => router.push({ path: '/market', query: { index: r.index_code, name: r.index_name } }),
-    }, { default: () => 'K线' }),
+      onClick: () => router.push({ path: '/environment' }),
+    }, { default: () => '查看' }),
   },
 ]
 
@@ -298,7 +298,7 @@ const detailTabs = computed(() => ['全部', ...new Set(detail.value.map((d) => 
          张数信息下沉到表头上方的一行 caption，组过滤由下面的 tab 承担。 -->
     <NCard id="mw-detail" size="small" class="mw-card" title="指数明细">
       <template #header-extra>
-        <DrillLink :items="[{ label: '行情看板看K线', to: '/market' }]" />
+        <DrillLink :items="[{ label: '投资环境看国内指数', to: '/environment' }]" />
       </template>
       <NTabs v-model:value="detailFilter" type="segment" size="small">
         <NTabPane v-for="grp in detailTabs" :key="grp" :name="grp" :tab="grp" />

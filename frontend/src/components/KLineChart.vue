@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { init, dispose } from 'klinecharts'
+import { init, dispose, registerIndicator } from 'klinecharts'
 import type { Chart, KLineData } from 'klinecharts'
 import dayjs from 'dayjs'
 import api from '../api'
@@ -106,6 +106,59 @@ function formatVol(v?: number): string {
   return String(v)
 }
 
+// ---------- 筹码分布（个股专属）自定义副图指标 ----------
+// 数据源：GET /market/cyq（stock_cyq_daily，本地 stock_market_daily 经 CYQ 三角分布离线重算）。
+// 筹码概念只对个股成立（需流通盘换手率），指数/概念无此数据，故仅 !isIndex 时启用。
+// extendData 注入「交易日 → 获利比例/平均成本/90集中度/70集中度」映射，calc 按 timestamp 取。
+const CYQ_COLORS = { benefit: '#EF232A', avg: '#185FA5', con90: '#D4AF37' }
+let cyqMap: Record<string, { benefit: number; avg: number; con90: number; con70: number }> = {}
+let cyqRegistered = false
+
+function registerCyqIndicator() {
+  if (cyqRegistered) return
+  cyqRegistered = true
+  registerIndicator({
+    name: 'CYQ',
+    shortName: '筹码',
+    shouldOhlc: false,
+    shouldFormatBigNumber: false,
+    precision: 2,
+    figures: [
+      { key: 'benefit', title: '获利比例(%): ', type: 'line' as const },
+      { key: 'avg', title: '平均成本: ', type: 'line' as const },
+      { key: 'con90', title: '90集中度(%): ', type: 'line' as const },
+    ],
+    calc: (dataList: KLineData[], indicator: any) => {
+      const ext = indicator.extendData as Record<string, any> | undefined
+      return dataList.map((b) => {
+        const d = dayjs(b.timestamp).format('YYYY-MM-DD')
+        const row = ext?.[d]
+        return {
+          benefit: row?.benefit ?? null,
+          avg: row?.avg ?? null,
+          con90: row?.con90 ?? null,
+        }
+      })
+    },
+  })
+}
+
+async function fetchCyqMap(): Promise<Record<string, any>> {
+  const map: Record<string, any> = {}
+  try {
+    const resp: any = await api.get('/market/cyq', { params: { code: props.code, limit: 500 } })
+    for (const it of resp.items || []) {
+      map[String(it.trade_date)] = {
+        benefit: Number(it.benefit_part),
+        avg: Number(it.avg_cost),
+        con90: Number(it.cost90_con),
+        con70: Number(it.cost70_con),
+      }
+    }
+  } catch { /* 筹码数据缺失时静默降级（指数/概念无筹码） */ }
+  return map
+}
+
 async function fetchBars(): Promise<KLineData[]> {
   const resp: any = await api.get('/market/kline', {
     params: {
@@ -163,6 +216,21 @@ function initChart() {
   chart.createIndicator('MA', false)
   chart.createIndicator('VOL')
   chart.createIndicator('MACD')
+  // 个股专属：筹码副图（获利比例/平均成本/集中度）；指数/概念无筹码，不建
+  if (!props.isIndex && !props.isConcept) {
+    registerCyqIndicator()
+    chart.createIndicator({
+      name: 'CYQ',
+      extendData: cyqMap,
+      styles: {
+        lines: [
+          { color: CYQ_COLORS.benefit },
+          { color: CYQ_COLORS.avg },
+          { color: CYQ_COLORS.con90 },
+        ],
+      } as any,
+    } as any)
+  }
   // klinecharts >=9.x 使用 DataLoader（替代旧的 applyNewData）
   chart.setDataLoader({
     getBars: ({ type, callback }) => {
@@ -171,6 +239,13 @@ function initChart() {
         .then((list) => {
           setLatest(list)
           loadingMsg.value = ''
+          // 个股筹码数据拉取并注入（先注入空 map 触发 applyNewData，再异步补真实数据）
+          if (!props.isIndex && !props.isConcept) {
+            fetchCyqMap().then((m) => {
+              cyqMap = m
+              try { chart?.overrideIndicator({ name: 'CYQ', extendData: m } as any) } catch { /* 忽略 */ }
+            }).catch(() => { /* 忽略 */ })
+          }
           callback(list, false)
         })
         .catch((e) => {

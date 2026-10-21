@@ -164,7 +164,7 @@ const conColumns: DataTableColumns<ConceptRow> = [
     <NCard id="sr-industry" size="small" class="sr-card"
            :title="`申万${industry?.level ?? '一级'}行业收益排行：谁在领涨`">
       <template #header-extra>
-        <DrillLink :items="[{ label: '行情看板看大盘', to: '/market' }]" />
+        <DrillLink :items="[{ label: '投资环境看国内指数', to: '/environment' }]" />
       </template>
       <div class="sr-sum">
         <span>行业中位 <b class="sr-num">{{ industry?.median == null ? '--' : industry.median + '%' }}</b></span>

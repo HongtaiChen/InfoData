@@ -140,7 +140,7 @@ function gapOf(code: string): number | null {
     <NCard id="cm-trend" size="small" class="cm-card"
            title="归一化走势对照（各自起点 = 100，按日期对齐 + 前值填充）">
       <template #header-extra>
-        <DrillLink :items="[{ label: '行情看板看大盘', to: '/market' }]" />
+        <DrillLink :items="[{ label: '投资环境看国内指数', to: '/environment' }]" />
       </template>
       <DualLineTrend :dates="chart.dates" :series="chart.series" height="320px" />
       <div class="cm-legend">

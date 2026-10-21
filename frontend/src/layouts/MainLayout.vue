@@ -18,7 +18,7 @@ const router = useRouter()
  * 于是「分析详情」这个二级下钻页跑到了侧栏第一位（2026-09-14 实测：菜单 idx=0，排在「行情看板」之前）。
  * 改用 router.options.routes 与 router/index.ts 的书写顺序保持一致，新增页面照旧只改 router 一处。
  */
-type MenuRoute = { name?: string; path?: string; meta?: Record<string, unknown> }
+type MenuRoute = { name?: string; path?: string; meta?: Record<string, unknown>; children?: MenuRoute[] }
 const rootRoute = router.options.routes.find((r) => r.path === '/' || r.children?.length) as { children?: MenuRoute[] } | undefined
 const menuRoutes = (rootRoute?.children ?? []) as MenuRoute[]
 
@@ -31,15 +31,30 @@ const declaredMenu = computed(() =>
   menuRoutes.filter((r) => r.meta?.title && r.meta?.hidden !== true && !String(r.path ?? '').includes(':')),
 )
 
+/**
+ * 菜单项生成（递归）：路由有「可进菜单的 children」时渲染为可展开的父项（NMenu 原生子菜单），
+ * 否则渲染为叶子。三道闸对每一层同样生效；带 : 参数的详情路由仍不进菜单。
+ * 2026-10-20 章节化：投资环境 → 7 个子章节（主侧栏=换章节，页内锚点=章节内跳转）。
+ */
+function routeLabel(r: MenuRoute) {
+  return () =>
+    h('span', { style: 'display:flex;align-items:center;gap:8px;' }, [
+      h('span', { style: 'font-size:18px;' }, r.meta!.icon as string),
+      h('span', null, r.meta!.title as string),
+    ])
+}
+function toMenuOption(r: MenuRoute): MenuOption | null {
+  if (!r.meta?.title || r.meta?.hidden === true) return null
+  const kids = ((r.children ?? []) as MenuRoute[])
+    .map(toMenuOption)
+    .filter(Boolean) as MenuOption[]
+  if (kids.length) return { key: r.name as string, label: routeLabel(r), children: kids }
+  if (String(r.path ?? '').includes(':')) return null
+  return { key: r.name as string, label: routeLabel(r) }
+}
+
 const menuOptions = computed<MenuOption[]>(() =>
-  declaredMenu.value.map((r) => ({
-    key: r.name as string,
-    label: () =>
-      h('span', { style: 'display:flex;align-items:center;gap:8px;' }, [
-        h('span', { style: 'font-size:18px;' }, r.meta!.icon as string),
-        h('span', null, r.meta!.title as string),
-      ]),
-  })),
+  declaredMenu.value.map((r) => toMenuOption(r)).filter(Boolean) as MenuOption[],
 )
 
 /**

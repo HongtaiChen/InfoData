@@ -59,7 +59,7 @@ def kline(
     code: str = Query(..., description="股票代码，如 000001"),
     start: str = Query("", description="起始日期 YYYYMMDD，缺省取最近 N 条"),
     end: str = Query("", description="结束日期 YYYYMMDD"),
-    limit: int = Query(250, ge=10, le=2000),
+    limit: int = Query(250, ge=10, le=10000, description="回看根数；指数全史（1990 年起 8700+ 根）需 >2000"),
     is_concept: bool = Query(False, description="True 表示查询概念指数K线"),
     is_index: bool = Query(False, description="True 表示查询大盘指数K线（dc_index_market）"),
 ):
@@ -69,6 +69,24 @@ def kline(
     if is_concept:
         return _kline_from_table("ths_concept_market", "index_code", code, start, end, limit)
     return _kline_from_table("stock_market_daily", "stock_code", code, start, end, limit)
+
+
+@router.get("/market-amount")
+def market_amount(limit: int = Query(10000, ge=10, le=20000)):
+    """两市成交额日序列（亿元）。
+
+    口径：market_style_daily.market_amount —— 全市场个股 amount 求和（含北交所），
+    即市场语境下的「两市成交额」。⚠️ 不可用「上证指数 + 深证成指」两个指数的 amount
+    求和近似（2026-10-19 实测该近似系统性偏低约 8000 亿：指数只覆盖成分/沪主板，
+    远小于全市场）。返回升序，供前端 K 线副图按交易日对齐。
+    """
+    rows = query_all(
+        "SELECT trade_date, market_amount FROM market_style_daily "
+        "WHERE market_amount IS NOT NULL ORDER BY trade_date DESC LIMIT %s",
+        [limit],
+    )
+    rows.reverse()
+    return {"total": len(rows), "items": rows}
 
 
 # 指数行情条的展示顺序（未列出的增补指数排在末尾）
@@ -305,3 +323,27 @@ def index_detail(code: str = Query(..., description="指数代码")):
         "industry_coverage": ind_cover,
         "industry_note": industry_note,
     }
+
+
+@router.get("/cyq")
+def stock_cyq(
+    code: str = Query(..., description="股票代码，如 000001"),
+    limit: int = Query(90, ge=1, le=500, description="返回最近 N 个交易日的筹码指标"),
+):
+    """个股筹码分布日序列（stock_cyq_daily，供前端 K 线筹码副图）。
+
+    字段：获利比例(%)/平均成本(元)/90、70 成本区间与集中度(%)。
+    ⚠️ 筹码概念只对个股成立（需流通盘换手率），指数/行业无此数据。
+    """
+    rows = query_all(
+        """SELECT trade_date, benefit_part, avg_cost,
+                  cost90_low, cost90_high, cost90_con,
+                  cost70_low, cost70_high, cost70_con
+           FROM stock_cyq_daily
+           WHERE stock_code = %s
+           ORDER BY trade_date DESC
+           LIMIT %s""",
+        [code, limit],
+    )
+    rows.reverse()
+    return {"code": code, "total": len(rows), "items": rows}
