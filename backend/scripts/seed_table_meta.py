@@ -700,10 +700,11 @@ _META: list[tuple[str, str, str, str, list[str], str]] = [
      "MAX(trade_date) 过滤 + uk(currency,metric,trade_date) 幂等 upsert。",
      ["cftc_position_sync"], ""),
     ("etf_share_daily", "资金",
-     "东财 ETF 实时快照(akshare fund_etf_spot_em)",
-     "ETF 份额与净流入日频：etf_flow_sync 逐日积累，**历史不可回溯**（源只给当日快照）。"
-     "⚠️ 正=净申购（流入）、负=净赎回（流出）。",
-     ["etf_flow_sync"], "历史不可回溯，仅当日起逐日积累"),
+     "交易所官方双源(上交所 fund_etf_scale_sse + 深交所 fund_scale_daily_szse)",
+     "ETF 份额与净流入日频：etf_flow_sync 逐日积累，**历史可回溯**（交易所官方源可拉 2019 起历史，"
+     "backfill_etf_share.py 回补）。"
+     "⚠️ 正=净申购（流入）、负=净赎回（流出）。净流入仅采集启动后逐日积累（历史价不可回溯）。",
+     ["etf_flow_sync"], "交易所官方源，历史可回溯（backfill_etf_share.py 回补）"),
     ("stock_pb_daily", "估值",
      "东财实时行情(akshare stock_zh_a_spot_em，双通道降级)",
      "个股 PB 日频快照（~5500 只含市净率 f23）：stock_pb_sync 双通道（akshare→push2 直连），"
@@ -1646,7 +1647,7 @@ _REBUILD: dict[str, tuple[str, str]] = {
     "cftc_position_weekly": ("full", "akshare CFTC 周频 1986 起全史可拉"),
     "vix_daily": ("full", "新浪 VIX num=10000 拉全史，可补全史"),
     "eu_hicp_monthly": ("full", "Eurostat 直连 MAX(stat_month) 增量，可补全史"),
-    "etf_share_daily": ("window", "东财实时快照源只给当日，历史不可回溯；换机仅能重建当日起"),
+    "etf_share_daily": ("full", "交易所官方源可拉 2019 起历史（backfill_etf_share.py 回补）"),
     "stock_pb_daily": ("window", "东财实时 PB 快照，历史不可回溯；换机仅能重建当日起"),
     "stock_account_monthly": ("window", "上交所逐月积累，历史无法回溯；上线前官方月用东财 EM 兜底"),
     "stock_cash_flow_ths": ("full", "同花顺逐股全历史期，可补全史（逐股增量 upsert）"),

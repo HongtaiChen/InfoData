@@ -291,6 +291,8 @@ const columns: DataTableColumns<OverviewRow> = [
       h('span', { class: 'ov-name' }, r.index_name),
       h('span', { class: 'ov-code' }, r.index_code),
     ]) },
+  { title: '数据日期', key: 'trade_date', width: 100, align: 'center',
+    render: (r) => h('span', { class: 'ov-num dim' }, r.trade_date ? String(r.trade_date).slice(0, 10) : '--') },
   { title: '收盘', key: 'close', width: 90, align: 'right',
     render: (r) => h('span', { class: 'ov-num' }, fmtNum(r.close)) },
   { title: '当日', key: 'change_pct', width: 85, align: 'right',
@@ -843,7 +845,7 @@ onBeforeUnmount(() => {
         >
           <div class="ib-inline">
             <span class="ib-big">{{ leverage.etf?.net_inflow != null ? fmtYi(leverage.etf.net_inflow) : '--' }}</span>
-            <span class="ib-thr">{{ leverage.etf?.empty ? '自采集启动日逐日积累' : ('总份额 ' + fmtYi(leverage.etf.total_share)) }}</span>
+            <span class="ib-thr">{{ leverage.etf?.empty ? '暂无数据' : ('总份额 ' + fmtYi(leverage.etf.total_share)) }}</span>
           </div>
           <HistoryCurve
             :dates="leverage.etf?.history?.dates || []"

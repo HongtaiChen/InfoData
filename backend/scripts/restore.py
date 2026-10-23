@@ -78,7 +78,8 @@ STAGES: list[tuple[str, str, list[str]]] = [
         "stock_company_sync", "stock_repurchase_sync", "jgdy_sync",
         "margin_sync", "bond_profit_sync", "bj_stock_sync",
         "finance_calendar_sync",
-        # 2026-10-21 补：现金流（逐股全史）+ 个股 PB / ETF 份额 / 开户（实时快照，当日起积累）
+        # 2026-10-21 补：现金流（逐股全史）+ 个股 PB（实时快照，当日起积累）
+        # + ETF 份额（交易所官方源，可回溯 2019 起）/ 开户（实时快照，当日起积累）
         "cash_flow_sync", "stock_pb_sync", "etf_flow_sync", "account_open_sync",
     ]),
     ("fund", "④ 基金（信息 / 持仓 / 新发）", [

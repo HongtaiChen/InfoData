@@ -35,14 +35,14 @@ COLLATE = "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
 DDL_ETF_SHARE_DAILY = f"""
 CREATE TABLE IF NOT EXISTS etf_share_daily (
   trade_date     DATE          NOT NULL COMMENT '交易日',
-  total_share    DECIMAL(24,4) DEFAULT NULL COMMENT '★全市场股票型 ETF 总份额（份）。Σ 各只股票型 ETF 当日最新份额。⚠️ 仅采集日累积，历史不回溯（源无历史份额序列）',
-  net_inflow     DECIMAL(18,4) DEFAULT NULL COMMENT '★当日净流入（元）= Σ(Δ份额 × 净值)。Δ份额=当日份额−上一采集日份额；正=净申购/流入、负=净赎回/流出。⚠️ 仅覆盖采集启动后的日变化',
+  total_share    DECIMAL(24,4) DEFAULT NULL COMMENT '★全市场股票型 ETF 总份额（份）。Σ 各只股票型 ETF 当日收盘清算份额。⚠️ 交易所官方源可回溯历史（2019 起）',
+  net_inflow     DECIMAL(18,4) DEFAULT NULL COMMENT '★当日净流入（元）= Σ(Δ份额 × 净值)。Δ份额=当日份额−上一交易日份额；正=净申购/流入、负=净赎回/流出。⚠️ 仅覆盖采集启动后的日变化（历史价不可回溯）',
   fund_count     INT           DEFAULT NULL COMMENT '当日纳入统计的股票型 ETF 只数（口径：全市场股票ETF，含跨境/商品，不含债券/货币）',
   update_time    TIMESTAMP     NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   data_source    VARCHAR(100)  DEFAULT NULL,
   PRIMARY KEY (trade_date)
 ) {COLLATE}
-COMMENT='全市场股票型 ETF 份额与净流入（日度，2026-10-20 起采集器逐日积累）。⭐ 「ETF 资金流向」的原料：净流入=份额变化×净值。⚠️ 口径=全市场股票型 ETF（含跨境/商品，排除债券/货币），来源 fund_etf_spot_em 最新份额列（全市场快照）+ fund_etf_scale_sse（沪市，可作交叉校验）。⚠️ 源无历史份额序列 ⇒ 本表从采集启动日起累积，历史不可回溯，UI 须标注「自 YYYY-MM-DD 起」。'
+COMMENT='全市场股票型 ETF 份额与净流入（日度）。⭐ 「ETF 资金流向」的原料：净流入=份额变化×净值。⚠️ 口径=全市场股票型 ETF（含跨境/商品，排除债券/货币）。⚠️ 2026-10-23 起主源切交易所官方双源（上交所 fund_etf_scale_sse + 深交所 fund_scale_daily_szse），历史可回溯（backfill_etf_share.py 回补 2019 起）；净流入仅采集启动后逐日积累（历史价不可回溯）。'
 """
 
 # ---------------------------------------------------------------- 2. 上交所股票账户新开户（月度）
