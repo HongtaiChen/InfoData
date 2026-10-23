@@ -336,22 +336,37 @@ class IndexMarketSyncCollector:
 
     # ---------- 统一取数入口 ----------
     def _fetch(self, code: str, market: str, start: str, end: str) -> tuple[list[dict] | None, str]:
-        """按指数归属路由数据源，返回 (rows, source)；rows 为 None 表示全部源失败"""
+        """按指数归属路由数据源，返回 (rows, source)；rows 为 None 表示全部源失败
+
+        陈旧降级（2026-10-23）：CSINDEX 官网更新时间不固定（实测 19:05 采集时 10-22
+        数据尚未发布，返回止于 10-21）。主源返回的最大日期 < 请求 end 时视为陈旧，
+        继续尝试后续源；全部源都拿不到 end 日则以陈旧结果兜底（聊胜于无）。
+        """
+        def _stale(rows: list[dict] | None) -> bool:
+            return not rows or max(r["trade_date"] for r in rows) < end
+
         if code in CSINDEX_CODES:
             rows = self._fetch_csindex(code, start, end)
-            if rows is not None:
+            if not _stale(rows):
                 return rows, "CSINDEX"
-            rows = self._fetch_em(code, start, end)
-            if rows is not None:
-                return rows, "AKSHARE"
-            return self._fetch_tencent(code, market, start, end), "TENCENT"
+            rows_em = self._fetch_em(code, start, end)
+            if not _stale(rows_em):
+                return rows_em, "AKSHARE"
+            rows_tx = self._fetch_tencent(code, market, start, end)
+            if not _stale(rows_tx):
+                return rows_tx, "TENCENT"
+            best = rows or rows_em or rows_tx
+            return (best, "CSINDEX") if best is rows else (best, "AKSHARE" if best is rows_em else "TENCENT")
         if code in CNINDEX_CODES:
             return self._fetch_sz(code, market or "sz", start, end)
         # 增补 / 未知指数：老路径
         rows = self._fetch_em(code, start, end)
-        if rows is not None:
+        if not _stale(rows):
             return rows, "AKSHARE"
-        return self._fetch_tencent(code, market, start, end), "TENCENT"
+        rows_tx = self._fetch_tencent(code, market, start, end)
+        if not _stale(rows_tx):
+            return rows_tx, "TENCENT"
+        return (rows or rows_tx), ("AKSHARE" if rows else "TENCENT")
 
     # ---------- 涨跌自愈 ----------
     @staticmethod

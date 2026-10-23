@@ -22,11 +22,14 @@ const props = withDefaults(defineProps<{
   note?: string
   /** 是否进入极值区高亮（<10% 或 >90%）—— 由父组件传入，避免本组件自己定义阈值 */
   highlight?: boolean
+  /** 数据截至日期（如「2026-09」或「2026-10-22」），显示在指标名右侧 */
+  asOf?: string | null
 }>(), {
   value: null,
   pct: null,
   note: '',
   highlight: false,
+  asOf: null,
 })
 
 /** 分位圆点位置（夹在 5~95% 内避免被裁） */
@@ -48,6 +51,7 @@ const pctText = computed(() => {
     <div class="ib-head">
       <div class="ib-title">
         <span class="ib-title-txt">{{ title }}</span>
+        <span v-if="asOf" class="ib-asof">{{ asOf }}</span>
         <NTooltip
           v-if="note"
           :theme-overrides="kpiHintTheme"
@@ -96,6 +100,10 @@ const pctText = computed(() => {
 .ib-title-txt {
   font-size: 14px; font-weight: 600; color: #1F2937;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ib-asof {
+  flex: none; font-size: 11px; font-weight: 400; color: #8D97A5;
+  font-variant-numeric: tabular-nums;
 }
 .ib-q {
   font-size: 11px; line-height: 1; color: #8D97A5; border: 1px solid #DDE3EA;

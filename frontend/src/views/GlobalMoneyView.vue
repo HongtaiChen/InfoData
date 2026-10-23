@@ -93,6 +93,10 @@ function fmtTn(v: any, digits = 1): string {
   if (v == null) return '--'
   return (Number(v) / 1000).toFixed(digits) + ' 万亿'
 }
+/** 截至日期 → 「截至 YYYY-MM-DD」；无则空串 */
+function asOfLabel(d: any): string {
+  return d ? `截至 ${String(d).slice(0, 10)}` : ''
+}
 
 // ---------- 数据加载 ----------
 async function load() {
@@ -171,6 +175,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="全球 M2 汇总（美欧中，折美元）"
+              :as-of="asOfLabel(quantity?.gbl_m2?.latest_date)"
               :value="quantity?.gbl_m2?.latest != null ? fmtTn(quantity.gbl_m2.latest, 1) : '--'"
               :note="'合成口径·非官方：美/欧/中三大经济体 M2 按汇率折美元加总（缺日本 M2）。M2 扩张时资金倾向流入风险资产。'"
             >
@@ -183,6 +188,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="美元净流动性（Fed − TGA − ON RRP）"
+              :as-of="asOfLabel(quantity?.net_liquidity?.latest_date)"
               :value="quantity?.net_liquidity?.latest != null ? fmtTn(quantity.net_liquidity.latest, 1) : '--'"
               :note="'合成口径·非官方：美联储总资产 − 财政部一般账户(TGA) − 隔夜逆回购(ON RRP)，过滤暂时性扭曲，反映真正在金融体系中流通的美元。'"
             >
@@ -195,6 +201,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="美联储资产负债表（总资产）"
+              :as-of="asOfLabel(quantity?.fed_balance?.latest_date)"
               :value="quantity?.fed_balance?.latest != null ? fmtTn(quantity.fed_balance.latest, 2) : '--'"
               :note="'美联储 H.4.1 总资产（DBnomics 主口径 + 官网交叉校验）。扩表 = 主动注入流动性，缩表 = 回收流动性。'"
             >
@@ -209,6 +216,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="美国 M2"
+              :as-of="asOfLabel(quantity?.us_m2?.latest_date)"
               :value="quantity?.us_m2?.latest != null ? fmtTn(quantity.us_m2.latest, 2) : '--'"
               :note="'美国 M2（十亿美元，DBnomics FED/H6）。同比：' + (quantity?.us_m2_yoy?.latest != null ? fmtNum(quantity.us_m2_yoy.latest, 1) + '%' : '--')"
             >
@@ -221,6 +229,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="欧元区 M2（折美元）"
+              :as-of="asOfLabel(quantity?.eu_m2?.latest_date)"
               :value="quantity?.eu_m2?.latest != null ? fmtTn(quantity.eu_m2.latest, 1) : '--'"
               :note="'欧元区 M2（DBnomics ECB/BSI，百万欧元）× 欧元/美元汇率折算。'"
             >
@@ -233,6 +242,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="中国 M2（折美元）"
+              :as-of="asOfLabel(quantity?.cn_m2?.latest_date)"
               :value="quantity?.cn_m2?.latest != null ? fmtTn(quantity.cn_m2.latest, 1) : '--'"
               :note="'中国 M2（人行统计，亿元）÷ 人民币中间价折算。同比：' + (quantity?.cn_m2_yoy?.latest != null ? fmtNum(quantity.cn_m2_yoy.latest, 1) + '%' : '--')"
             >
@@ -247,6 +257,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="中国人民银行总资产（折美元）"
+              :as-of="asOfLabel(quantity?.cn_cb_balance?.latest_date)"
               :value="quantity?.cn_cb_balance?.latest != null ? fmtTn(quantity.cn_cb_balance.latest, 1) : '--'"
               :note="'人行资产负债表总资产（亿元）÷ 人民币中间价折算。央行主动投放（MLF/逆回购）扩张 = 放水。'"
             >
@@ -259,6 +270,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="货币乘数（美 M2 ÷ 基础货币）"
+              :as-of="asOfLabel(quantity?.money_mult?.latest_date)"
               :value="quantity?.money_mult?.latest != null ? fmtNum(quantity.money_mult.latest, 2) + '×' : '--'"
               :note="'美国 M2 ÷ 基础货币，衡量基础货币转化为广义货币的效率。乘数上升 = 同样基础货币支撑更多信用。'"
             >
@@ -317,6 +329,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="SOFR（担保隔夜融资利率）"
+              :as-of="asOfLabel(price?.sofr?.latest_date)"
               :value="price?.sofr?.latest != null ? fmtNum(price.sofr.latest, 2) + '%' : '--'"
               :note="'LIBOR 官方替代利率（纽约联储直连）。美国货币市场实际成交利率，比政策利率更真实。'"
             >
@@ -329,6 +342,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="VIX（标普500 隐含波动率）"
+              :as-of="asOfLabel(price?.vix?.latest_date)"
               :value="price?.vix?.latest != null ? fmtNum(price.vix.latest, 2) : '--'"
               :note="'恐慌指数：<15 平稳，>25-30 风险信号。流动性收紧常伴随 VIX 飙升。'"
             >
@@ -371,6 +385,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="美元指数 DXY"
+              :as-of="asOfLabel(transmission?.dxy?.latest_date)"
               :value="transmission?.dxy?.latest != null ? fmtNum(transmission.dxy.latest, 2) : '--'"
               :note="'全球避险与流动性风向：美元走强 = 全球流动性收紧的危险信号，走弱 = 压力缓释。'"
             >
@@ -383,6 +398,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="黄金（沪金主力）"
+              :as-of="asOfLabel(transmission?.gold?.latest_date)"
               :value="transmission?.gold?.latest != null ? fmtNum(transmission.gold.latest, 1) : '--'"
               :note="'流动性宽松 + 风险偏好提升时，避险与需求双驱动金价上涨。'"
             >
@@ -395,6 +411,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="铜（沪铜主力）"
+              :as-of="asOfLabel(transmission?.copper?.latest_date)"
               :value="transmission?.copper?.latest != null ? fmtNum(transmission.copper.latest, 0) : '--'"
               :note="'流动性宽松时需求扩张驱动铜价（铜是全球工业需求风向标）。原油库内无直接期货，其波动率见国际环境章节 OVX。'"
             >
@@ -409,6 +426,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="中国外汇储备（亿美元）"
+              :as-of="asOfLabel(transmission?.reserve?.latest_date)"
               :value="transmission?.reserve?.latest != null ? fmtNum(transmission.reserve.latest, 0) : '--'"
               :note="'外汇储备（1978 起）：国际流动性缓冲与资本流动的反映。'"
             >
@@ -448,6 +466,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="美联储扩表/缩表"
+              :as-of="asOfLabel(centralBank?.fed_balance?.latest_date)"
               :value="centralBank?.fed_balance?.latest != null ? fmtTn(centralBank.fed_balance.latest, 2) : '--'"
               :note="'美联储总资产：扩表注入流动性，缩表回收流动性。QE/QT 的直接观测。'"
             >
@@ -460,6 +479,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="人民银行扩表/缩表"
+              :as-of="asOfLabel(centralBank?.cn_cb_balance?.latest_date)"
               :value="centralBank?.cn_cb_balance?.latest != null ? fmtTn(centralBank.cn_cb_balance.latest, 1) : '--'"
               :note="'人行总资产：主动投放（MLF/逆回购）扩张 = 放水，收缩 = 收水。'"
             >
@@ -549,6 +569,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="外汇储备积累（中国）"
+              :as-of="asOfLabel(structure?.reserve?.latest_date)"
               :value="structure?.reserve?.latest != null ? fmtNum(structure.reserve.latest, 0) + ' 亿美元' : '--'"
               :note="'新兴市场央行积累美元储备并投资美债，压低美债收益率，间接影响全球流动性。'"
             >
@@ -561,6 +582,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
 
             <IndicatorBlock
               title="货币乘数 / 流通速度"
+              :as-of="asOfLabel(structure?.money_mult?.latest_date)"
               :value="structure?.money_mult?.latest != null ? fmtNum(structure.money_mult.latest, 2) + '×' : '--'"
               :note="'基础货币转化为广义货币的效率。流通速度上升 = 同样基础货币支撑更多经济活动。'"
             >
@@ -610,6 +632,7 @@ const usGdpGrowth = computed(() => lastOf(structure.value?.gdp_growth?.countries
           <div class="block-grid">
             <IndicatorBlock
               title="全球流动性指标 GLI（离岸美元信贷）"
+              :as-of="asOfLabel(cycle?.gli?.latest_date)"
               :value="cycle?.gli?.latest != null ? fmtTn(cycle.gli.latest, 2) : '--'"
               :note="'BIS 全球流动性指标（官方口径，严格 6 条件：非美借款人 × 非银行 × 跨境+本地外币 × 贷款+债券 × 美元）。GLI 呈约 65 个月（5.5 年）振荡周期。'"
             >

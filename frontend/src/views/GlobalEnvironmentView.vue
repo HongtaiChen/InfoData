@@ -91,6 +91,10 @@ function fmtNum(v: any, digits = 2): string {
   if (v == null) return '--'
   return Number(v).toFixed(digits)
 }
+/** 截至日期 → 「截至 YYYY-MM-DD」；无则空串 */
+function asOfLabel(d: any): string {
+  return d ? `截至 ${String(d).slice(0, 10)}` : ''
+}
 
 // ---------- 数据加载 ----------
 async function load() {
@@ -155,6 +159,7 @@ const consensus = computed(() => data.value?.consensus)
           <div class="block-grid">
             <IndicatorBlock
               title="VIX（标普500 隐含波动率）"
+              :as-of="asOfLabel(volatility?.vix?.latest_date)"
               :value="volatility?.vix?.latest != null ? fmtNum(volatility.vix.latest, 2) : '--'"
               :note="'恐慌指数：<15 平稳，>25-30 风险信号。标普500 期权隐含波动率。'"
             >
@@ -168,6 +173,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="OVX（原油波动率）"
+              :as-of="asOfLabel(volatility?.ovx?.latest_date)"
               :value="volatility?.ovx?.latest != null ? fmtNum(volatility.ovx.latest, 2) : '--'"
               :note="'原油 ETF 隐含波动率（Cboe，2009 起）。与 VIX 同步共振上行 = 风险事件驱动。'"
             >
@@ -180,6 +186,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="金融压力指数 FSI（Püttmann）"
+              :as-of="asOfLabel(volatility?.fsi?.latest_date)"
               :value="volatility?.fsi?.latest != null ? fmtNum(volatility.fsi.latest, 2) : '--'"
               :note="'报纸文本金融压力指数（1889-2016，均值 100）。>100 = 压力高于历史均值。⚠️ 2016 年后停更。'"
             >
@@ -209,6 +216,7 @@ const consensus = computed(() => data.value?.consensus)
           <div class="block-grid">
             <IndicatorBlock
               title="美元指数 DXY"
+              :as-of="asOfLabel(capitalFlow?.dxy?.latest_date)"
               :value="capitalFlow?.dxy?.latest != null ? fmtNum(capitalFlow.dxy.latest, 2) : '--'"
               :note="'全球避险与流动性风向：快速走强 = 避险，急跌 = 风险偏好回升。'"
             >
@@ -221,6 +229,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="美元/日元（避险货币代理）"
+              :as-of="asOfLabel(capitalFlow?.cny?.latest_date)"
               :value="capitalFlow?.cny?.latest != null ? fmtNum(capitalFlow.cny.latest, 2) : '--'"
               :note="'USD/JPY：日元走强（数值下行）= 避险。传统避险货币信号。'"
             >
@@ -233,6 +242,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="中国外汇储备（亿美元）"
+              :as-of="asOfLabel(capitalFlow?.reserve?.latest_date)"
               :value="capitalFlow?.reserve?.latest != null ? fmtNum(capitalFlow.reserve.latest, 0) : '--'"
               :note="'外储规模（1978 起）：人民币汇率的外部缓冲，快速下降 = 贬值压力。'"
             >
@@ -258,6 +268,7 @@ const consensus = computed(() => data.value?.consensus)
           <div class="block-grid">
             <IndicatorBlock
               title="黄金（沪金主力）"
+              :as-of="asOfLabel(safeHaven?.gold?.latest_date)"
               :value="safeHaven?.gold?.latest != null ? fmtNum(safeHaven.gold.latest, 1) : '--'"
               :note="'避险需求：金价上行 = 避险买盘。上期所沪金主力合约价格。'"
             >
@@ -270,6 +281,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="美债 10Y 收益率"
+              :as-of="asOfLabel(safeHaven?.us_bond_10y?.latest_date)"
               :value="safeHaven?.us_bond_10y?.latest != null ? fmtNum(safeHaven.us_bond_10y.latest, 2) + '%' : '--'"
               :note="'全球利率锚：收益率飙升 = 紧缩/抛售，避险抢购 = 收益率急跌。'"
             >
@@ -282,6 +294,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="美债 10Y-2Y 利差"
+              :as-of="asOfLabel(safeHaven?.us_bond_spread?.latest_date)"
               :value="safeHaven?.us_bond_spread?.latest != null ? fmtNum(safeHaven.us_bond_spread.latest, 2) + '%' : '--'"
               :note="'期限利差：倒挂（负值）= 衰退预警，陡峭化 = 复苏/通胀预期。'"
             >
@@ -302,6 +315,7 @@ const consensus = computed(() => data.value?.consensus)
           <div class="block-grid">
             <IndicatorBlock
               title="EPU 美国经济政策不确定性"
+              :as-of="asOfLabel(uncertainty?.epu?.latest_date)"
               :value="uncertainty?.epu?.latest != null ? fmtNum(uncertainty.epu.latest, 1) : '--'"
               :note="'Baker/Bloom/Davis 报纸文本指数（1985 起日频）。持续攀升 = 政策不确定性上升。'"
             >
@@ -314,6 +328,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="WUI 世界不确定性指数"
+              :as-of="asOfLabel(uncertainty?.wui?.latest_date)"
               :value="uncertainty?.wui?.latest != null ? fmtNum(uncertainty.wui.latest, 0) : '--'"
               :note="'IMF 编制（EIU 国别报告文本，全球 GDP 加权，2008 起月频）。高位 = 全球不确定性高。'"
             >
@@ -326,6 +341,7 @@ const consensus = computed(() => data.value?.consensus)
 
             <IndicatorBlock
               title="TPU 贸易政策不确定性"
+              :as-of="asOfLabel(uncertainty?.tpu?.latest_date)"
               :value="uncertainty?.tpu?.latest != null ? fmtNum(uncertainty.tpu.latest, 1) : '--'"
               :note="'Caldara et al. 指数（1960 起月频，100=1% 文章占比）。贸易政策不确定性历史高位 = 风险。'"
             >
@@ -370,6 +386,7 @@ const consensus = computed(() => data.value?.consensus)
           <div class="block-grid">
             <IndicatorBlock
               title="GPR 地缘政治风险指数"
+              :as-of="asOfLabel(geopolitics?.gpr?.latest_date)"
               :value="geopolitics?.gpr?.latest != null ? fmtNum(geopolitics.gpr.latest, 1) : '--'"
               :note="'Caldara & Iacoviello（AER 2022，10 报日频 1985 起）。高位 = 地缘风险上升。'"
             >
@@ -399,6 +416,7 @@ const consensus = computed(() => data.value?.consensus)
           <div class="block-grid">
             <IndicatorBlock
               title="TPU 贸易政策不确定性"
+              :as-of="asOfLabel(trade?.tpu?.latest_date)"
               :value="trade?.tpu?.latest != null ? fmtNum(trade.tpu.latest, 1) : '--'"
               :note="'月频 1960 起：快速攀升至历史高位 = 关税战/贸易政策不确定性上升。'"
             >

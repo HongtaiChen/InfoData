@@ -95,6 +95,10 @@ function fmtYi(v: any, digits = 1): string {
   if (v == null) return '--'
   return (Number(v) / 10000).toFixed(digits) + ' 万亿'
 }
+/** 截至日期 → 「截至 YYYY-MM-DD」；无则空串 */
+function asOfLabel(d: any): string {
+  return d ? `截至 ${String(d).slice(0, 10)}` : ''
+}
 
 // ---------- 数据加载 ----------
 async function load() {
@@ -178,6 +182,7 @@ const CYCLE_CARDS = computed(() => [
           <div class="block-grid">
             <IndicatorBlock
               title="M2 广义货币"
+              :as-of="asOfLabel(quantity?.m2?.latest_date)"
               :value="quantity?.m2?.latest != null ? fmtYi(quantity.m2.latest, 2) : '--'"
               :note="'流通于经济体系的货币总量，涵盖 M0、M1 及各类存款。同比：' + (quantity?.m2_yoy?.latest != null ? fmtNum(quantity.m2_yoy.latest, 1) + '%' : '--') + '。M2 扩张时资金倾向流入风险资产。'"
             >
@@ -190,6 +195,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="M1 狭义货币"
+              :as-of="asOfLabel(quantity?.m1?.latest_date)"
               :value="quantity?.m1?.latest != null ? fmtYi(quantity.m1.latest, 2) : '--'"
               :note="'流通中现金 + 企业活期存款，反映现实购买力。同比：' + (quantity?.m1_yoy?.latest != null ? fmtNum(quantity.m1_yoy.latest, 1) + '%' : '--') + '。'"
             >
@@ -202,6 +208,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="M0 流通中现金"
+              :as-of="asOfLabel(quantity?.m0?.latest_date)"
               :value="quantity?.m0?.latest != null ? fmtYi(quantity.m0.latest, 2) : '--'"
               :note="'银行体系以外流通的现金。同比：' + (quantity?.m0_yoy?.latest != null ? fmtNum(quantity.m0_yoy.latest, 1) + '%' : '--') + '。'"
             >
@@ -216,6 +223,7 @@ const CYCLE_CARDS = computed(() => [
           <div class="block-grid">
             <IndicatorBlock
               title="M1-M2 增速差"
+              :as-of="asOfLabel(quantity?.m1_m2_gap?.latest_date)"
               :value="quantity?.m1_m2_gap?.latest != null ? fmtNum(quantity.m1_m2_gap.latest, 1) + ' pp' : '--'"
               :note="'M1 增速 − M2 增速，反映资金活化程度。负值扩大 = 资金活化程度偏弱（定期化/储蓄化）。'"
             >
@@ -229,6 +237,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="货币乘数"
+              :as-of="asOfLabel(quantity?.money_mult?.latest_date)"
               :value="quantity?.money_mult?.latest != null ? fmtNum(quantity.money_mult.latest, 2) + '×' : '--'"
               :note="'派生口径：M2 ÷ 基础货币（央行资产负债表 reserve_money）。乘数上升 = 同样基础货币支撑更多信用，共同托住 M2 增速中枢。'"
             >
@@ -241,6 +250,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="社会融资规模增量"
+              :as-of="asOfLabel(quantity?.shrzgm?.latest_date)"
               :value="quantity?.shrzgm?.latest != null ? fmtNum(quantity.shrzgm.latest, 0) + ' 亿' : '数据源待接入'"
               :note="'社融增量（akshare macro_china_shrzgm）实测停更在 2026-04，5-9 月缺失。央行公告最新累计值（前三季度 27.46 万亿、9 月末存量 468.17 万亿）免费源无法自动同步。'"
             >
@@ -292,6 +302,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="SHIBOR（隔夜 / 1周）"
+              :as-of="asOfLabel(price?.shibor_on?.latest_date)"
               :value="price?.shibor_on?.latest != null ? fmtNum(price.shibor_on.latest, 3) + '%' : '--'"
               :note="'单利、无担保、批发性利率。1 周：' + (price?.shibor_1w?.latest != null ? fmtNum(price.shibor_1w.latest, 3) + '%' : '--') + '。整体低位运行。'"
             >
@@ -309,6 +320,7 @@ const CYCLE_CARDS = computed(() => [
           <div class="block-grid">
             <IndicatorBlock
               title="LPR（贷款市场报价利率）"
+              :as-of="asOfLabel(price?.lpr_1y?.latest_date)"
               :value="price?.lpr_1y?.latest != null ? fmtNum(price.lpr_1y.latest, 2) + '%' : '--'"
               :note="'贷款定价基准。1 年期 ' + (price?.lpr_1y?.latest != null ? fmtNum(price.lpr_1y.latest, 2) + '%' : '--') + '、5 年期以上 ' + (price?.lpr_5y?.latest != null ? fmtNum(price.lpr_5y.latest, 2) + '%' : '--') + '，已连续 16 个月保持不变。'"
             >
@@ -324,6 +336,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="国债收益率曲线（10Y）"
+              :as-of="asOfLabel(price?.bond_10y?.latest_date)"
               :value="price?.bond_10y?.latest != null ? fmtNum(price.bond_10y.latest, 2) + '%' : '--'"
               :note="'长端定价核心基准。2Y ' + (price?.bond_2y?.latest != null ? fmtNum(price.bond_2y.latest, 2) + '%' : '--') + '、10Y-2Y 利差 ' + (price?.bond_spread?.latest != null ? fmtNum(price.bond_spread.latest, 2) + ' pp' : '--') + '。央行 2024 年启动国债买卖后成为货币政策调控直接对象。'"
             >
@@ -361,6 +374,7 @@ const CYCLE_CARDS = computed(() => [
           <div class="block-grid">
             <IndicatorBlock
               title="人民币中间价（美元）"
+              :as-of="asOfLabel(transmission?.usd_mid?.latest_date)"
               :value="transmission?.usd_mid?.latest != null ? fmtNum(transmission.usd_mid.latest, 4) : '--'"
               :note="'美元兑人民币中间价（元/美元）。保持人民币汇率在合理均衡水平上的基本稳定是货币政策重要考量。'"
             >
@@ -373,6 +387,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="外汇储备（亿美元）"
+              :as-of="asOfLabel(transmission?.fx_reserve_usd?.latest_date)"
               :value="transmission?.fx_reserve_usd?.latest != null ? fmtNum(transmission.fx_reserve_usd.latest, 0) : '--'"
               :note="'中国外汇储备（人行官方，亿美元）。国际流动性缓冲与资本流动的反映。'"
             >
@@ -385,6 +400,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="其他存款（亿元）"
+              :as-of="asOfLabel(transmission?.other_deposit?.latest_date)"
               :value="transmission?.other_deposit?.latest != null ? fmtYi(transmission.other_deposit.latest, 2) : '--'"
               :note="'银行体系资金来源（库内「其他存款」口径）。「人民币存款余额总量」口径缺，见下方缺口标注。'"
             >
@@ -428,6 +444,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="人民银行资产负债表（总资产）"
+              :as-of="asOfLabel(structure?.fx_reserve?.latest_date)"
               :value="structure?.fx_reserve?.latest != null ? fmtYi(structure.fx_reserve.latest, 2) : '--'"
               :note="'央行资产负债表外汇占款（亿元）。外汇占款对基础货币贡献下降，央行主动投放工具重要性上升。'"
             >
@@ -440,6 +457,7 @@ const CYCLE_CARDS = computed(() => [
 
             <IndicatorBlock
               title="财政存款（政府存款）"
+              :as-of="asOfLabel(fiscal?.gov_deposit?.latest_date)"
               :value="fiscal?.gov_deposit?.latest != null ? fmtYi(fiscal.gov_deposit.latest, 2) : '--'"
               :note="'央行资产负债表政府存款（亿元）。财政存款增减直接影响超额准备金水平，是超储率测算的重要因素。'"
             >

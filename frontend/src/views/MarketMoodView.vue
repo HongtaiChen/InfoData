@@ -100,6 +100,10 @@ function fmtYi(v: any): string {
   if (Math.abs(n) >= 10000) return `${(n / 10000).toFixed(2)} 万亿`
   return `${n.toFixed(0)} 亿`
 }
+/** 截至日期 → 「截至 YYYY-MM-DD」；无则空串 */
+function asOfLabel(d: any): string {
+  return d ? `截至 ${String(d).slice(0, 10)}` : ''
+}
 
 // ---------- 数据加载 ----------
 async function load() {
@@ -173,6 +177,7 @@ const fundamental = computed(() => data.value?.fundamental)
           <div class="block-grid">
             <IndicatorBlock
               title="两市成交额"
+              :as-of="asOfLabel(heat?.amount?.latest_date)"
               :value="heat?.amount?.latest != null ? fmtYi(heat.amount.latest) : '--'"
               :note="heat?.amount?.note"
             >
@@ -186,6 +191,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="量能比（成交额 / 20 日均量）"
+              :as-of="asOfLabel(heat?.amount_ratio?.latest_date)"
               :value="heat?.amount_ratio?.latest != null ? fmtNum(heat.amount_ratio.latest, 0) + '%' : '--'"
               :note="heat?.amount_ratio?.note"
             >
@@ -201,6 +207,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="换手率中位数"
+              :as-of="asOfLabel(heat?.turnover?.latest_date)"
               :value="heat?.turnover?.latest != null ? fmtNum(heat.turnover.latest, 2) + '%' : '--'"
               :note="heat?.turnover?.note"
             >
@@ -239,6 +246,7 @@ const fundamental = computed(() => data.value?.fundamental)
           <div class="block-grid">
             <IndicatorBlock
               title="上涨 / 下跌家数"
+              :as-of="asOfLabel(breadth?.up_down?.up?.latest_date)"
               :value="`涨 ${breadth?.up_down?.up?.latest ?? '--'} · 跌 ${breadth?.up_down?.down?.latest ?? '--'}`"
               :note="breadth?.up_down?.note"
             >
@@ -255,6 +263,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="上涨家数占比"
+              :as-of="asOfLabel(breadth?.up_down?.ratio?.latest_date)"
               :value="breadth?.up_down?.ratio?.latest != null ? fmtNum(breadth.up_down.ratio.latest, 0) + '%' : '--'"
               :note="'普涨还是普跌：上涨家数 ÷ 全市场个股数。'"
             >
@@ -270,6 +279,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="涨停 / 跌停家数"
+              :as-of="asOfLabel(breadth?.limit?.up?.latest_date)"
               :value="`涨停 ${breadth?.limit?.up?.latest ?? '--'} · 跌停 ${breadth?.limit?.down?.latest ?? '--'}`"
               :note="breadth?.limit?.note"
             >
@@ -288,6 +298,7 @@ const fundamental = computed(() => data.value?.fundamental)
           <div class="block-grid">
             <IndicatorBlock
               title="站上均线个股占比"
+              :as-of="asOfLabel(breadth?.above_ma?.ma20?.latest_date)"
               :value="`MA20 ${breadth?.above_ma?.ma20?.latest != null ? fmtNum(breadth.above_ma.ma20.latest, 0) + '%' : '--'} · MA60 ${breadth?.above_ma?.ma60?.latest != null ? fmtNum(breadth.above_ma.ma60.latest, 0) + '%' : '--'}`"
               :note="breadth?.above_ma?.note"
             >
@@ -305,6 +316,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="创 60 日新高 / 新低家数"
+              :as-of="asOfLabel(breadth?.new_high_low?.high60?.latest_date)"
               :value="`新高 ${breadth?.new_high_low?.high60?.latest ?? '--'} · 新低 ${breadth?.new_high_low?.low60?.latest ?? '--'}`"
               :note="breadth?.new_high_low?.note"
             >
@@ -321,6 +333,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="腾落线 ADL（累计）"
+              :as-of="asOfLabel(breadth?.adl?.latest_date)"
               :value="breadth?.adl?.latest != null ? fmtNum(breadth.adl.latest, 0) : '--'"
               :note="breadth?.adl?.note"
             >
@@ -358,6 +371,7 @@ const fundamental = computed(() => data.value?.fundamental)
           <div class="block-grid">
             <IndicatorBlock
               title="两融余额（融资余额）"
+              :as-of="asOfLabel(capital?.margin?.latest_date)"
               :value="capital?.margin?.latest_rzye != null ? fmtYi(capital.margin.latest_rzye) : '--'"
               :note="capital?.margin?.note"
             >
@@ -371,6 +385,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="新增 A 股投资者（月频）"
+              :as-of="asOfLabel(capital?.accounts?.latest_month)"
               :value="capital?.accounts?.latest != null ? fmtNum(capital.accounts.latest, 0) + ' 万' : '--'"
               :note="capital?.accounts?.note"
             >
@@ -384,6 +399,7 @@ const fundamental = computed(() => data.value?.fundamental)
 
             <IndicatorBlock
               title="新基金发行（月频）"
+              :as-of="asOfLabel(capital?.fund_issue?.latest_month)"
               :value="capital?.fund_issue?.latest != null ? fmtNum(capital.fund_issue.latest, 0) + ' 只' : '--'"
               :note="capital?.fund_issue?.note"
             >
@@ -399,6 +415,7 @@ const fundamental = computed(() => data.value?.fundamental)
           <div class="block-grid">
             <IndicatorBlock
               title="股票型 ETF 净申赎"
+              :as-of="asOfLabel(capital?.etf_flow?.latest_date)"
               :value="capital?.etf_flow?.latest != null ? fmtNum(capital.etf_flow.latest, 1) + ' 亿' : '--'"
               :note="capital?.etf_flow?.note"
             >
@@ -436,6 +453,7 @@ const fundamental = computed(() => data.value?.fundamental)
           <div class="block-grid">
             <IndicatorBlock
               title="黄金（避险资产）"
+              :as-of="asOfLabel(derivatives?.gold?.latest_date)"
               :value="derivatives?.gold?.latest != null ? fmtNum(derivatives.gold.latest, 1) : '--'"
               :note="derivatives?.gold?.note"
             >
@@ -473,6 +491,7 @@ const fundamental = computed(() => data.value?.fundamental)
             <IndicatorBlock
               v-if="fundamental?.macro?.gdp"
               title="GDP 增速"
+              :as-of="asOfLabel(fundamental?.macro?.gdp?.latest)"
               :value="fundamental.macro.gdp.latest_yoy != null ? fmtPct(fundamental.macro.gdp.latest_yoy) : '--'"
               :note="'GDP 同比（国家统计局，季度）。企稳回升 vs 下行压力加大。'"
             >
@@ -488,6 +507,7 @@ const fundamental = computed(() => data.value?.fundamental)
             <IndicatorBlock
               v-if="fundamental?.macro?.pmi"
               title="PMI（制造业）"
+              :as-of="asOfLabel(fundamental?.macro?.pmi?.latest)"
               :value="fundamental.macro.pmi.latest_value != null ? fmtNum(fundamental.macro.pmi.latest_value, 1) : '--'"
               :note="'制造业 PMI（月频）：50 荣枯线。经济景气度先行指标。'"
             >
@@ -503,6 +523,7 @@ const fundamental = computed(() => data.value?.fundamental)
             <IndicatorBlock
               v-if="fundamental?.macro?.cpi"
               title="CPI（通胀）"
+              :as-of="asOfLabel(fundamental?.macro?.cpi?.latest)"
               :value="fundamental.macro.cpi.latest_yoy != null ? fmtPct(fundamental.macro.cpi.latest_yoy) : '--'"
               :note="'CPI 同比（月频）：温和回升 vs 通缩。价格与居民端。'"
             >
@@ -518,6 +539,7 @@ const fundamental = computed(() => data.value?.fundamental)
             <IndicatorBlock
               v-if="fundamental?.macro?.ppi"
               title="PPI（工业品价格）"
+              :as-of="asOfLabel(fundamental?.macro?.ppi?.latest)"
               :value="fundamental.macro.ppi.latest_yoy != null ? fmtPct(fundamental.macro.ppi.latest_yoy) : '--'"
               :note="'PPI 同比（月频）：价格与企业利润。通缩或成本冲击。'"
             >
