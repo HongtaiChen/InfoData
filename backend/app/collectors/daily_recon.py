@@ -78,7 +78,7 @@ class DailyReconCollector:
 
     def __init__(self, mode: str = "window", days: int = 5, sample_size: int = 50,
                  seed: int = 42, max_stocks: int = 0, tolerance_pct: float = 0.5,
-                 adjust: str = "", lag_days: int = DEFAULT_LAG_DAYS):
+                 adjust: str = "", lag_days: int = DEFAULT_LAG_DAYS, workers: int = 8):
         self.mode = mode if mode in ("window", "sample") else "window"
         self.days = days
         self.sample_size = sample_size
@@ -89,6 +89,9 @@ class DailyReconCollector:
         # 参数保留以便需要时切回复权口径对照，但默认必须与实际价一致。
         self.adjust = adjust
         self.lag_days = lag_days
+        # 对账并发（2026-10-23 提速专项：4→8，复用第二步「日线增量并发提升」结论）。
+        # 窗口对账 21:15 跑，此时日线(19:20)/ex(19:50) 已结束，独占新浪带宽，提并发收益明确。
+        self.workers = max(1, int(workers))
         self.run_at = datetime.now()
         self.run_date = self.run_at.date()
         self._diffs: list[tuple] = []
@@ -159,7 +162,7 @@ class DailyReconCollector:
         from .stock_daily_core import js_engine_ready, warmup_js_engine
 
         warm_msg = warmup_js_engine()
-        pool_size = 4 if js_engine_ready() else 1
+        pool_size = self.workers if js_engine_ready() else 1
         logger.info("%s；对账并发 %s 线程", warm_msg, pool_size)
         start_s, end_s = start_d.strftime("%Y%m%d"), end_d.strftime("%Y%m%d")
         logger.info(f"🔍 窗口对账：{start_d}~{end_d}（{len(dates)} 个交易日）× {len(stocks)} 只")

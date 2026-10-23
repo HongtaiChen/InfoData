@@ -68,12 +68,14 @@ TASKS = [
     ("stock_daily_incr", 1, "20 19 * * 0-4",                        # 每周一至周五 19:20（后移 20 min 让前置链跑完）
      # 2026-09-20：adjust 废弃（口径固定「实际价 + 后复权因子列」）；
      # include_bj=True 显式写明 —— 新浪对 bj920xxx 实测可用，北交所必须进采集池。
-     {"days_back": 15, "max_stocks": 0, "include_bj": True}),
+     # 2026-10-23：workers=8 并发提速。探针实测单票网络+V8 硬成本 1.34s，砍掉冗余
+     # 防风控延时（0.3~1.2s→0.15~0.45s）+ 并发 4→8，理论 45 分钟 → 19 分钟。
+     {"days_back": 15, "max_stocks": 0, "include_bj": True, "workers": 8}),
     # 2026-10-17 归档扩展行情（stock_market_daily_ex）。此前该表 writers=[]，
     # 1690 万行纯历史快照、停更于 2025-09-19；补上写入方后既不再停更，空库也能重建 92.52%。
     # 排在 stock_daily_incr(19:20) 之后 30 分钟，避免同时冲击新浪源。
     ("stock_market_daily_ex_sync", 1, "50 19 * * 0-4",
-     {"source": "auto", "max_codes": 0}),
+     {"source": "auto", "max_codes": 0, "workers": 8}),
     # 2026-10-17 基金持仓（stock_hold_by_fund）。原 writers=[]，11.3 万行停更于 2025Q2。
     # 每月 5 日跑一次即可（季报节奏 + 幂等）：采集器自带 45 天披露缓冲，
     # 未过披露期的季度会自行跳过，不会存下半量快照。
@@ -250,7 +252,7 @@ TASKS = [
      {"groups": ["weekly"]}),
     # ---------- L2 外部对账 ----------
     ("daily_recon_window", 1, "15 21 * * 0-4",                      # 每周一至周五 21:15（需日线就绪，46~69 min）
-     {"days": 5, "max_stocks": 0, "tolerance_pct": 0.5}),           # adjust 已废弃：口径固定实际价（2026-09-20）
+     {"days": 5, "max_stocks": 0, "tolerance_pct": 0.5, "workers": 8}),  # adjust 已废弃：口径固定实际价（2026-09-20）
     ("daily_recon_sample", 1, "0 10 * * 6",                         # 每周日 10:00
      {"sample_size": 50, "seed": 42}),                              # adjust 已废弃：口径固定实际价（2026-09-20）
     # ---------- 手动任务 ----------

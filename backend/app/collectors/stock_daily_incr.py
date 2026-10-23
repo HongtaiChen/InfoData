@@ -78,8 +78,15 @@ logger = logging.getLogger(__name__)
 # 默认增量窗口（天）：覆盖停牌/长假等缺口
 DEFAULT_DAYS_BACK = 15
 # 单只股票请求间隔基准（秒）——实际用随机延时 [MIN, MAX]，模拟人工节奏，降低被风控概率
-REQUEST_DELAY_MIN = 0.3
-REQUEST_DELAY_MAX = 1.2
+# 2026-10-23 下调：0.3~1.2s → 0.15~0.45s。探针实测（scripts/probe_sina_concurrency.py）
+# 单票纯网络+V8 硬成本约 1.34s，0.75s 平均延时是纯「防风控」冗余，砍掉后吞吐可翻倍；
+# ex 表（stock_market_daily_ex_sync）同档位 0.15~0.45s 长期未触发限流，可安全对齐。
+REQUEST_DELAY_MIN = 0.15
+REQUEST_DELAY_MAX = 0.45
+# 并发线程数默认值（2026-10-23 由 4 提为 8）。探针实测 16 线程吞吐 6.37 只/s、
+# 无异常（错误均为源侧空数据票，非限流），但长时跑 5569 只的限流风险未知；
+# 8 线程是「20 分钟内跑完」目标下的安全折中（理论 19 分钟），留 16 作后续选项。
+DEFAULT_WORKERS = 8
 # 每个数据源重试次数
 RETRY_TIMES = 2
 # 疑似退市/长期停牌判定：最后数据日期距今超过该天数则默认跳过
@@ -132,10 +139,13 @@ class StockDailyIncrementalCollector:
     def __init__(self, days_back: int = DEFAULT_DAYS_BACK, adjust: str = "",
                  max_stocks: int = 0, include_stale: bool = False, include_bj: bool = True,
                  backfill_ranges: list | None = None,
-                 max_history_days: int = DEFAULT_MAX_HISTORY_DAYS):
+                 max_history_days: int = DEFAULT_MAX_HISTORY_DAYS,
+                 workers: int = DEFAULT_WORKERS):
         self.days_back = days_back
         # 单票单次回看上限（天），0 = 不限。见 DEFAULT_MAX_HISTORY_DAYS 处的说明。
         self.max_history_days = int(max_history_days)
+        # 并发线程数（2026-10-23 参数化，默认 8）。V8 预热失败会自动退回 1。
+        self.workers = max(1, int(workers))
         # adjust 参数**已废弃**：口径固定为「实际价 + 后复权因子列」，不再按调用方切换
         # 复权。保留参数仅为兼容既有调用方（daily_recon / tasks.run）不破坏签名。
         self.adjust = adjust
@@ -154,7 +164,7 @@ class StockDailyIncrementalCollector:
         self._errors: list[str] = []
         self._factor_missing: list[str] = []
         self._degraded: list[str] = []
-        self._effective_workers = 4
+        self._effective_workers = self.workers
 
     # ---------- 数据库工具 ----------
     def _connect(self):
@@ -445,7 +455,7 @@ class StockDailyIncrementalCollector:
         logger.info(f"🔧 定向回补 {len(todo)} 个区间（涉及 {len({t[0] for t in todo})} 只股票）")
 
         warm_msg = warmup_js_engine()
-        workers = 4 if js_engine_ready() else 1
+        workers = self.workers if js_engine_ready() else 1
         logger.info("%s；回补并发 %s 线程", warm_msg, workers)
 
         source_stats: dict = {}
@@ -567,7 +577,7 @@ class StockDailyIncrementalCollector:
 
             # ⚠️ 建线程池前必须先在主线程预热 V8（否则新浪接口并发调用会让进程硬崩溃）
             warm_msg = warmup_js_engine()
-            workers = 4 if js_engine_ready() else 1
+            workers = self.workers if js_engine_ready() else 1
             logger.info("%s；实际并发 %s 线程", warm_msg, workers)
 
             source_stats = {}

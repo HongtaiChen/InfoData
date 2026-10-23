@@ -76,7 +76,7 @@ socket.setdefaulttimeout(20)
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WORKERS = 4
+DEFAULT_WORKERS = 8
 # 单票请求间隔（秒）：并发下取较短区间，模拟人工节奏降低风控概率
 REQUEST_DELAY_MIN = 0.15
 REQUEST_DELAY_MAX = 0.45

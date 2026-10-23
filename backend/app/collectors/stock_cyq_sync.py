@@ -25,7 +25,8 @@ from datetime import date, timedelta
 import pymysql
 
 from ..db import get_db_config
-from ..services.cyq import compute_cyq, WINDOW
+from ..services.cyq import WINDOW
+from ..services.cyq_fast import compute_cyq_fast
 from ._common import with_steps
 
 logger = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ class StockCyqSyncCollector:
                     kline = self._load_kline(conn, code)
                     if len(kline) < 30:  # 数据太少，筹码无意义
                         continue
-                    results = compute_cyq(kline)
+                    results = compute_cyq_fast(kline)
                     n = self._write(conn, code, results)
                     conn.commit()
                     n_codes += 1

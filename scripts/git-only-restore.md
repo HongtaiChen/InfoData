@@ -147,6 +147,12 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 ```
 
+> **可选依赖 `numba`（2026-10-23 补）**：已在 requirements.txt 里，用于筹码分布（CYQ）
+> 加速，装不上**不阻断恢复** —— `app/services/cyq_fast.py` 做了优雅降级，numba 缺失时
+> 自动回退纯 Python 原版（功能与数值一致，只是 `stock_cyq_sync` 从 ~1 分钟回到 ~8 分钟）。
+> 唯一注意：numba 强绑定 numpy 版本，若升级 numpy 后 numba import 报错，先升级 numba 到
+> 对应兼容版（`pip index versions numba`）。
+
 ### S3 · 建库 + 建表（秒级）
 
 ```bash

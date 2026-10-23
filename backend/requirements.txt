@@ -22,3 +22,10 @@ baostock>=0.8
 APScheduler>=3.10,<4
 # tushare 可选（备源，需 TUSHARE_TOKEN 环境变量）
 # tushare>=1.4
+# numba 可选（筹码分布 CYQ 加速）：app/services/cyq_fast.py 用它把纯 Python 逐桶循环
+#   JIT 编译为机器码，实测 8.9~32x 加速（stock_cyq_sync 从 ~8 分钟降到 ~1 分钟）。
+#   ⚠️ 不是硬依赖：cyq_fast.py 做了优雅降级，numba 缺失时自动回退纯 Python 原版，
+#   功能与数值完全一致（仅慢）。但 numba 版本强绑定 numpy 版本 —— 升级 numpy 前
+#   先确认 numba 有对应兼容版本（`pip index versions numba`），否则 import 会报错。
+#   恢复脚本/新机器若想启用加速，装一句：pip install numba
+numba>=0.60

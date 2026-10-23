@@ -166,6 +166,8 @@ def run_stock_daily_incr(params: dict) -> int:
         # 想要空库直出全史请用 daily_backfill 的 source=all_stocks，而不是把它调成 0
         # （增量路径没有分批概念，一次拉全史会让上游单次响应过大且无法断点续跑）。
         max_history_days=int(params.get("max_history_days", 500)),
+        # 2026-10-23：并发线程数参数化，默认 8（seed 契约可覆盖）。V8 预热失败自动退 1。
+        workers=int(params.get("workers", 8)),
     )
     result = _collector_run(collector)
     if result["error_count"] > 0 and result["records_written"] == 0:
@@ -239,19 +241,19 @@ def run_stock_market_daily_ex_sync(params: dict) -> int:
       max_codes : 0 = 本轮不限；>0 = 只处理前 N 只（分批推进，幂等可重跑）
       start_date: 显式回补起点（YYYYMMDD，可选）
       end_date  : 截止日（默认今天）
-      workers   : 并发数（默认 4；V8 预热失败会自动退回 1）
+      workers   : 并发数（默认 8；V8 预热失败会自动退回 1）
 
     ⚠️ 已知不可重建域：老北交所代码（430/83x/87x）新浪返回空响应，
     共 245 只 / 249,999 行，采集器会自动跳过并计入 skipped_old_bj。
     """
-    p = _task_params(params, {"source": "auto", "max_codes": 0})
+    p = _task_params(params, {"source": "auto", "max_codes": 0, "workers": 8})
     source = (p.get("source") or "auto").lower()
     collector = StockDailyExCollector(
         max_codes=int(p.get("max_codes") or 0),
         ranges=p.get("ranges") or None,
         start_date=p.get("start_date"),
         end_date=p.get("end_date"),
-        workers=int(p.get("workers") or 4),
+        workers=int(p.get("workers") or 8),
         # source=all：无视库内水位线，一律从 list_date 全量重拉（UPSERT 幂等，慢但彻底）
         full_sweep=(source == "all"),
     )
@@ -800,13 +802,14 @@ def run_daily_recon_window(params: dict) -> int:
 
     params: days(默认5) / max_stocks(0=全市场) / tolerance_pct(0.5) / adjust(qfq)
     """
-    p = _task_params(params, {"days": 5, "max_stocks": 0, "tolerance_pct": 0.5, "adjust": "qfq"})
+    p = _task_params(params, {"days": 5, "max_stocks": 0, "tolerance_pct": 0.5, "adjust": "qfq", "workers": 8})
     collector = DailyReconCollector(
         mode="window",
         days=int(p.get("days", 5)),
         max_stocks=int(p.get("max_stocks", 0)),
         tolerance_pct=float(p.get("tolerance_pct", 0.5)),
         adjust=p.get("adjust", "qfq"),
+        workers=int(p.get("workers", 8)),
     )
     result = _collector_run(collector)
     if result["error_count"] > 0:
