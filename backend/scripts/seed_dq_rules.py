@@ -190,6 +190,11 @@ RULES = [
      {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "指数日线对齐交易日历"),
     ("index_rows_latest", "dc_index_market", "row_count_slice",
      {"date_col": "trade_date", "min_rows": 20}, "warning", 1, "最新日指数条数（当前跟踪 21 只）"),
+    ("index_amount_notnull", "dc_index_market", "null_rate_slice",
+     {"date_col": "trade_date", "col": "amount", "max_pct": 0}, "warning", 1,
+     "最新日成交额非空：深证系 5 指数走 CNINDEX+TENCENT 合并源，amount 依赖国证官网成交额，"
+     "而国证当日成交额常晚于采集（19:05）发布，最新日 amount 会落 NULL（2026-10-24 实测 5/21 缺失）。"
+     "采集器已加 amount 自愈补拉，本规则兜底报警"),
     # ---------- 市场风格物化（分析研究·市场风向模块数据源，2026-09-13） ----------
     ("style_freshness", "market_style_daily", "freshness_daily",
      {"date_col": "trade_date", "warn_days": 2}, "warning", 1, "风格物化表对齐交易日历（20:05 挂个股日线之后）"),

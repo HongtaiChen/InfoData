@@ -396,6 +396,63 @@ class IndexMarketSyncCollector:
                 prev_close = float(close)
         return fixed
 
+    # ---------- 成交额自愈（2026-10-24 深证系 amount 发布时滞） ----------
+    def _heal_missing_amount(self, cur, code: str, market: str) -> int:
+        """补算最新交易日缺失的 amount（幂等：仅 UPDATE，不碰 OHLC/涨跌）。
+
+        触发场景（2026-10-24 实测）：深证系 5 指数走 CNINDEX+TENCENT 合并源，
+        volume 来自腾讯（当日即有），amount 依赖国证官网（cnindex）成交额——国证
+        当日成交额常在收盘后数小时才发布。若采集（19:05）早于国证发布，最新行
+        amount 落 NULL；且 run() 的 skip 判断只看「日期是否已到最近交易日」，不查
+        字段完整性，缺口会滞留到下一交易日才自愈。
+
+        本方法在 skip 分支前被调用：仅当最新行 amount 缺失时，从对应源补拉当日
+        amount 并 UPDATE，其余字段一律不动（幂等可重放）。amount 补不到（源仍未
+        发布）时静默返回 0，等下一轮调度再试，不阻断主流程。
+
+        返回补到的行数（0 或 1）。
+        """
+        cur.execute(
+            "SELECT trade_date, amount FROM dc_index_market WHERE index_code=%s "
+            "ORDER BY trade_date DESC LIMIT 1",
+            (code,),
+        )
+        r = cur.fetchone()
+        if not r:
+            return 0
+        latest_d, latest_amt = r[0], r[1]
+        if latest_amt is not None and float(latest_amt) > 0:
+            return 0  # 最新行 amount 完好，无需自愈
+
+        d0, d1 = latest_d.isoformat(), latest_d.isoformat()
+        amt = None
+        try:
+            if code in CNINDEX_CODES:
+                rows = self._fetch_cnindex(code, d0, d1)
+            elif code in CSINDEX_CODES:
+                rows = self._fetch_csindex(code, d0, d1)
+            else:
+                rows = self._fetch_em(code, d0, d1)
+            if rows:
+                for rr in rows:
+                    if rr["trade_date"] == d0 and rr.get("amount") is not None:
+                        amt = rr["amount"]
+                        break
+        except Exception as e:
+            logger.warning(f"指数 {code} 成交额自愈拉取失败: {str(e)[:90]}")
+            return 0
+
+        if amt is None:
+            # 源仍未发布当日成交额，本轮放弃，等下一轮（不告警，属预期时滞）
+            return 0
+        cur.execute(
+            "UPDATE dc_index_market SET amount=%s, update_time=NOW() "
+            "WHERE index_code=%s AND trade_date=%s",
+            (amt, code, d0),
+        )
+        logger.info(f"✅ 成交额自愈：{code} {d0} amount={amt}")
+        return cur.rowcount
+
     # ---------- 收盘基准 ----------
     @staticmethod
     def _last_trading_day(cur) -> str | None:
@@ -551,6 +608,9 @@ class IndexMarketSyncCollector:
                     max_d = cur.fetchone()[0]
                     if max_d is not None:
                         if max_d.isoformat() >= bench:  # 已含最近交易日（周末 / 节假日自然跳过）
+                            # 成交额自愈：日期已到最近交易日，但最新行 amount 可能因源发布
+                            # 时滞而缺（深证系国证成交额常晚于采集），此处补拉一次。
+                            healed += self._heal_missing_amount(cur, code, market)
                             skipped += 1
                             continue
                         start = (max_d - timedelta(days=self.overlap_days)).isoformat()
