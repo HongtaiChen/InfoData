@@ -30,6 +30,10 @@ import HistoryCurve, { type CurveSeries, type CandleSeries } from './HistoryCurv
 const props = withDefaults(defineProps<{
   code: string
   name?: string
+  // 「所选区间」边界（自然日 YYYY-MM-DD），分位样本池 = 该区间内每日滚动样本（与总览表口径一致）
+  rangeStart?: string
+  rangeEnd?: string
+  rangeLabel?: string
 }>(), {})
 
 // 滚动窗口档（交易日数），按短→长排序
@@ -48,6 +52,53 @@ const note = ref('')
 const dates = ref<string[]>([])
 // 每个窗口的滚动涨日占比序列（0~1，前端用 change_pct 符号聚合）
 const ratioByWin = ref<Record<string, (number | null)[]>>({})
+// 每个窗口的「区间内滚动样本」排序数组（升序），供分位二分查找（O(log n)/次，避免逐日 O(N²)）
+// 口径与总览表一致：样本 = 窗口终点落在所选区间内 且 窗口起点也落在区间内的每日滚动占比
+const sortedSamples = ref<Record<string, number[]>>({})
+
+// 分位：v 在升序样本中的排位（(less + 0.5*equal)/n，与后端 pct_rank 同口径）
+function pctOf(sorted: number[], v: number): number {
+  if (!sorted.length) return NaN
+  let lo = 0, hi = sorted.length
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < v) lo = mid + 1; else hi = mid }
+  const less = lo
+  let eq = lo
+  while (eq < sorted.length && sorted[eq] === v) eq++
+  return ((less + 0.5 * (eq - less)) / sorted.length) * 100
+}
+
+// 某交易日 index 是否落在「所选区间」内（按自然日；未传区间视为全史，恒 true）
+function inRange(idx: number): boolean {
+  if (!props.rangeStart && !props.rangeEnd) return true
+  const d = daily[idx]?.date
+  if (!d) return false
+  if (props.rangeStart && d < props.rangeStart) return false
+  if (props.rangeEnd && d > props.rangeEnd) return false
+  return true
+}
+
+// 从 daily + 区间重建各窗口分位样本池（区间变化时调用，不重新拉数据）
+function rebuildSamples() {
+  const smp: Record<string, number[]> = {}
+  for (const w of WINDOWS) {
+    const arr = ratioByWin.value[w.key] ?? []
+    const filtered: number[] = []
+    for (let i = 0; i < arr.length; i++) {
+      const v = arr[i]
+      if (v == null) continue
+      // 窗口终点 index=i；窗口起点 index=i-w.days+1（须 >=0 才是有完整窗口的样本）
+      const startIdx = i - w.days + 1
+      if (startIdx < 0) continue
+      if (!inRange(i) || !inRange(startIdx)) continue
+      filtered.push(v)
+    }
+    smp[w.key] = filtered.sort((a, b) => a - b)
+  }
+  sortedSamples.value = smp
+}
+
+// 当前分位样本池标签（快照行展示「区间」用）
+const rangeLabelTxt = computed(() => props.rangeLabel || '全史')
 // 日历档快照：{ label, up, down, flat, ratio }
 const calSnap = ref<{ label: string; up: number; down: number; flat: number; ratio: number }[]>([])
 
@@ -101,6 +152,29 @@ function calcCalSnap(bars: DailyBar[]) {
   })
 }
 
+// 当前（最新交易日）各激活窗口的占比+分位快照（分位=所选区间内同窗口滚动样本排位）
+const curSnap = computed(() =>
+  activeKeys.value.map((key) => {
+    const w = WINDOWS.find((x) => x.key === key)!
+    const arr = ratioByWin.value[key] ?? []
+    let cur: number | null = null
+    let curIdx = -1
+    for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) { cur = arr[i]!; curIdx = i; break }
+    const s = sortedSamples.value[key] ?? []
+    // 当前窗口起点须落在区间内，分位才有意义（与总览表口径一致，否则显示 --）
+    const startIdx = curIdx - w.days + 1
+    const inPool = curIdx >= 0 && startIdx >= 0 && inRange(curIdx) && inRange(startIdx)
+    const pct = cur != null && inPool && s.length ? pctOf(s, cur) : NaN
+    return { label: w.label, ratio: cur, pct }
+  }).filter((x) => x.ratio != null),
+)
+
+// 分位配色（与总览表分位规则一致）：<10% 超跌绿 / >90% 超涨红 / 正常灰
+function snapCls(p: number): string {
+  if (isNaN(p)) return ''
+  return p < 10 ? 'udr-snap-low' : p > 90 ? 'udr-snap-high' : ''
+}
+
 const series = computed<CurveSeries[]>(() =>
   activeKeys.value.map((key, i) => {
     const w = WINDOWS.find((x) => x.key === key)!
@@ -113,6 +187,20 @@ const series = computed<CurveSeries[]>(() =>
 )
 
 const candleProp = computed(() => (showCandle.value && candleSeries.value ? candleSeries.value : undefined))
+
+// tooltip 分位文案：悬停日占比在所选区间同窗口滚动样本中的排位；<10% 超跌绿 / >90% 超涨红
+// 悬停日窗口起点落在区间内才显示分位（与总览表口径一致），否则显示 --
+function pctTxt(v: number, key: string, dataIndex: number): string {
+  const s = sortedSamples.value[key]
+  const w = WINDOWS.find((x) => x.key === key)
+  if (!s || !s.length || v == null || !w) return ''
+  const startIdx = dataIndex - w.days + 1
+  const inPool = startIdx >= 0 && inRange(dataIndex) && inRange(startIdx)
+  if (!inPool) return ' · <span style="color:#C0C4CC;">分位 --</span>'
+  const p = pctOf(s, v)
+  const color = p < 10 ? '#14B143' : p > 90 ? '#EF232A' : '#6B7280'
+  return ` · <span style="color:${color};font-weight:600;">分位 ${p.toFixed(0)}%</span>`
+}
 
 const tooltipFormatter = (params: any) => {
   const p = Array.isArray(params) ? params[0] : params
@@ -148,7 +236,7 @@ const tooltipFormatter = (params: any) => {
     }
     head += `<div style="display:flex;align-items:center;gap:6px;">
       <span style="width:8px;height:8px;border-radius:2px;background:${it.color};display:inline-block;"></span>
-      <span>${it.seriesName}：涨${up} 跌${down} 平${flat} · 占比 ${(it.value * 100).toFixed(1)}%</span>
+      <span>${it.seriesName}：涨${up} 跌${down} 平${flat} · 占比 ${(it.value * 100).toFixed(1)}%${pctTxt(it.value, key, it.dataIndex)}</span>
     </div>`
   }
   return head
@@ -170,10 +258,11 @@ async function load() {
     }))
     if (!daily.length) { note.value = '该指数暂无涨跌数据'; return }
     dates.value = daily.map((b) => b.date)
-    // 计算各窗口滚动占比
+    // 计算各窗口滚动占比（样本池由 rebuildSamples 按区间过滤后构建）
     const map: Record<string, (number | null)[]> = {}
     for (const w of WINDOWS) map[w.key] = calcRolling(daily, w.days)
     ratioByWin.value = map
+    rebuildSamples()
     calcCalSnap(daily)
     // 日K线蜡烛数据（[open, close, low, high]）
     candleSeries.value = daily.every((b) => b.open && b.close)
@@ -187,6 +276,8 @@ async function load() {
 }
 
 watch(() => props.code, load)
+// 区间变化时只重建分位样本池（daily 已全量，不重新拉数据）
+watch(() => [props.rangeStart, props.rangeEnd, props.rangeLabel], rebuildSamples)
 onMounted(load)
 </script>
 
@@ -223,13 +314,21 @@ onMounted(load)
         :candle="candleProp"
       />
       <div class="udr-cal">
+        <span class="udr-cal-title">滚动窗口快照</span>
+        <span class="udr-cal-pool">分位样本池 = 总览表「分位样本池区间」（{{ rangeLabelTxt }}）</span>
+        <span v-for="c in curSnap" :key="c.label" class="udr-cal-item">
+          {{ c.label }}：占比 {{ (c.ratio! * 100).toFixed(1) }}%
+          · <span :class="snapCls(c.pct)" class="udr-snap-pct">分位 {{ isNaN(c.pct) ? '--' : c.pct.toFixed(0) + '%' }}</span>
+        </span>
+      </div>
+      <div class="udr-cal">
         <span class="udr-cal-title">自然区间快照</span>
         <span v-for="c in calSnap" :key="c.label" class="udr-cal-item">
           {{ c.label }}：涨{{ c.up }} 跌{{ c.down }}<template v-if="c.flat"> 平{{ c.flat }}</template>
           · 占比 {{ (c.ratio * 100).toFixed(1) }}%
         </span>
       </div>
-      <div class="udr-foot">纵轴（左）= 区间内涨日占比（0~100%），50% 为多空分界；纵轴（右）= 指数价格。悬停查看该日「涨/跌/平」明细与日K线开/收/涨跌。折线用中性色区分窗口长度，日K线红涨绿跌。</div>
+      <div class="udr-foot">纵轴（左）= 区间内涨日占比（0~100%），50% 为多空分界；分位 = 该日占比在所选区间内同窗口滚动样本中的排位（样本=窗口起点与终点均落在区间内的每日滚动占比，&lt;10% 绿=超跌、&gt;90% 红=超涨，区间装不下窗口或样本不足时显示 --）；纵轴（右）= 指数价格。悬停查看该日「涨/跌/平」明细、占比分位与日K线开/收/涨跌。折线用中性色区分窗口长度，日K线红涨绿跌。</div>
     </template>
   </div>
 </template>
@@ -251,6 +350,10 @@ onMounted(load)
 .udr-loading, .udr-note { padding: 24px 0; text-align: center; color: #909399; font-size: 13px; }
 .udr-cal { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px; color: #374151; }
 .udr-cal-title { font-weight: 600; color: #1F2937; }
+.udr-cal-pool { font-size: 11px; color: #9CA3AF; }
 .udr-cal-item { white-space: nowrap; }
+.udr-snap-pct { font-weight: 600; }
+.udr-snap-pct.udr-snap-low { color: #14B143; }
+.udr-snap-pct.udr-snap-high { color: #EF232A; }
 .udr-foot { font-size: 11px; color: #C0C4CC; margin-top: 6px; line-height: 1.5; }
 </style>

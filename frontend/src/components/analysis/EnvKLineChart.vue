@@ -21,6 +21,12 @@ const props = withDefaults(defineProps<{
   name?: string
 }>(), {})
 
+// 自定义区间变化时抛给父组件：涨日占比趋势图的「分位样本池」跟随 K 线自定义区间
+// （2026-10-24：此前 K 线内部区间不外抛，趋势图分位只认总览表区间，用户自定义后趋势图"没反应"）
+const emit = defineEmits<{
+  (e: 'range-change', v: [number, number] | null): void
+}>()
+
 const containerRef = ref<HTMLDivElement>()
 let chart: Chart | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -84,15 +90,17 @@ const period = ref<'day' | 'week' | 'month' | 'year'>('day')
 
 // 窗口快切（全史 = 10000 根，覆盖 1990 年起的完整历史）——按「交易日天数」定义，
 // 聚合周期按天数折算成对应周期根数（周≈天/5，月≈天/21）
+// ⚠️ 根数 = 总览表窗口天数 + 1：区间涨跌幅首根 = N 个交易日前，与总览表 win_*（今收÷N日前收−1）口径对齐
+// （2026-10-23 用户实测发现 K线「1年」-4.52% vs 总览 近1年 -6.19% 不一致，根因即此错位）
 const WINDOWS = [
   { label: '1月', days: 22 },
-  { label: '3月', days: 66 },
-  { label: '6月', days: 132 },
-  { label: '1年', days: 250 },
+  { label: '3月', days: 64 },
+  { label: '6月', days: 127 },
+  { label: '1年', days: 253 },
   { label: '3年', days: 750 },
   { label: '全史', days: 10000 },
 ]
-const activeWin = ref<number | null>(250)
+const activeWin = ref<number | null>(253)
 // 自定义日期区间（时间戳 ms）；一旦设置优先于窗口快切
 const customRange = ref<[number, number] | null>(null)
 
@@ -140,7 +148,8 @@ function applyTonghuashunStyle(c: Chart) {
               { title: '收盘', value: d.close.toFixed(2) },
               { title: '涨跌幅', value: `${d.changePct ?? ''}` },
               { title: '成交量(手)', value: formatVol(d.volume) },
-              { title: '成交额', value: formatVol((d as any).amount) },
+              // 成交额：当日盘后未写入时为 0/null，显示 -- 而非「0」（2026-10-24）
+              { title: '成交额', value: (d as any).amount ? formatVol((d as any).amount) : '--' },
             ]
           },
         },
@@ -164,9 +173,12 @@ function formatVol(v?: number): string {
 // 内置 MA 直接算会让 MA250 几乎整条为空。方案：取数时多取 250 根预热，MA 全序列基于
 // 全量数据预计算成 maMap（timestamp → 各周期值），经 extendData 注入指标；
 // 展示仍只显示窗口内 K 线，窗口语义不变且 MA250 全程有效。
-const MA_PARAMS = [5, 10, 30, 60, 250]
-// 各周期线色（沿用同花顺习惯：5橙/10蓝/30紫/60红，250粉）
-const MA_COLORS: Record<number, string> = { 5: '#F5A623', 10: '#378ADD', 30: '#8452D6', 60: '#EF232A', 250: '#E8618C' }
+const MA_PARAMS = [5, 10, 30, 40, 60, 250]
+// 各周期线色（2026-10-24 优化可辨识度：六色相全部拉开，避开 K 线红绿主色混淆区）
+// 5橙/10蓝/30紫/40青(策略线,加粗)/60红/250灰(长期线弱化)；原 40 暗金褐与 5 橙太近、250 粉与 60 红难分
+const MA_COLORS: Record<number, string> = { 5: '#F5A623', 10: '#378ADD', 30: '#8452D6', 40: '#0E9E9E', 60: '#EF232A', 250: '#6B7280' }
+// MA40 为策略主线加粗，其余 1.3 提升浅底可读性（默认 1 太细）
+const MA_LINE_SIZE: Record<number, number> = { 5: 1.3, 10: 1.3, 30: 1.3, 40: 2, 60: 1.3, 250: 1.3 }
 type MaMap = Record<string, Record<number, number>>
 let maMap: MaMap = {}
 
@@ -261,6 +273,8 @@ function registerVolOverride() {
           vol: vols[i],
           open: b.open,
           close: b.close,
+          // 成交额(亿)：日线与周/月/年聚合根的 amount 均为「元」，统一 ÷1e8
+          amount: (b as any).amount != null ? (b as any).amount / 1e8 : null,
         }
         for (const p of params) {
           const key = `ma${p}`
@@ -274,6 +288,37 @@ function registerVolOverride() {
         }
         return out
       })
+    },
+    // 自定义图例：在「量/MA5/MA10」后追加「额(亿)」（2026-10-24 用户需求）。
+    // 为什么不用 figure：klinecharts 单窗格仅一条 Y 轴，金额(亿,千级)与量(万手,万级)量纲差
+    // 10 倍+，画实线会贴地失真；且 legend 文字色 = figure 色，透明 figure 会让图例隐身。
+    // createTooltipDataSource 会整体替换默认 legends，故 4 项全部自建（含原 3 项的红绿/线色）。
+    createTooltipDataSource: ({ chart, indicator, crosshair }: any) => {
+      const idx = crosshair?.dataIndex ?? -1
+      const row = indicator.result?.[idx] ?? {}
+      const fmt = (v: number | null | undefined) =>
+        v == null || !isFinite(v) ? '--' : v.toFixed(2)
+      // 量能柱红涨绿跌（与 figure.styles 同逻辑）
+      let volColor = '#909399'
+      if (row.close != null && row.open != null) {
+        volColor = row.close > row.open ? '#EF232A' : row.close < row.open ? '#14B143' : '#909399'
+      }
+      // MA 线色：取全局 indicator.lines 样式（与图上实际画线一致），兜底库默认
+      const lines = chart?.getStyles?.()?.indicator?.lines ?? []
+      const maColor = (i: number, fallback: string) => lines[i]?.color ?? fallback
+      // 成交额金色：资金语义，与「两市额」副图同一强调色（蓝骨金魂纪律）
+      const amt = row.amount
+      return {
+        name: 'VOL',
+        calcParamsText: '(5,10)',
+        features: [],
+        legends: [
+          { title: { text: '量(万手): ', color: volColor }, value: { text: fmt(row.vol), color: volColor } },
+          { title: { text: 'MA5: ', color: maColor(0, '#FF9600') }, value: { text: fmt(row.ma5), color: maColor(0, '#FF9600') } },
+          { title: { text: 'MA10: ', color: maColor(1, '#935EBD') }, value: { text: fmt(row.ma10), color: maColor(1, '#935EBD') } },
+          { title: { text: '额(亿): ', color: TWO_AMOUNT_COLOR }, value: { text: amt != null && amt > 0 ? fmt(amt) : '--', color: TWO_AMOUNT_COLOR } },
+        ],
+      }
     },
   })
 }
@@ -458,7 +503,7 @@ async function fetchBars(): Promise<KLineData[]> {
   maMap = computeMaMap(agg)
   srMap = computeSrLevels(agg)
   if (isFull) return agg
-  const winDays = activeWin.value ?? 250
+  const winDays = activeWin.value ?? 253
   if (period.value === 'day') return agg.slice(-winDays)
   // 周/月/年：展示根数 ≈ 窗口天数折算（周≈/5，月≈/21，年≈/250），与既有窗口语义一致
   const div = period.value === 'week' ? 5 : period.value === 'month' ? 21 : 250
@@ -540,7 +585,7 @@ function buildIndicators() {
       // marginTop 需容纳上方 OHLC 图例整行（含「成交量 x,xxx亿」，宽屏单行 ~30px）；
       // 16 是 4 条均线时代的值，MA250 加入后图例更宽，实测与 OHLC 行重叠 → 32
       tooltip: { legend: { marginTop: 32 } },
-      lines: MA_PARAMS.map((p) => ({ color: MA_COLORS[p] })),
+      lines: MA_PARAMS.map((p) => ({ color: MA_COLORS[p], size: MA_LINE_SIZE[p] })),
     } as any,
   } as any)
   if (showBoll.value) chart.createIndicator('BOLL')
@@ -656,7 +701,7 @@ function initChart() {
 
 function switchWindow(days: number) {
   activeWin.value = days
-  customRange.value = null
+  if (customRange.value) { customRange.value = null; emit('range-change', null) }
   initChart()
 }
 
@@ -667,6 +712,7 @@ function switchPeriod(p: 'day' | 'week' | 'month' | 'year') {
 
 function onCustomRange(v: [number, number] | null) {
   customRange.value = v
+  emit('range-change', v)
   if (v) initChart()
 }
 
@@ -713,6 +759,7 @@ watch(
           >{{ { day: '日K', week: '周K', month: '月K', year: '年K' }[p] }}</span>
         </span>
         <span class="ek-sep" />
+        <span class="ek-win-label" title="只控制下方 K 线画多少根（取景），不影响任何分位/统计指标">视图取景</span>
         <span
           v-for="w in WINDOWS"
           :key="w.days"
@@ -726,7 +773,8 @@ watch(
           clearable
           size="small"
           style="width: 240px"
-          placeholder="自定义区间"
+          start-placeholder="取景开始"
+          end-placeholder="取景结束"
           @update:value="onCustomRange"
         />
       </div>
@@ -767,6 +815,11 @@ watch(
 }
 .ek-win { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ek-period { display: inline-flex; gap: 4px; }
+.ek-win-label {
+  font-size: 12px; font-weight: 500; color: #6B7280; line-height: 1;
+  padding: 5px 10px; border-radius: 4px; background: #F3F4F6;
+  white-space: nowrap; user-select: none; cursor: help;
+}
 .ek-sep { width: 1px; height: 16px; background: #DDE3EA; margin: 0 4px; }
 .ek-win-btn {
   font-size: 12px; padding: 3px 10px; border-radius: 4px; cursor: pointer;

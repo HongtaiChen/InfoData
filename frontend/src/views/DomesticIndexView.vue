@@ -2,14 +2,12 @@
 /**
  * DomesticIndexView —— 投资环境·国内指数（单页，v1.7）
  * 页面结构（自上而下）：
- *   ① 多指数对比（归一化净值曲线 + 悬停显示真实收盘与区间涨跌幅，chips 多选 + 窗口/自定义区间，曲线各配色）
- *   ② 国内指数总览表（21 指数关键指标横向对比，涨跌红绿字，点指数名联动 K 线）
- *   ③ 大 K 线主图（单指数深钻：K线+MA+BOLL、VOL/MACD/RSI 副图勾选、窗口/自定义区间）
- *   ④ 技术面统计 + 基本面分析
+ *   ① 指数趋势与价格结构（2026-10-23 合并章节，内含两个小节：多指数对比与总览 / 大 K 线主图深钻）
+ *   ② 技术面统计 + 基本面分析
  * 指数在每处内容自由多选/单选；不做 AI 结论（E3），分位中性展示。
  */
 import { computed, h, onBeforeUnmount, onMounted, ref } from 'vue'
-import { NCard, NCollapse, NCollapseItem, NSpin, NEmpty, NDatePicker, NDataTable } from 'naive-ui'
+import { NCard, NCollapse, NCollapseItem, NSpin, NEmpty, NDatePicker, NDataTable, NSelect } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
@@ -57,12 +55,52 @@ const compareWindow = ref<'3m' | '6m' | '1y' | '3y'>('1y')
 const compareRange = ref<[number, number] | null>(null)
 const compareData = ref<any>(null)
 const compareLoading = ref(false)
+// 对比模式：normal = 归一化净值；rs = 相对强弱（各指数 ÷ 基准指数，基准恒 100）
+type CompareMode = 'normal' | 'rs'
+const compareMode = ref<CompareMode>('normal')
+// 相对强弱基准指数（默认沪深300）
+const rsBase = ref<string>('000300')
 
 // ---------- 总览表状态 ----------
 interface OverviewRow {
   index_code: string; index_name: string; trade_date: string | null
   close: number | null; change_pct: number | null
-  win_1m: number | null; win_1y: number | null
+  drop_threshold: number | null; threshold_source: string | null
+  win_halfm: number | null; win_1m: number | null; win_15m: number | null
+  win_2m: number | null; win_25m: number | null; win_3m: number | null
+  win_6m: number | null; win_1y: number | null
+  win_ytd: number | null; win_qtd: number | null; win_mtd: number | null; win_wtd: number | null
+  win_3y: number | null; win_all: number | null
+  // 「区间回撤」列：五档 K 线在所选区间内的最大回撤（+峰/谷日期）
+  range_mdd_d: number | null; range_mdd_w: number | null; range_mdd_m: number | null
+  range_mdd_q: number | null; range_mdd_y: number | null
+  range_mdd_d_pk?: string | null; range_mdd_d_tr?: string | null
+  range_mdd_w_pk?: string | null; range_mdd_w_tr?: string | null
+  range_mdd_m_pk?: string | null; range_mdd_m_tr?: string | null
+  range_mdd_q_pk?: string | null; range_mdd_q_tr?: string | null
+  range_mdd_y_pk?: string | null; range_mdd_y_tr?: string | null
+  // 12 窗口分位 + 区间最大回撤（后端现算，副行展示）
+  win_halfm_pctile: number | null; win_1m_pctile: number | null; win_15m_pctile: number | null
+  win_2m_pctile: number | null; win_25m_pctile: number | null; win_3m_pctile: number | null
+  win_6m_pctile: number | null; win_1y_pctile: number | null
+  win_ytd_pctile: number | null; win_qtd_pctile: number | null; win_mtd_pctile: number | null; win_wtd_pctile: number | null
+  // 12 窗口五档最大回撤（日K/周K/月K/季K/年K，后端现算）
+  win_halfm_mdd_d: number | null; win_halfm_mdd_w: number | null; win_halfm_mdd_m: number | null; win_halfm_mdd_q: number | null; win_halfm_mdd_y: number | null
+  win_1m_mdd_d: number | null; win_1m_mdd_w: number | null; win_1m_mdd_m: number | null; win_1m_mdd_q: number | null; win_1m_mdd_y: number | null
+  win_15m_mdd_d: number | null; win_15m_mdd_w: number | null; win_15m_mdd_m: number | null; win_15m_mdd_q: number | null; win_15m_mdd_y: number | null
+  win_2m_mdd_d: number | null; win_2m_mdd_w: number | null; win_2m_mdd_m: number | null; win_2m_mdd_q: number | null; win_2m_mdd_y: number | null
+  win_25m_mdd_d: number | null; win_25m_mdd_w: number | null; win_25m_mdd_m: number | null; win_25m_mdd_q: number | null; win_25m_mdd_y: number | null
+  win_3m_mdd_d: number | null; win_3m_mdd_w: number | null; win_3m_mdd_m: number | null; win_3m_mdd_q: number | null; win_3m_mdd_y: number | null
+  win_6m_mdd_d: number | null; win_6m_mdd_w: number | null; win_6m_mdd_m: number | null; win_6m_mdd_q: number | null; win_6m_mdd_y: number | null
+  win_1y_mdd_d: number | null; win_1y_mdd_w: number | null; win_1y_mdd_m: number | null; win_1y_mdd_q: number | null; win_1y_mdd_y: number | null
+  win_ytd_mdd_d: number | null; win_ytd_mdd_w: number | null; win_ytd_mdd_m: number | null; win_ytd_mdd_q: number | null; win_ytd_mdd_y: number | null
+  win_qtd_mdd_d: number | null; win_qtd_mdd_w: number | null; win_qtd_mdd_m: number | null; win_qtd_mdd_q: number | null; win_qtd_mdd_y: number | null
+  win_mtd_mdd_d: number | null; win_mtd_mdd_w: number | null; win_mtd_mdd_m: number | null; win_mtd_mdd_q: number | null; win_mtd_mdd_y: number | null
+  win_wtd_mdd_d: number | null; win_wtd_mdd_w: number | null; win_wtd_mdd_m: number | null; win_wtd_mdd_q: number | null; win_wtd_mdd_y: number | null
+  // 所选区间三合一（区间选择器启用时）
+  range_stats?: { pct: number | null; pctile: number | null; mdd: number | null } | null
+  // 「当日」列副行：涨跌幅分位（样本池内）+ 当日盘中最大回撤（low/high−1）
+  change_pctile: number | null; day_mdd: number | null
   ann_vol_60: number | null; max_dd_1y: number | null
   pe_ttm: number | null; pe_ttm_pct: number | null
   pb: number | null; pb_pct: number | null
@@ -70,6 +108,43 @@ interface OverviewRow {
 }
 const overview = ref<OverviewRow[]>([])
 const overviewLoading = ref(false)
+
+// ---------- 总览表区间选择器（独立于对比图窗口） ----------
+const ovRangeWin = ref<'3m' | '6m' | '1y' | '3y' | 'all' | ''>('3y')  // 默认「近3年」，'' = 关闭（回落近3年全局口径）
+const ovRangeCustom = ref<[number, number] | null>(null)
+const ovRangeLabel = computed(() => {
+  if (ovRangeCustom.value) {
+    return `${dayjs(ovRangeCustom.value[0]).format('YYYY-MM-DD')}~${dayjs(ovRangeCustom.value[1]).format('YYYY-MM-DD')}`
+  }
+  const m: Record<string, string> = { '3m': '近3月', '6m': '近6月', '1y': '近1年', '3y': '近3年', 'all': '全史' }
+  return m[ovRangeWin.value] || ''
+})
+
+// 趋势图「涨日占比」分位样本池的区间边界（自然日，与后端 sample_start/sample_end 同口径）
+// window→自然日数 与后端 env_service._COMPARE_WINDOW_DAYS 一致（3m=95/6m=190/1y=380/3y=1160）
+const UPDOWN_WIN_DAYS: Record<string, number> = { '3m': 95, '6m': 190, '1y': 380, '3y': 1160 }
+// K 线图内部的自定义区间（EnvKLineChart @range-change 外抛）：趋势图分位池优先跟随它，清空回落总览表区间
+const klCustomRange = ref<[number, number] | null>(null)
+const updownRange = computed<{ start: string; end: string; label: string }>(() => {
+  if (klCustomRange.value) {
+    const s = dayjs(klCustomRange.value[0]).format('YYYY-MM-DD')
+    const e = dayjs(klCustomRange.value[1]).format('YYYY-MM-DD')
+    return { start: s, end: e, label: `${s}~${e}（K线自定义）` }
+  }
+  if (ovRangeCustom.value) {
+    const s = dayjs(ovRangeCustom.value[0]).format('YYYY-MM-DD')
+    const e = dayjs(ovRangeCustom.value[1]).format('YYYY-MM-DD')
+    return { start: s, end: e, label: `${s}~${e}` }
+  }
+  const w = ovRangeWin.value
+  if (w && w !== 'all') {
+    const end = dayjs()
+    const start = end.subtract(UPDOWN_WIN_DAYS[w] ?? 1160, 'day')
+    return { start: start.format('YYYY-MM-DD'), end: end.format('YYYY-MM-DD'), label: ovRangeLabel.value }
+  }
+  // 'all' 或 ''：全史（不限制区间）
+  return { start: '', end: '', label: ovRangeLabel.value || '全史' }
+})
 
 function fmtPct(v: any, digits = 2): string {
   if (v == null) return '--'
@@ -92,6 +167,28 @@ function fmtYi(v: any): string {
 function pctClass(v: number | null): string {
   if (v == null) return ''
   return v > 0 ? 'c-up' : v < 0 ? 'c-down' : ''
+}
+
+// ---------- 「级别」列：五档分色（狂涨/大涨/小涨/平/小跌/大跌/狂跌） ----------
+// 判定基准 = 当日涨跌幅 x，阈值 T = env_threshold.drop_threshold（每指数一个，取整到 0.5）
+// 平盘阈值 0.1%（指数点位精度内视为没涨没跌）；狂 = |x| ≥ 2T；大 = T ≤ |x| < 2T；小 = 0.1% < |x| < T
+const FLAT_EPS = 0.1
+function moveLevel(x: number | null, T: number | null): { label: string; cls: string } {
+  if (x == null) return { label: '--', cls: '' }
+  const thr = T ?? 1.5 // 阈值缺失兜底 1.5%
+  const ax = Math.abs(x)
+  if (ax <= FLAT_EPS) return { label: '平', cls: 'lv-flat' }
+  const extreme = ax >= thr * 2
+  const big = ax >= thr
+  if (x > 0) return extreme ? { label: '狂涨', cls: 'lv-surge' } : big ? { label: '大涨', cls: 'lv-up' } : { label: '小涨', cls: 'lv-up-light' }
+  return extreme ? { label: '狂跌', cls: 'lv-plunge' } : big ? { label: '大跌', cls: 'lv-down' } : { label: '小跌', cls: 'lv-down-light' }
+}
+// 分位副行配色：超跌分位（<10%）绿、超涨分位（>90%）红、正常灰
+function pctileCls(p: number | null | undefined): string {
+  if (p == null) return 'ov-sub-pct'
+  if (p < 10) return 'ov-sub-pct ov-sub-pct-low'
+  if (p > 90) return 'ov-sub-pct ov-sub-pct-high'
+  return 'ov-sub-pct'
 }
 function isExtreme(pct: number | null | undefined): boolean {
   if (pct == null) return false
@@ -119,13 +216,30 @@ async function loadIndices() {
 async function loadOverview() {
   overviewLoading.value = true
   try {
-    const resp: any = await api.get('/environment/domestic/overview')
+    const params: any = {}
+    if (ovRangeCustom.value) {
+      params.start = dayjs(ovRangeCustom.value[0]).format('YYYYMMDD')
+      params.end = dayjs(ovRangeCustom.value[1]).format('YYYYMMDD')
+    } else if (ovRangeWin.value) {
+      params.window = ovRangeWin.value
+    }
+    const resp: any = await api.get('/environment/domestic/overview', { params })
     overview.value = resp.items || []
   } catch (e) {
     console.error('[env overview]', e)
   } finally {
     overviewLoading.value = false
   }
+}
+
+function onOvRangeWin(w: '3m' | '6m' | '1y' | '3y' | 'all' | '') {
+  ovRangeWin.value = w
+  ovRangeCustom.value = null
+  loadOverview()
+}
+function onOvRangeCustom(v: [number, number] | null) {
+  ovRangeCustom.value = v
+  if (v) { ovRangeWin.value = ''; loadOverview() }
 }
 
 async function loadCompare() {
@@ -243,15 +357,124 @@ async function loadLeverage() {
 
 // ---------- 对比图派生 ----------
 // 曲线画归一化净值（起点=100，不同点位量级可比强弱）；悬停展示真实收盘 + 区间涨跌幅（红绿）
+// 相对强弱模式：RS = 该指数净值 ÷ 基准指数净值 × 100（均以区间起点=100 归一），
+// 窗口起点恒 100：上穿 100 = 跑赢基准，下穿 = 跑输（直接用原始价格比会引入历史量级偏移——实测踩坑）
 const compareSeries = computed(() => {
   const d = compareData.value
   if (!d?.series) return []
+  if (compareMode.value === 'rs') {
+    const base = d.series.find((s: any) => s.index_code === rsBase.value)
+    if (!base?.values) return []
+    const baseVals: (number | null)[] = base.values
+    const out: any[] = []
+    for (const s of d.series) {
+      if (!s.values) continue
+      if (s.index_code === rsBase.value) {
+        out.push({
+          name: s.index_name, values: baseVals.map(() => 100),
+          color: SERIES_PALETTE[out.length % SERIES_PALETTE.length],
+        })
+      } else {
+        const vals = s.values.map((v: number | null, i: number) => {
+          const b = baseVals[i]
+          if (v == null || b == null || b === 0) return null
+          return round2((v / b) * 100)
+        })
+        out.push({
+          name: s.index_name, values: vals,
+          color: SERIES_PALETTE[out.length % SERIES_PALETTE.length],
+        })
+      }
+    }
+    return out
+  }
   return d.series.map((s: any, i: number) => ({
     name: s.index_name,
     values: s.values,
     color: SERIES_PALETTE[i % SERIES_PALETTE.length],
   }))
 })
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100
+}
+
+// 区间统计（三合一指标）：涨跌幅 + 近3年分位 + 最大回撤（后端 domestic_compare 实时派生）
+interface CompareStat {
+  name: string; code: string; pct: number
+  pctile: number | null; maxDrawdown: number | null; color: string
+}
+const compareStats = computed<CompareStat[]>(() => {
+  const d = compareData.value
+  if (!d?.series) return []
+  const out: CompareStat[] = []
+  d.series.forEach((s: any, i: number) => {
+    // 后端返回 pct（区间涨跌幅）；旧数据兜底：前端相对首值计算
+    let pct: number | null = s.pct != null ? Number(s.pct) : null
+    if (pct == null) {
+      const closes: (number | null)[] = s.closes
+      if (closes?.length) {
+        const first = closes.find((c: number | null) => c != null)
+        const last = [...closes].reverse().find((c: number | null) => c != null)
+        if (first != null && last != null && first !== 0) pct = ((last - first) / first) * 100
+      }
+    }
+    if (pct == null) return
+    out.push({
+      name: s.index_name,
+      code: s.index_code,
+      pct: round2(pct),
+      pctile: s.pctile == null ? null : Number(s.pctile),
+      maxDrawdown: s.max_drawdown == null ? null : Number(s.max_drawdown),
+      color: SERIES_PALETTE[i % SERIES_PALETTE.length],
+    })
+  })
+  return out.sort((a, b) => b.pct - a.pct)
+})
+
+// 相对强弱基准指数下拉选项（默认沪深300 排前）
+const rsBaseOptions = computed(() => {
+  const list = (indices.value || []).map((i) => ({ label: i.index_name, value: i.index_code }))
+  const b = list.find((x) => x.value === rsBase.value)
+  if (b) return [b, ...list.filter((x) => x.value !== rsBase.value)]
+  return list
+})
+const rsBaseName = computed(() => {
+  return indices.value.find((i) => i.index_code === rsBase.value)?.index_name || rsBase.value
+})
+// 区间统计条形最大值（用于归一化条宽）
+const maxAbsStat = computed(() => {
+  const m = Math.max(...compareStats.value.map((s) => Math.abs(s.pct)), 0.01)
+  return m || 0.01
+})
+// 区间统计标题的窗口描述（与曲线窗口一致）
+const WIN_LABELS: Record<string, string> = { '3m': '近3月', '6m': '近6月', '1y': '近1年', '3y': '近3年' }
+const statsRangeLabel = computed(() => {
+  if (compareRange.value) {
+    return `${dayjs(compareRange.value[0]).format('YYYY-MM-DD')} ~ ${dayjs(compareRange.value[1]).format('YYYY-MM-DD')}`
+  }
+  return WIN_LABELS[compareWindow.value] || compareWindow.value
+})
+
+// 相对强弱模式的悬停提示：显示 RS 值 + 真实收盘
+const compareRsTooltipFormatter = (params: any) => {
+  const d = compareData.value
+  if (!d?.series || !params?.length) return ''
+  const idx = params[0]?.dataIndex ?? 0
+  let html = `<div style="font-weight:600;margin-bottom:4px">${d.dates?.[idx] ?? ''}</div>`
+  for (const p of params) {
+    const s = d.series[p.seriesIndex]
+    if (!s?.closes) continue
+    const close = s.closes[idx]
+    const rs = p.value == null ? null : Number(p.value)
+    const rsStr = rs == null ? '--' : rs.toFixed(2)
+    const dot = p.color ?? '#999'
+    html += `<div style="display:flex;justify-content:space-between;gap:16px;line-height:1.7">`
+      + `<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dot};margin-right:6px"></span>${p.seriesName}</span>`
+      + `<span style="font-variant-numeric:tabular-nums">RS ${rsStr} · 收盘 ${close == null ? '--' : Number(close).toFixed(2)}</span></div>`
+  }
+  return html
+}
 
 const compareTooltipFormatter = (params: any) => {
   const d = compareData.value
@@ -282,8 +505,67 @@ const compareTooltipFormatter = (params: any) => {
 }
 
 // ---------- 总览表列 ----------
-const columns: DataTableColumns<OverviewRow> = [
+// 排序：默认按后端顺序（importance_rank）展示，点表头手工排序；null 值恒排最后
+function numSorter(key: keyof OverviewRow) {
+  return (a: OverviewRow, b: OverviewRow) => {
+    const av = a[key] as number | null, bv = b[key] as number | null
+    if (av == null && bv == null) return 0
+    if (av == null) return -1
+    if (bv == null) return 1
+    return av - bv
+  }
+}
+// 级别列排序键 = 档位序为主（狂跌-3 … 狂涨+3），同档内按 |涨跌|/T 相对强度细分
+// 修复：此前只用 |涨跌|/T，导致小跌被夹进小涨堆（档位直觉错乱）
+function levelRank(r: OverviewRow): { ord: number; ratio: number } {
+  if (r.change_pct == null) return { ord: -99, ratio: 0 }
+  const x = r.change_pct
+  const thr = r.drop_threshold ?? 1.5
+  const ratio = Math.abs(x) / thr
+  let ord: number
+  if (Math.abs(x) <= 0.1) ord = 0
+  else if (ratio >= 2) ord = x > 0 ? 3 : -3
+  else if (ratio >= 1) ord = x > 0 ? 2 : -2
+  else ord = x > 0 ? 1 : -1
+  return { ord, ratio }
+}
+// 多窗口涨跌幅列配置（label → OverviewRow 字段），全部红涨绿跌 + 可排序
+const WIN_COLS: { label: string; key: keyof OverviewRow }[] = [
+  { label: '本周', key: 'win_wtd' },
+  { label: '本月', key: 'win_mtd' },
+  { label: '本季', key: 'win_qtd' },
+  { label: '本年', key: 'win_ytd' },
+  { label: '半月', key: 'win_halfm' },
+  { label: '近1月', key: 'win_1m' },
+  { label: '近1.5月', key: 'win_15m' },
+  { label: '近2月', key: 'win_2m' },
+  { label: '近2.5月', key: 'win_25m' },
+  { label: '近3月', key: 'win_3m' },
+  { label: '近6月', key: 'win_6m' },
+  { label: '近1年', key: 'win_1y' },
+  { label: '近3年', key: 'win_3y' },
+  { label: '全史', key: 'win_all' },
+]
+// 窗口单元格 title 文案（涨跌幅 + 分位 + 五档回撤完整口径）
+function winCellTitle(label: string, v: number | null, p: number | null, dd: (number | null)[] | number | null, ddPk?: (string | null)[], ddTr?: (string | null)[]): string {
+  const pool = ovRangeLabel.value || '近3年'
+  let ddTxt = ''
+  if (Array.isArray(dd)) {
+    const lb = ['日K', '周K', '月K', '季K', '年K']
+    ddTxt = lb.map((l, i) => {
+      if (dd[i] == null) return `${l}--`
+      const range = ddPk?.[i] && ddTr?.[i] ? `（${ddPk[i]}→${ddTr[i]}）` : ''
+      return `${l}${fmtNum(dd[i], 2)}%${range}`
+    }).join(' · ')
+  } else if (dd != null) {
+    ddTxt = `${fmtNum(dd, 2)}%`
+  }
+  const ddPart = ddTxt ? ` · 最大回撤 ${ddTxt}` : ''
+  return `${label}涨跌幅 ${v == null ? '--' : fmtPct(v)} · 分位 ${p == null ? '--' : fmtNum(p, 1) + '%'}（样本=「${pool}」内同窗口；<10%绿=超跌、>90%红=超涨）${ddPart}`
+}
+const columns = computed<DataTableColumns<OverviewRow>>(() => [
   { title: '指数', key: 'index_name', width: 150, fixed: 'left',
+    sorter: (a, b) => a.index_name.localeCompare(b.index_name, 'zh'),
     render: (r) => h('a', {
       class: 'ov-link' + (r.index_code === currentCode.value ? ' cur' : ''),
       onClick: () => onCompareChip(r.index_code),
@@ -292,28 +574,94 @@ const columns: DataTableColumns<OverviewRow> = [
       h('span', { class: 'ov-code' }, r.index_code),
     ]) },
   { title: '数据日期', key: 'trade_date', width: 100, align: 'center',
+    sorter: (a, b) => String(a.trade_date ?? '').localeCompare(String(b.trade_date ?? '')),
     render: (r) => h('span', { class: 'ov-num dim' }, r.trade_date ? String(r.trade_date).slice(0, 10) : '--') },
-  { title: '收盘', key: 'close', width: 90, align: 'right',
+  { title: '收盘', key: 'close', width: 90, align: 'right', sorter: numSorter('close'),
     render: (r) => h('span', { class: 'ov-num' }, fmtNum(r.close)) },
-  { title: '当日', key: 'change_pct', width: 85, align: 'right',
-    render: (r) => h('span', { class: `ov-num ${pctClass(r.change_pct)}` }, fmtPct(r.change_pct)) },
-  { title: '近1月', key: 'win_1m', width: 85, align: 'right',
-    render: (r) => h('span', { class: `ov-num ${pctClass(r.win_1m)}` }, fmtPct(r.win_1m)) },
-  { title: '近1年', key: 'win_1y', width: 85, align: 'right',
-    render: (r) => h('span', { class: `ov-num ${pctClass(r.win_1y)}` }, fmtPct(r.win_1y)) },
-  { title: 'PE', key: 'pe_ttm', width: 70, align: 'right',
+  { title: '当日', key: 'change_pct', width: 96, align: 'right', sorter: numSorter('change_pct'),
+    render: (r) => h('div', { class: 'ov-win-cell', title: winCellTitle('当日', r.change_pct, r.change_pctile, null) }, [
+      h('span', { class: `ov-num ${pctClass(r.change_pct)}` }, fmtPct(r.change_pct)),
+      h('span', { class: 'ov-win-sub' }, [
+        h('span', { class: pctileCls(r.change_pctile) }, r.change_pctile == null ? '分位--' : `分位${fmtNum(r.change_pctile, 0)}%`),
+      ]),
+    ]) },
+  { title: '级别', key: 'level', width: 72, align: 'center',
+    sorter: (a, b) => {
+      const A = levelRank(a), B = levelRank(b)
+      return A.ord !== B.ord ? A.ord - B.ord : A.ratio - B.ratio
+    },
+    render: (r) => {
+      const { label, cls } = moveLevel(r.change_pct, r.drop_threshold)
+      const thrTxt = r.drop_threshold != null
+        ? `T=${fmtNum(r.drop_threshold, 1)}%（${r.threshold_source === 'manual' ? '手定' : '95分位建议'}）`
+        : '阈值缺失，兜底 T=1.5%'
+      return h('span', {
+        class: `ov-level ${cls}`,
+        title: `当日 ${fmtPct(r.change_pct)} · ${thrTxt}`,
+      }, label)
+    } },
+  // 「区间回撤」列：五档 K 线在「所选区间」内的最大回撤（跟随区间选择器，默认 3y）
+  (() => {
+    const RF = ['d', 'w', 'm', 'q', 'y'] as const
+    const RL = ['日', '周', '月', '季', '年'] as const
+    return {
+      title: '区间回撤', key: 'range_mdd_d', width: 150, align: 'right' as const,
+      sorter: (a: OverviewRow, b: OverviewRow) => (a.range_mdd_d ?? 0) - (b.range_mdd_d ?? 0),
+      render: (r: OverviewRow) => {
+        const dd = RF.map((f) => (r as any)[`range_mdd_${f}`] as number | null)
+        const pks = RF.map((f) => (r as any)[`range_mdd_${f}_pk`] as string | null)
+        const trs = RF.map((f) => (r as any)[`range_mdd_${f}_tr`] as string | null)
+        const chips = dd.map((x, i) => x == null ? null : h('span', { class: 'ov-dd-chip' }, [
+          h('i', { class: 'ov-dd-chip-lb' }, RL[i]),
+          h('b', { class: 'ov-dd-chip-v' }, fmtNum(x, 1)),
+        ])).filter(Boolean) as any[]
+        const pool = ovRangeLabel.value || '近3年'
+        const tip = RL.map((l, i) => dd[i] == null ? `${l}K--` : `${l}K${fmtNum(dd[i], 2)}%${pks[i] && trs[i] ? `（${pks[i]}→${trs[i]}）` : ''}`).join(' · ')
+        return h('div', { class: 'ov-win-cell', title: `「${pool}」区间内五档最大回撤：${tip}` }, [
+          h('span', { class: 'ov-sub-dd' }, `区间 ${pool}`),
+          chips.length ? h('span', { class: 'ov-dd-chips' }, chips) : h('span', { class: 'ov-sub-dd' }, '撤--'),
+        ])
+      },
+    }
+  })(),
+  // 多窗口涨跌幅（12 列，红涨绿跌 + 可排序）；单元格双行：涨跌幅主行 + 分位/回撤副行
+  // 注：区间选择器仅控制各列分位的样本池，不再单独插「所选区间」列
+  ...WIN_COLS.map(({ label, key }) => ({
+    title: label, key, width: 132, align: 'right' as const, sorter: numSorter(key),
+    render: (r: OverviewRow) => {
+      const v = r[key] as number | null
+      const pkey = (key + '_pctile') as keyof OverviewRow
+      const p = r[pkey] as number | null
+      const dd = ['d', 'w', 'm', 'q', 'y'].map((f) => (r as any)[`${key}_mdd_${f}`] as number | null)
+      const ddPk = ['d', 'w', 'm', 'q', 'y'].map((f) => (r as any)[`${key}_mdd_${f}_pk`] as string | null)
+      const ddTr = ['d', 'w', 'm', 'q', 'y'].map((f) => (r as any)[`${key}_mdd_${f}_tr`] as string | null)
+      const ddLabels = ['日', '周', '月', '季', '年']
+      const chips = dd.map((x, i) => x == null ? null : h('span', { class: 'ov-dd-chip' }, [
+        h('i', { class: 'ov-dd-chip-lb' }, ddLabels[i]),
+        h('b', { class: 'ov-dd-chip-v' }, fmtNum(x, 1)),
+      ])).filter(Boolean) as any[]
+      return h('div', { class: 'ov-win-cell', title: winCellTitle(label, v, p, dd, ddPk, ddTr) }, [
+        h('span', { class: `ov-num ${pctClass(v)}` }, fmtPct(v)),
+        h('span', { class: 'ov-win-sub' }, [
+          h('span', { class: pctileCls(p) }, p == null ? '分位--' : `分位${fmtNum(p, 0)}%`),
+          chips.length
+            ? h('span', { class: 'ov-dd-chips' }, chips)
+            : h('span', { class: 'ov-sub-dd' }, '撤--'),
+        ]),
+      ])
+    },
+  })),
+  { title: 'PE', key: 'pe_ttm', width: 70, align: 'right', sorter: numSorter('pe_ttm'),
     render: (r) => h('span', { class: 'ov-num' }, fmtNum(r.pe_ttm)) },
-  { title: 'PE分位', key: 'pe_ttm_pct', width: 80, align: 'right',
+  { title: 'PE分位', key: 'pe_ttm_pct', width: 80, align: 'right', sorter: numSorter('pe_ttm_pct'),
     render: (r) => r.pe_ttm_pct == null
       ? h('span', { class: 'ov-num dim' }, '--')
       : h('span', { class: `ov-num ${isExtreme(r.pe_ttm_pct) ? 'hl' : ''}` }, `${fmtNum(r.pe_ttm_pct, 1)}%`) },
-  { title: '股息率', key: 'dividend_yield', width: 75, align: 'right',
+  { title: '股息率', key: 'dividend_yield', width: 75, align: 'right', sorter: numSorter('dividend_yield'),
     render: (r) => h('span', { class: 'ov-num' }, r.dividend_yield == null ? '--' : `${fmtNum(r.dividend_yield)}%`) },
-  { title: '年化波动', key: 'ann_vol_60', width: 85, align: 'right',
+  { title: '年化波动', key: 'ann_vol_60', width: 85, align: 'right', sorter: numSorter('ann_vol_60'),
     render: (r) => h('span', { class: 'ov-num' }, fmtPct(r.ann_vol_60)) },
-  { title: '回撤1Y', key: 'max_dd_1y', width: 85, align: 'right',
-    render: (r) => h('span', { class: 'ov-num' }, fmtPct(r.max_dd_1y)) },
-]
+])
 
 // ---------- 技术面派生 ----------
 const trend = computed(() => tech.value?.trend ?? null)
@@ -409,11 +757,6 @@ async function setPolicy(topic: string, state: string) {
   }
 }
 
-const thresholdLine = computed(() => {
-  const it = indices.value.find((i) => i.index_code === currentCode.value)
-  return it?.drop_threshold ?? null
-})
-
 onMounted(async () => {
   loadIndices()
   setCurrent('000001')
@@ -427,10 +770,8 @@ onMounted(async () => {
 // ---------- 页内锚点导航（两级：技术面/基本面为一级组，其余为二级项；口径说明不进导航） ----------
 const NAV_ITEMS = [
   {
-    id: 'sec-compare', label: '技术面分析',
+    id: 'sec-tech', label: '技术面分析',
     children: [
-      { id: 'sec-compare', label: '多指数对比' },
-      { id: 'sec-overview', label: '指数总览' },
       { id: 'sec-kline', label: '指数趋势与价格结构' },
       { id: 'sec-tech-risk', label: '指数波动与下行风险' },
       { id: 'sec-sentiment', label: '市场情绪与交易结构' },
@@ -446,7 +787,7 @@ const NAV_ITEMS = [
     ],
   },
 ]
-const activeNav = ref<string>('sec-compare')
+const activeNav = ref<string>('sec-kline')
 
 function scrollTo(id: string) {
   activeNav.value = id
@@ -536,14 +877,41 @@ onBeforeUnmount(() => {
       </NCollapse>
     </NCard>
 
-    <!-- ② 多指数对比 -->
-    <div class="env-section" id="sec-compare">
-      <h2 class="env-h2">多指数对比</h2>
+    <!-- ② 指数趋势与价格结构（2026-10-23：原「多指数对比」「指数总览」合并为「多指数对比与总览」，作为小节） -->
+    <div class="env-section" id="sec-kline">
+      <h2 class="env-h2">指数趋势与价格结构</h2>
+
+      <!-- 小节 1：多指数对比与总览（原「多指数对比」+「指数总览」合并） -->
+      <h3 class="env-h3">多指数对比与总览</h3>
       <NCard size="small">
         <div class="ov-toolbar">
           <MultiIndexSelect :indices="indices" :model-value="compareCodes" @update:model-value="onCompareChange" />
           <div class="ov-right">
+            <!-- 对比模式切换：净值 / 相对强弱 -->
             <div class="ov-win">
+              <span
+                class="ov-win-btn"
+                :class="{ on: compareMode === 'normal' }"
+                @click="compareMode = 'normal'"
+              >净值</span>
+              <span
+                class="ov-win-btn"
+                :class="{ on: compareMode === 'rs' }"
+                @click="compareMode = 'rs'"
+              >相对强弱</span>
+            </div>
+            <!-- 相对强弱基准指数（仅 rs 模式显示） -->
+            <NSelect
+              v-if="compareMode === 'rs'"
+              :value="rsBase"
+              :options="rsBaseOptions"
+              size="small"
+              style="width: 140px"
+              placeholder="基准指数"
+              @update:value="(v: string) => { rsBase = v }"
+            />
+            <div class="ov-win">
+              <span class="ov-range-label" title="只控制下方净值曲线与区间涨跌幅条形图的取景长度，不影响任何分位">曲线区间</span>
               <span
                 v-for="w in ([['3m', '3月'], ['6m', '6月'], ['1y', '1年'], ['3y', '3年']] as const)"
                 :key="w[0]"
@@ -573,17 +941,67 @@ onBeforeUnmount(() => {
             height="380px"
             :zoom="true"
             :y-scale="true"
-            :tooltip-formatter="compareTooltipFormatter"
+            :tooltip-formatter="compareMode === 'rs' ? compareRsTooltipFormatter : compareTooltipFormatter"
           />
         </div>
-        <div class="ov-note">📖 曲线为归一化净值（区间起点 = 100），便于不同点位量级的指数同框比强弱；鼠标悬停显示各指数<b>真实收盘点位</b>及<b>相对区间起点的涨跌幅</b>（红涨绿跌）。曲线颜色按选择顺序取自系统调色板。</div>
+        <!-- 区间统计条形（所选指数当前窗口涨跌幅，零轴居中，按涨跌幅排序；分位/回撤已移至总览表） -->
+        <div v-if="compareStats.length" class="compare-stats">
+          <div class="cs-head">
+            <span class="cs-title">区间涨跌幅 · 按大小排序</span>
+            <span class="cs-sub">{{ statsRangeLabel }} · 条长 = 涨跌幅绝对值（以 0 为中心，右正左负）</span>
+          </div>
+          <div v-for="st in compareStats" :key="st.code" class="cs-row" :title="`${st.name} ${statsRangeLabel}涨跌幅 ${st.pct >= 0 ? '+' : ''}${st.pct.toFixed(2)}%`">
+            <span class="cs-name">
+              <i class="cs-dot" :style="{ background: st.color }"></i>{{ st.name }}
+            </span>
+            <div class="cs-bar-track">
+              <i class="cs-zero"></i>
+              <i
+                class="cs-bar"
+                :class="st.pct >= 0 ? 'cs-up' : 'cs-down'"
+                :style="st.pct >= 0
+                  ? { left: '50%', width: (Math.abs(st.pct) / maxAbsStat * 50) + '%', background: st.color }
+                  : { right: '50%', width: (Math.abs(st.pct) / maxAbsStat * 50) + '%', background: st.color }"
+              ></i>
+            </div>
+            <span class="cs-val" :class="st.pct >= 0 ? 'c-up' : 'c-down'">{{ st.pct >= 0 ? '+' : '' }}{{ st.pct.toFixed(2) }}%</span>
+          </div>
+        </div>
+        <div v-if="compareMode === 'rs'" class="ov-note">📖 相对强弱模式：每条曲线 = 该指数收盘 ÷ 基准指数（{{ rsBaseName }}）收盘 × 100，基准自身恒为 100 水平线。曲线上穿 100 = 跑赢基准，下穿 = 跑输；斜率向上 = 相对走强。适合看风格/宽基指数的轮动与相对强弱演变。</div>
+        <div v-else class="ov-note">📖 曲线为归一化净值（区间起点 = 100），便于不同点位量级的指数同框比强弱；鼠标悬停显示各指数真实收盘点位及相对区间起点的涨跌幅（红涨绿跌）。曲线颜色按选择顺序取自系统调色板。</div>
       </NCard>
-    </div>
 
-    <!-- ③ 国内指数总览表 -->
-    <div class="env-section" id="sec-overview">
-      <h2 class="env-h2">国内指数总览</h2>
-      <NCard size="small">
+      <!-- 指数总览表（并入「多指数对比与总览」小节，紧跟对比图之后） -->
+      <NCard size="small" style="margin-top: 12px">
+        <div class="ov-toolbar" style="margin-bottom: 12px">
+          <div class="ov-range-box">
+            <span class="ov-range-label">分位样本池区间</span>
+            <div class="ov-win">
+              <span
+                class="ov-win-btn"
+                :class="{ on: !ovRangeWin && !ovRangeCustom }"
+                @click="onOvRangeWin('')"
+              >关闭</span>
+              <span
+                v-for="w in ([['3m', '3月'], ['6m', '6月'], ['1y', '1年'], ['3y', '3年'], ['all', '全史']] as const)"
+                :key="w[0]"
+                class="ov-win-btn"
+                :class="{ on: !ovRangeCustom && ovRangeWin === w[0] }"
+                @click="onOvRangeWin(w[0])"
+              >{{ w[1] }}</span>
+            </div>
+            <NDatePicker
+              :value="ovRangeCustom"
+              type="daterange"
+              clearable
+              size="small"
+              style="width: 240px"
+              placeholder="自定义区间"
+              @update:value="onOvRangeCustom"
+            />
+            <span class="ov-range-tip">本区间 = 各窗口列「分位」+「五档回撤」+ 下方趋势图「涨日占比分位」的样本池（固定窗口=区间内滚动、本周/月/季/年=区间内完整周期）；关闭则回落近3年</span>
+          </div>
+        </div>
         <NSpin v-if="overviewLoading" />
         <NDataTable
           v-else
@@ -592,17 +1010,15 @@ onBeforeUnmount(() => {
           :bordered="false"
           :single-line="false"
           size="small"
-          :scroll-x="1240"
+          :scroll-x="2910"
           :max-height="640"
           :row-class-name="(r: OverviewRow) => r.index_code === currentCode ? 'cur-row' : ''"
         />
-        <div class="ov-note">📖 21 个指数关键指标横向对比；点击指数名联动下方 K 线主图。红 = 涨、绿 = 跌；金色 = 分位进入极值区（&lt;10% 或 &gt;90%）。</div>
+        <div class="ov-note">📖 21 个指数关键指标横向对比；点击指数名联动下方 K 线主图。红 = 涨、绿 = 跌；分位配色：绿 = 超跌分位（&lt;10%）、红 = 超涨分位（&gt;90%）、灰 = 正常。每个窗口单元格上行涨跌幅、下行「分位 + 撤（区间最大回撤，绿）」；**分位的样本池 = 上方「所选区间」**；每个窗口单元格的撤为五档（日K/周K/月K/季K/年K 各自在该窗口区间内的最大回撤，浅灰小字）（固定窗口列取区间内每日滚动样本、本周/月/季/年列取区间内完整周期切片，样本&lt;5 显示 --），关闭则回落近 3 年。「级别」列按当日涨跌幅分五档（阈值 T 各指数不同，取整到 0.5）；本周/本月/本季/本年按自然周期、半月~近1年按固定交易日数（10/21/32/42/53/63/126/252）。</div>
       </NCard>
-    </div>
 
-    <!-- ④ 大 K 线主图 -->
-    <div class="env-section" id="sec-kline">
-      <h2 class="env-h2">指数趋势与价格结构</h2>
+      <!-- 小节 2：大 K 线主图 -->
+      <h3 class="env-h3">主图 K 线</h3>
       <NCard size="small" class="env-kline">
         <MultiIndexSelect
           :indices="indices"
@@ -612,11 +1028,11 @@ onBeforeUnmount(() => {
           @update:model-value="(codes: string[]) => { if (codes[0]) setCurrent(codes[0]) }"
         />
         <div class="env-kline-body">
-          <EnvKLineChart :code="currentCode" :name="currentName" />
+          <EnvKLineChart :code="currentCode" :name="currentName" @range-change="(v: [number, number] | null) => { klCustomRange = v }" />
         </div>
         <div class="ov-note">📖 K 线（日频，同花顺风格）· 主图叠加 MA/布林带，副图可勾选 VOL/MACD/RSI；窗口快切或自定义日期区间；全史覆盖 1990 年起。滚轮缩放，十字光标查看 OHLC。</div>
         <NCard size="small" class="env-udr">
-          <UpDownRatioTrend :code="currentCode" :name="currentName" />
+          <UpDownRatioTrend :code="currentCode" :name="currentName" :range-start="updownRange.start" :range-end="updownRange.end" :range-label="updownRange.label" />
         </NCard>
       </NCard>
 
@@ -628,27 +1044,7 @@ onBeforeUnmount(() => {
         <NEmpty :description="tech?.note || '该指数暂无技术面数据'" />
       </template>
       <template v-else-if="trend">
-        <IndicatorBlock
-          :title="`当日涨跌幅 · ${currentName}`"
-          :value="fmtPct(trend.change_pct?.value)"
-          :note="trend.change_pct?.note"
-        >
-          <div class="ib-inline">
-            <span class="ib-big" :class="trend.change_pct?.value > 0 ? 'c-up' : trend.change_pct?.value < 0 ? 'c-down' : ''">
-              {{ fmtPct(trend.change_pct?.value) }}
-            </span>
-            <span v-if="thresholdLine != null" class="ib-thr">阈值参考线：{{ thresholdLine }}%</span>
-          </div>
-        </IndicatorBlock>
-
-        <IndicatorBlock :title="`多窗口涨跌幅 · ${currentName}`" note="12 个时间窗口（半月/一月/…/本年/本季/本月/本周）的当前涨跌幅，横向对比近期各周期表现">
-          <div class="win-matrix">
-            <div v-for="w in trend.windows" :key="w.key" class="win-cell" :class="w.value > 0 ? 'c-up-bg' : w.value < 0 ? 'c-down-bg' : ''">
-              <span class="win-label">{{ w.label }}</span>
-              <span class="win-val">{{ fmtPct(w.value) }}</span>
-            </div>
-          </div>
-        </IndicatorBlock>
+        <!-- 「当日涨跌幅」「多窗口涨跌幅」两块已移除（2026-10-23）：总览表已有 当日 + 级别 + 12 窗口列，避免重复展示 -->
 
         <IndicatorBlock
           :title="`支撑 / 阻力位 · ${currentName}`"
@@ -1042,6 +1438,43 @@ onBeforeUnmount(() => {
 .ov-win-btn.on { background: #185FA5; border-color: #185FA5; color: #fff; }
 .ov-body { margin-top: 12px; }
 .ov-note { margin-top: 10px; font-size: 12px; line-height: 1.6; color: #6B7280; }
+/* 区间统计条形（多指数对比图下方，零轴居中发散式） */
+.compare-stats { margin-top: 16px; padding: 12px 14px 10px; background: #FAFBFC; border: 1px solid #EFF2F6; border-radius: 8px; }
+.cs-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.cs-title { font-size: 13px; font-weight: 700; color: #1F2937; }
+.cs-sub { font-size: 11px; color: #9CA3AF; }
+.cs-row { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 3px 0; }
+.cs-name { flex: 0 0 130px; display: flex; align-items: center; gap: 6px; justify-content: flex-end; font-weight: 600; color: #374151; white-space: nowrap; overflow: hidden; }
+.cs-dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; }
+.cs-bar-track { flex: 1 1 auto; min-width: 0; height: 12px; position: relative; background: linear-gradient(to right, #F6F8FA 0 50%, #FBFDFC 50% 100%); border-radius: 3px; }
+.cs-zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: #C9CFD8; }
+.cs-bar { position: absolute; top: 0; bottom: 0; border-radius: 2px; opacity: 0.85; }
+.cs-val { flex: 0 0 72px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* 总览表区间选择器 */
+.ov-range-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* 区间说明标签：灰色软 chip，与胶囊按钮族同语言（灰=说明、蓝=选中），避免裸文本突兀 */
+.ov-range-label {
+  font-size: 12px; font-weight: 500; color: #6B7280; line-height: 1;
+  padding: 5px 10px; border-radius: 4px; background: #F3F4F6;
+  white-space: nowrap; user-select: none;
+}
+.ov-range-tip { font-size: 11px; color: #9CA3AF; }
+
+/* 窗口单元格双行（涨跌幅主行 + 分位/回撤副行） */
+:deep(.ov-win-cell) { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; line-height: 1.35; }
+:deep(.ov-win-cell .ov-num) { font-size: 13px; }
+:deep(.ov-win-sub) { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 10px; line-height: 1.3; }
+:deep(.ov-win-sub .ov-sub-dd) { font-size: 9px; color: #9CA3AF; white-space: nowrap; }
+:deep(.ov-dd-chips) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+:deep(.ov-dd-chip) { display: inline-flex; align-items: center; gap: 1px; padding: 0 4px; height: 14px; border-radius: 3px; background: #F3F4F6; }
+:deep(.ov-dd-chip-lb) { font-style: normal; font-size: 9px; color: #9CA3AF; }
+:deep(.ov-dd-chip-v) { font-weight: 600; font-size: 9px; color: #4B5563; font-variant-numeric: tabular-nums; }
+:deep(.ov-sub-pct) { color: #909399; }
+:deep(.ov-sub-pct.ov-sub-pct-low) { color: #14B143; font-weight: 700; }
+:deep(.ov-sub-pct.ov-sub-pct-high) { color: #EF232A; font-weight: 700; }
+:deep(.ov-sub-dd) { color: #6B7280; }
+
 :deep(.ov-link) { display: inline-flex; align-items: baseline; gap: 6px; cursor: pointer; text-decoration: none; }
 :deep(.ov-link .ov-name) { font-weight: 600; color: #185FA5; }
 :deep(.ov-link:hover .ov-name) { color: #1E6FFF; }
@@ -1054,6 +1487,18 @@ onBeforeUnmount(() => {
 /* NDataTable 列 render 产出的节点不带本组件 scoped 属性，必须 :deep() 才能命中 */
 :deep(.c-up) { color: #EF232A; }
 :deep(.c-down) { color: #14B143; }
+/* 「级别」列：五档分色 chip（红涨绿跌 + 深浅分级，狂档加底色） */
+:deep(.ov-level) {
+  display: inline-block; min-width: 40px; padding: 2px 8px; border-radius: 4px;
+  font-size: 12px; font-weight: 600; line-height: 1.5; text-align: center;
+}
+:deep(.ov-level.lv-surge)   { color: #B91C1C; background: #FDE2E2; } /* 狂涨：深红 + 浅红底 */
+:deep(.ov-level.lv-up)      { color: #EF232A; }                     /* 大涨：标准红 */
+:deep(.ov-level.lv-up-light){ color: #F58A8A; font-weight: 500; }   /* 小涨：浅红 */
+:deep(.ov-level.lv-flat)    { color: #9CA3AF; font-weight: 500; }   /* 平：灰 */
+:deep(.ov-level.lv-down-light){ color: #5FBE79; font-weight: 500; } /* 小跌：浅绿 */
+:deep(.ov-level.lv-down)    { color: #14B143; }                     /* 大跌：标准绿 */
+:deep(.ov-level.lv-plunge)  { color: #0B7A31; background: #D9F2E1; } /* 狂跌：深绿 + 浅绿底 */
 .ib-inline { display: flex; align-items: baseline; gap: 14px; }
 .ib-big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ib-thr { font-size: 12px; color: #6B7280; }
@@ -1062,17 +1507,6 @@ onBeforeUnmount(() => {
 .ib-sr { display: flex; flex-direction: column; gap: 6px; }
 .sr-row { display: flex; justify-content: space-between; font-size: 13px; color: #374151; }
 .sr-row b { font-variant-numeric: tabular-nums; color: #1F2937; }
-.win-matrix { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-.win-cell {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 10px 6px; border-radius: 6px; background: #F5F7FA;
-}
-.win-cell.c-up-bg { background: #FDECEC; }
-.win-cell.c-down-bg { background: #E7F6EC; }
-.win-label { font-size: 12px; color: #6B7280; }
-.win-val { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.win-cell.c-up-bg .win-val { color: #EF232A; }
-.win-cell.c-down-bg .win-val { color: #14B143; }
 .env-macro-empty { font-size: 13px; color: #909399; padding: 12px 0; }
 /* 政策与外部环境判读卡（人工两态） */
 .policy-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
