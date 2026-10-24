@@ -81,7 +81,7 @@ function applyTonghuashunStyle(c: Chart) {
               { title: '最低', value: d.low.toFixed(2) },
               { title: '收盘', value: d.close.toFixed(2) },
               { title: '涨跌幅', value: `${d.changePct ?? ''}` },
-              { title: '成交量', value: formatVol(d.volume) },
+              { title: '成交量(股)', value: formatVol(d.volume) },
             ]
           },
         },
