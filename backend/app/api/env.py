@@ -19,9 +19,13 @@ def domestic_indices():
 
 
 @router.get("/domestic/overview")
-def domestic_overview():
+def domestic_overview(
+    window: str = Query("", description="区间窗口：3m/6m/1y/3y（可选，给定则每行带 range_stats）"),
+    start: str = Query("", description="自定义起始日期 YYYYMMDD"),
+    end: str = Query("", description="自定义结束日期 YYYYMMDD"),
+):
     """21 指数关键指标横向对比表（总览页）。"""
-    return env_service.domestic_overview()
+    return env_service.domestic_overview(window=window, start=start, end=end)
 
 
 @router.get("/domestic/compare")

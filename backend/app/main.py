@@ -6,6 +6,7 @@ InvestBuddy 后端 API 入口
 """
 import logging
 import sys
+import threading
 from contextlib import asynccontextmanager
 
 
@@ -68,6 +69,14 @@ async def lifespan(app: FastAPI):
             " 单独复跑看修法：python scripts/preflight.py"
         )
     scheduler_manager.start()
+    # 后台预热总览缓存（国内指数 overview 全史现算 ~2.5s/窗口，预热后切换窗口即时返回）
+    def _warm_overview_cache() -> None:
+        try:
+            from app.services.env_service import warm_overview_cache
+            warm_overview_cache()
+        except Exception as e:  # 预热失败不影响服务，首次请求再现算
+            logger.warning(f"overview 缓存预热失败（不阻断）: {e}")
+    threading.Thread(target=_warm_overview_cache, name="ov-cache-warm", daemon=True).start()
     yield
     scheduler_manager.shutdown()
 

@@ -64,17 +64,176 @@ def domestic_indices() -> dict:
 # 总览（21 指数横向对比）
 # ---------------------------------------------------------------------------
 
-def domestic_overview() -> dict:
+# 分位样本池最少样本数（少于该值分位无统计意义，返回 None 由前端显示 --）
+_MIN_PCTILE_SAMPLE = 5
+
+# 自然周期分位的历史样本长度（按「完整周期个数」兜底），避免短区间样本过少
+# 周→近3年(~156周) / 月→近3年(~36月) / 季→近3年(~12季) / 年→近5年(~5年)
+_PERIOD_SAMPLE_DAYS = {"week": 1095, "month": 1095, "quarter": 1095, "year": 1825}
+
+_FREQ_PERIOD = {"W": "W", "M": "M", "Q": "Q", "Y": "Y"}
+
+
+def _mdd_freq(seg: pd.Series, freq: str | None) -> tuple | None:
+    """对区间收盘序列 seg，按 freq 重采样后算最大回撤，返回 (mdd%, 峰日期, 谷日期)。
+
+    freq ∈ {None(日K), 'W'(周K), 'M'(月K), 'Q'(季K), 'Y'(年K)}。
+    取每周期最后一个交易日收盘（等价该周期收盘价）。
+    用 groupby(period) 替代 resample（口径一致，实测快 ~3.6×）。
+    峰/谷 = 回撤路径上最高点与最低点的日期（周期内实际最后交易日）。
+    """
+    def _mdd_dates(s: pd.Series) -> tuple | None:
+        if s is None or len(s.dropna()) < 2:
+            return None
+        s = s.dropna()
+        dd = (s / s.cummax() - 1) * 100
+        tr = dd.idxmin()
+        mdd = float(dd.min())
+        if pd.isna(mdd) or mdd == 0:
+            return (0.0, None, None)
+        pk = s.loc[:tr].idxmax()
+        return (round(mdd, 4), str(pk)[:10], str(tr)[:10])
+
+    if freq is None:
+        return _mdd_dates(seg) if len(seg) > 1 else None
+    if not isinstance(seg.index, pd.DatetimeIndex):
+        seg = pd.Series(seg.values, index=pd.to_datetime(seg.index))
+    per = seg.index.to_period(_FREQ_PERIOD[freq])
+    vals = pd.Series(seg.values, index=per).groupby(level=0).last()
+    # 周期日期取「该周期内实际最后交易日」（而非日历周期末，避免出现未来日期）
+    pdates = pd.Series(seg.index, index=per).groupby(level=0).last()
+    rs = pd.Series(vals.values, index=pd.to_datetime(pdates.values))
+    return _mdd_dates(rs) if len(rs) > 1 else None
+
+
+def _mdd_five(seg: pd.Series) -> dict:
+    """区间 seg 的五档最大回撤：日K/周K/月K/季K/年K，各含 (值, 峰, 谷)。样本不足档 None。"""
+    return {
+        "d": _mdd_freq(seg, None),
+        "w": _mdd_freq(seg, "W"),
+        "m": _mdd_freq(seg, "M"),
+        "q": _mdd_freq(seg, "Q"),
+        "y": _mdd_freq(seg, "Y"),
+    }
+
+
+def _window_stats(close: pd.Series,
+                  sample_start: pd.Timestamp | None = None,
+                  sample_end: pd.Timestamp | None = None) -> dict:
+    """对单个指数的收盘序列，算 12 窗口的分位(pctile) + 区间最大回撤(mdd)。
+
+    返回 key 用 `<win>_pctile` / `<win>_mdd`（win 与 OverviewRow 字段名一致）。
+
+    分位样本池（用户诉求：样本随「所选区间」变化）：
+      - 传入 sample_start/sample_end 时，分位只在该时间区间内找同类样本：
+        · 固定窗口（halfm/1m/…/1y）：取区间内「每日滚动 n 日涨跌幅」为样本；
+        · 自然周期（wtd/mtd/qtd/ytd）：取区间内「完整自然周期切片」为样本（每个完整周期一个值）。
+      - 未传时回落近 3 年全局口径（现状）。
+      样本 < _MIN_PCTILE_SAMPLE 个时分位返回 None（前端显示 --）。
+    回撤 = 各窗口区间内最大回撤（与样本池无关，始终为「该窗口区间最深跌幅」）。
+
+    全部现算、无新增表列；close 序列由调用方喂（近 3 年，index 为日期）。
+    """
+    close = close[~close.index.duplicated(keep="last")].sort_index()
+    idx = pd.to_datetime(close.index)
+    out: dict = {}
+
+    def _close_mask() -> pd.Series:
+        """close 序列落在样本池区间内的布尔 mask（按 close 自身 index 判断）。"""
+        m = pd.Series(True, index=close.index)
+        if sample_start is not None:
+            m &= (idx >= sample_start)
+        if sample_end is not None:
+            m &= (idx <= sample_end)
+        return m
+
+    # 固定窗口（+ 近3年/全史；全史涨跌幅 = 末日/首日 − 1，无滚动样本 → 分位恒 None）
+    fixed_windows: list[tuple[str, int | None]] = list(M.WINDOW_DAYS) + [("win_3y", 756), ("win_all", None)]
+    for name, n in fixed_windows:
+        if n is None:
+            cur = round((float(close.iloc[-1]) / float(close.iloc[0]) - 1) * 100, 2) if len(close) > 1 and float(close.iloc[0]) != 0 else None
+            pct = None
+            seg = close
+        else:
+            wr = M.window_return(close, n)
+            cur = wr.iloc[-1] if len(wr) else None
+            # 样本 = 每日滚动 n 日涨跌幅，且「窗口起点（close.shift(n) 基准日）落在样本池内」
+            # 避免用区间外更早的 close 算出值、却因结果 index 落在区间内被误纳入样本。
+            base_in_pool = close.shift(n).notna() & _close_mask().shift(n).fillna(False)
+            hist = wr[base_in_pool].dropna().to_numpy(dtype=float)
+            hist = hist[~np.isnan(hist)]
+            pct = M.pct_rank(float(cur), hist) if cur is not None and not pd.isna(cur) and len(hist) >= _MIN_PCTILE_SAMPLE else None
+            seg = close.tail(n + 1)
+        out[f"{name}_pctile"] = pct
+        out[name] = cur
+        # 回撤：该窗口区间内五档（日K/周K/月K/季K/年K）最大回撤（各含峰/谷日期）
+        for k, v in _mdd_five(seg).items():
+            out[f"{name}_mdd_{k}"] = v[0] if v else None
+            out[f"{name}_mdd_{k}_pk"] = v[1] if v else None
+            out[f"{name}_mdd_{k}_tr"] = v[2] if v else None
+
+    # 自然周期
+    for name, mode in (("win_wtd", "week"), ("win_mtd", "month"),
+                       ("win_qtd", "quarter"), ("win_ytd", "year")):
+        pr = M.period_return(close, mode)
+        cur = pr.iloc[-1] if len(pr) else None
+        # 样本：该自然周期的「完整周期切片」——每周期只取一个代表值
+        # （用每周期最后一个交易日的 period_return 值，等价于该完整周期的整段涨跌幅）
+        per = idx.to_period({"week": "W", "month": "M", "quarter": "Q", "year": "Y"}[mode])
+        pr_period = pd.Series(pr.values, index=per)
+        # 每周期取末值（该周期最后一天的值 = 完整周期累计涨跌幅）
+        period_last = pr_period.groupby(level=0).last()
+        period_last = period_last.dropna()
+        # 排除当前进行中的周期（避免未来函数：当前周期未完，其值即 cur 本身）
+        cur_per = per[-1]
+        period_last = period_last[period_last.index != cur_per]
+        # 样本池区间内过滤（按周期起点时间近似：用周期 end_time）
+        if sample_start is not None:
+            period_last = period_last[pd.PeriodIndex(period_last.index).end_time >= sample_start]
+        if sample_end is not None:
+            period_last = period_last[pd.PeriodIndex(period_last.index).end_time <= sample_end]
+        hist = period_last.to_numpy(dtype=float)
+        hist = hist[~np.isnan(hist)]
+        pct = M.pct_rank(float(cur), hist) if cur is not None and not pd.isna(cur) and len(hist) >= _MIN_PCTILE_SAMPLE else None
+        out[f"{name}_pctile"] = pct
+        # 回撤：当前周期内（首日→末日）close 切片，五档（各含峰/谷日期）
+        seg = close[per == cur_per]
+        for k, v in _mdd_five(seg).items():
+            out[f"{name}_mdd_{k}"] = v[0] if v else None
+            out[f"{name}_mdd_{k}_pk"] = v[1] if v else None
+            out[f"{name}_mdd_{k}_tr"] = v[2] if v else None
+    return out
+
+
+# 进程内结果缓存：key=(window,start,end) → (数据日期, payload)。
+# 数据按交易日更新，同一交易日内 overview 结果恒定 → 缓存命中即返回（<10ms）。
+# 跨交易日自动失效（以 env_index_tech_daily 最新 trade_date 为准）；零新增表（纯内存）。
+_ov_cache: dict[tuple, tuple[str, dict]] = {}
+
+
+def domestic_overview(window: str = "3y", start: str = "", end: str = "") -> dict:
     """21 指数关键指标横向对比表（总览页）。
 
-    每行一个指数，列 = 最新收盘 / 当日涨跌幅 / 近1月 / 近1年 / PE分位 / 股息率分位 /
-    60日年化波动率 / 近1年最大回撤。全部从物化表聚合，无新采集。
+    每行一个指数，列 = 最新收盘 / 当日涨跌幅 / 12 窗口涨跌幅（含分位+回撤） /
+    PE分位 / 股息率分位 / 60日年化波动率 / 近1年最大回撤。全部从物化表聚合，无新采集。
+
+    window ∈ {3m,6m,1y,3y}（默认 3y=近3年）或 start/end（YYYYMMDD）可选：
+      · 该区间作为「分位样本池」：12 窗口列的 pctile 只在该区间内找同类样本
+        （固定窗口=每日滚动、自然周期=完整周期切片）；
+      · 每行额外带 `range_stats`（区间涨跌幅 pct + 分位 pctile + 最大回撤 mdd），
+        供前端「所选区间」列。
     """
+    # 按交易日缓存：同一交易日内同参数直接命中（全史现算 ~2s，缓存命中 <10ms）
+    latest = query_all("SELECT MAX(trade_date) AS md FROM env_index_tech_daily")[0]["md"]
+    cache_key = (window, start, end)
+    hit = _ov_cache.get(cache_key)
+    if hit and hit[0] == str(latest):
+        return hit[1]
     prof = query_all(
         "SELECT index_code, index_name, importance_rank FROM index_profile "
         "ORDER BY importance_rank, index_code"
     )
-    # 技术面最新行（含涨跌幅、近1月/近1年窗口、波动率、回撤）
+    # 技术面最新行（含涨跌幅、12 窗口、波动率、回撤）
     tech = query_all(
         "SELECT t.* FROM env_index_tech_daily t "
         "JOIN (SELECT index_code, MAX(trade_date) AS md FROM env_index_tech_daily "
@@ -88,20 +247,80 @@ def domestic_overview() -> dict:
         "      GROUP BY index_code) m ON m.index_code = f.index_code AND m.md = f.trade_date"
     )
     fund_map = {r["index_code"]: r for r in fund}
+    # 大跌阈值（每指数一个 T，用于「级别」列分档）
+    thr = query_all(
+        "SELECT index_code, drop_threshold, threshold_source FROM env_threshold"
+    )
+    thr_map = {r["index_code"]: r for r in thr}
+    # 当日盘中高低（「当日」列最大回撤 = low/high − 1，仅取每指数最新交易日）
+    hl_rows = query_all(
+        f"SELECT t.index_code, t.high, t.low FROM dc_index_market t "
+        f"JOIN (SELECT index_code, MAX(trade_date) AS md FROM dc_index_market "
+        f"      WHERE index_code IN ({','.join(['%s'] * len(prof))}) GROUP BY index_code) m "
+        f"ON m.index_code = t.index_code AND m.md = t.trade_date",
+        list(p["index_code"] for p in prof),
+    )
+    hl_map = {r["index_code"]: r for r in hl_rows}
+
+    # 全史收盘序列（近3年/全史窗口 + 分位/回撤现算用；一次拉全量，避免 21 次逐条查询）
+    codes = [p["index_code"] for p in prof]
+    hist_rows = query_all(
+        f"SELECT index_code, trade_date, close FROM env_index_tech_daily "
+        f"WHERE index_code IN ({','.join(['%s'] * len(codes))}) AND close IS NOT NULL "
+        f"ORDER BY trade_date",
+        list(codes),
+    )
+    hist_df = pd.DataFrame(hist_rows) if hist_rows else pd.DataFrame(
+        columns=["index_code", "trade_date", "close"])
+    closes: dict[str, pd.Series] = {}
+    if not hist_df.empty:
+        hist_df["close"] = pd.to_numeric(hist_df["close"], errors="coerce")
+        for code in codes:
+            sub = hist_df[hist_df["index_code"] == code].drop_duplicates(
+                subset=["trade_date"], keep="last").sort_values("trade_date")
+            s = sub.set_index("trade_date")["close"].dropna()
+            if len(s) >= 2:
+                closes[code] = s
+
+    # 解析「所选区间」→ 分位样本池的 [start, end) 时间边界（含末日）
+    sample_start: pd.Timestamp | None = None
+    sample_end: pd.Timestamp | None = None
+    if start and end:
+        sample_start = pd.Timestamp(f"{start[:4]}-{start[4:6]}-{start[6:8]}")
+        sample_end = pd.Timestamp(f"{end[:4]}-{end[4:6]}-{end[6:8]}")
+    elif window == "all":
+        pass  # 全史：不限制样本池
+    elif window:
+        w = window if window in _COMPARE_WINDOW_DAYS else "3y"
+        sample_end = pd.Timestamp.now().normalize()
+        sample_start = sample_end - pd.Timedelta(days=_COMPARE_WINDOW_DAYS[w])
 
     items = []
     for p in prof:
         code = p["index_code"]
         t = tech_map.get(code, {})
         f = fund_map.get(code, {})
-        items.append({
+        th = thr_map.get(code, {})
+        row = {
             "index_code": code,
             "index_name": p["index_name"],
             "trade_date": t.get("trade_date"),
             "close": t.get("close"),
             "change_pct": t.get("change_pct"),
+            "drop_threshold": th.get("drop_threshold"),
+            "threshold_source": th.get("threshold_source"),
+            "win_halfm": t.get("win_halfm"),
             "win_1m": t.get("win_1m"),
+            "win_15m": t.get("win_15m"),
+            "win_2m": t.get("win_2m"),
+            "win_25m": t.get("win_25m"),
+            "win_3m": t.get("win_3m"),
+            "win_6m": t.get("win_6m"),
             "win_1y": t.get("win_1y"),
+            "win_ytd": t.get("win_ytd"),
+            "win_qtd": t.get("win_qtd"),
+            "win_mtd": t.get("win_mtd"),
+            "win_wtd": t.get("win_wtd"),
             "ann_vol_60": t.get("ann_vol_60"),
             "max_dd_1y": t.get("max_dd_1y"),
             "pe_ttm": f.get("pe_ttm"),
@@ -110,8 +329,107 @@ def domestic_overview() -> dict:
             "pb_pct": f.get("pb_pct"),
             "dividend_yield": f.get("dividend_yield"),
             "dividend_yield_pct": f.get("dividend_yield_pct"),
-        })
-    return {"total": len(items), "items": items}
+        }
+        # 12 窗口分位 + 回撤（分位样本池 = 所选区间，未选时近3年全局）
+        if code in closes:
+            row.update(_window_stats(closes[code], sample_start, sample_end))
+            # 「当日」列：分位 = 当日涨跌幅在样本池内所有日涨跌幅中的排位
+            c = closes[code]
+            ret = (c / c.shift(1) - 1) * 100
+            cur_ret = ret.iloc[-1] if len(ret) else None
+            r_idx = pd.to_datetime(ret.index)
+            m = pd.Series(True, index=ret.index)
+            if sample_start is not None:
+                m &= r_idx >= sample_start
+            if sample_end is not None:
+                m &= r_idx <= sample_end
+            hist_ret = ret[m].dropna().to_numpy(dtype=float)
+            hist_ret = hist_ret[~np.isnan(hist_ret)]
+            row["change_pctile"] = (
+                M.pct_rank(float(cur_ret), hist_ret)
+                if cur_ret is not None and not pd.isna(cur_ret) and len(hist_ret) >= _MIN_PCTILE_SAMPLE
+                else None
+            )
+        else:
+            row["change_pctile"] = None
+        # 「当日」盘中最大回撤 = low/high − 1（负值；无盘中数据为 None）
+        hl = hl_map.get(code, {})
+        try:
+            hi, lo = float(hl["high"]), float(hl["low"])
+            row["day_mdd"] = round((lo / hi - 1) * 100, 2) if hi > 0 and lo > 0 else None
+        except (TypeError, ValueError, KeyError):
+            row["day_mdd"] = None
+        # 「所选区间」三合一列（默认 3y 也会带上）
+        rs = _range_stats(closes.get(code), window or "3y", start, end)
+        if rs is not None:
+            row["range_stats"] = rs
+        # 「区间回撤」列：五档 K 线在「所选区间」内的最大回撤（峰→谷日期）
+        c = closes.get(code)
+        if c is not None:
+            ci = pd.to_datetime(c.index)
+            sm = pd.Series(True, index=c.index)
+            if sample_start is not None:
+                sm &= ci >= sample_start
+            if sample_end is not None:
+                sm &= ci <= sample_end
+            for k, v in _mdd_five(c[sm]).items():
+                row[f"range_mdd_{k}"] = v[0] if v else None
+                row[f"range_mdd_{k}_pk"] = v[1] if v else None
+                row[f"range_mdd_{k}_tr"] = v[2] if v else None
+        items.append(row)
+    payload = {"total": len(items), "items": items}
+    _ov_cache[cache_key] = (str(latest), payload)
+    return payload
+
+
+def warm_overview_cache() -> None:
+    """预热总览缓存：把 5 个标准窗口全部算好（服务启动后后台线程调用）。
+
+    预热后用户切换 3月/6月/1年/3年/全史 均即时返回；自定义区间仍首次现算。
+    """
+    for w in ("3y", "1y", "6m", "3m", "all"):
+        try:
+            domestic_overview(window=w)
+        except Exception:
+            continue
+
+
+def _range_stats(close: pd.Series | None, window: str, start: str, end: str) -> dict | None:
+    """自定义/标准窗口的区间三合一（涨跌幅+分位+回撤），与 domestic_compare 同口径。
+
+    返回 {pct, pctile, mdd}；数据不足返回 None。
+    """
+    if close is None or len(close) < 2:
+        return None
+    # index 可能是 datetime.date（pymysql 返回），统一转 Timestamp 再比较
+    idx = pd.to_datetime(close.index)
+    close = pd.Series(close.values, index=idx)
+    if start and end:
+        s = pd.Timestamp(f"{start[:4]}-{start[4:6]}-{start[6:8]}")
+        e = pd.Timestamp(f"{end[:4]}-{end[4:6]}-{end[6:8]}")
+        mask = (idx >= s) & (idx <= e)
+        seg = close[mask]
+        end_date = seg.index[-1] if len(seg) else None
+    elif window == "all":
+        seg = close
+        end_date = seg.index[-1] if len(seg) else None
+    else:
+        days = _COMPARE_WINDOW_DAYS.get(window, 380)
+        cutoff = pd.Timestamp.now() - pd.Timedelta(days=days)
+        seg = close[idx >= cutoff]
+        end_date = seg.index[-1] if len(seg) else None
+    if len(seg) < 2 or end_date is None:
+        return None
+    first = float(seg.iloc[0])
+    last = float(seg.iloc[-1])
+    pct = round((last / first - 1) * 100, 2) if first != 0 else None
+    mdd = M.max_drawdown(seg)
+    # 分位：n_shift = 区间交易日数 - 1，用截至 end_date 的历史滚动值（含末日，排除未来）
+    n_shift = max(len(seg) - 1, 1)
+    wr = M.window_return(close, n_shift)
+    hist = wr[(wr.index <= end_date)].dropna().to_numpy(dtype=float)
+    pctile = M.pct_rank(pct, hist) if pct is not None and len(hist) else None
+    return {"pct": pct, "pctile": pctile, "mdd": mdd}
 
 
 # ---------------------------------------------------------------------------
@@ -129,13 +447,20 @@ _COMPARE_WINDOW_DAYS = {
 
 def domestic_compare(codes: list[str], window: str = "1y",
                      start: str = "", end: str = "") -> dict:
-    """多指数收盘序列 → 归一化净值曲线（起点=100）+ 各自真实收盘价。
+    """多指数收盘序列 → 归一化净值曲线（起点=100）+ 各自真实收盘价 + 区间三指标。
 
     曲线画归一化 values（不同点位量级的指数可比强弱）；
     悬停展示用 closes（真实点位）+ 区间涨跌幅（前端相对首值计算）。
     codes 已由调用方按 index_profile 过滤/去重；
     window ∈ {3m,6m,1y,3y}；start/end（YYYYMMDD）优先于 window（自定义区间）。
     数据源用 env_index_tech_daily.close（已物化、与内容块同口径）。
+
+    每个 series 额外带「三合一」指标（供前端区间指标卡，实时派生、无新增表列）：
+      - pct       区间涨跌幅(%) = 末收盘 ÷ 区间首个有效收盘 − 1；
+      - max_drawdown  区间内最大回撤(%)（负值，对 closes 现算 close/cummax−1 最小值）；
+      - pctile    区间涨跌幅的近 3 年分位（0~100）。口径：以「区间末日」为界，
+                  取该指数近 3 年每日滚动 n_shift 日涨跌幅（n_shift=区间交易日数−1）
+                  的历史序列（不含末日自身，避免未来函数），用 pct_rank 排名当前值。
     """
     if not codes:
         return {"series": [], "labels": [], "dates": []}
@@ -171,6 +496,34 @@ def domestic_compare(codes: list[str], window: str = "1y",
     norm = pivot.ffill() / base * 100
     dates = [str(d) for d in pivot.index]
 
+    # ---- 分位历史：近 3 年各指数 close 序列（截至区间末日），现算同窗口滚动涨跌幅 ----
+    end_date = pivot.index[-1]
+    n_shift = max(int(len(pivot)) - 1, 1)  # 区间涨跌幅对应的「间隔交易日数」
+    hist_rows = query_all(
+        f"SELECT index_code, trade_date, close FROM env_index_tech_daily "
+        f"WHERE index_code IN ({','.join(['%s'] * len(codes))}) AND close IS NOT NULL "
+        f"AND trade_date <= %s AND trade_date >= DATE_SUB(%s, INTERVAL 3 YEAR) "
+        f"ORDER BY trade_date",
+        list(codes) + [end_date, end_date],
+    )
+    hist_df = pd.DataFrame(hist_rows) if hist_rows else pd.DataFrame(
+        columns=["index_code", "trade_date", "close"])
+    # code → 截至末日前的 n_shift 日滚动涨跌幅历史数组（np.ndarray）
+    pctile_hist: dict[str, np.ndarray] = {}
+    if not hist_df.empty:
+        hist_df["close"] = pd.to_numeric(hist_df["close"], errors="coerce")
+        for code in codes:
+            sub = hist_df[hist_df["index_code"] == code].drop_duplicates(
+                subset=["trade_date"], keep="last").sort_values("trade_date")
+            s = sub.set_index("trade_date")["close"]
+            if len(s) <= n_shift:
+                continue
+            # 滚动 n_shift 日涨跌幅，剔除末日（当日值即当前区间涨跌幅，不计入历史）
+            wr = M.window_return(s, n_shift)
+            wr = wr[wr.index < end_date].dropna()
+            if len(wr) > 0:
+                pctile_hist[code] = wr.to_numpy(dtype=float)
+
     series = []
     labels = []
     for code in codes:
@@ -178,11 +531,28 @@ def domestic_compare(codes: list[str], window: str = "1y",
             continue
         raw = pivot[code].ffill()
         nv = norm[code]
+        closes = raw.dropna()
+        # 区间涨跌幅：末值 ÷ 首个有效收盘 − 1
+        pct: float | None = None
+        if len(closes) > 0:
+            first = float(closes.iloc[0])
+            last = float(closes.iloc[-1])
+            if first != 0:
+                pct = round((last / first - 1) * 100, 2)
+        # 区间最大回撤（负值）
+        mdd = M.max_drawdown(closes)
+        # 区间分位（近 3 年同窗口）
+        pctile: float | None = None
+        if pct is not None and code in pctile_hist:
+            pctile = M.pct_rank(pct, pctile_hist[code])
         series.append({
             "index_code": code,
             "index_name": name_map.get(code, code),
             "values": [None if pd.isna(v) else round(float(v), 2) for v in nv.tolist()],
             "closes": [None if pd.isna(v) else round(float(v), 2) for v in raw.tolist()],
+            "pct": pct,
+            "max_drawdown": mdd,
+            "pctile": pctile,
         })
         labels.append(name_map.get(code, code))
     return {"dates": dates, "labels": labels, "series": series}
@@ -545,7 +915,7 @@ def scope_note() -> dict:
     )
     return {
         "sample": "国内指数样本 = index_profile 全量 21 个指数（上证/沪深300/创业板指/科创50/中证500 等），页面顶部切换器选择。",
-        "threshold": "大幅下跌阈值：上证 1%、沪深300 1.5%、创业板·科创 2%（手定）；其余指数按「近3年日跌幅95分位」统计建议值，标注口径仅供参考——是统计事实，非 AI 判断。",
+        "threshold": "大幅下跌阈值（每指数一个 T，已取整到 0.5 便于分辨）：上证 1%、沪深300 1.5%、创业板·科创 2%、中证500 3%、中证2000 4%、北证50 4.5%、国证芯片 5% 等——由近3年日跌幅95分位四舍五入得到并全量固化，是统计事实，非 AI 判断。总览「级别」列据此分五档：狂=|涨跌|≥2T、大=T≤|涨跌|<2T、小=0.1%<|涨跌|<T、平=|涨跌|≤0.1%。",
         "indicator": "技术面（12窗口涨跌幅/均线/量价/MACD/RSI/布林/支撑阻力/回撤/波动率/Beta/相关性）+ 基本面（PE/PB/股息率/ERP 及分位 + 成分股财务聚合近40季度 + 宏观GDP/PMI/CPI/PPI）。分位 = 当前值在历史窗口的排位，仅作位置参考，不含定性结论。",
         "thresholds": thresholds,
     }
